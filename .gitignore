@@ -1,0 +1,41 @@
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node and npm
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Chrome Extension specific
+chrome-extension-backup/
+*.zip
+*.crx
+
+# Development
+.env
+.env.local
+debug.log
+
+# OS specific
+Thumbs.db
+.DS_Store
+*.bak
+
+# Testing
+.coverage/
+test-results/
+
+# Build output (if any)
+dist/
+build/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
