@@ -13,8 +13,38 @@ const ALARMS = {
   POLL: 'pollResult',
 };
 
+const RUNS_KEY = 'runs';
+const MAX_RUNS = 50;
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function makeRunId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch {
+    // ignore
+  }
+  return `run_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+async function appendRun(run) {
+  const stored = await chrome.storage.local.get([RUNS_KEY]);
+  const runs = Array.isArray(stored[RUNS_KEY]) ? stored[RUNS_KEY] : [];
+  runs.unshift(run);
+  if (runs.length > MAX_RUNS) runs.length = MAX_RUNS;
+  await chrome.storage.local.set({ [RUNS_KEY]: runs });
+}
+
+async function updateRun(runId, patch) {
+  if (!runId) return;
+  const stored = await chrome.storage.local.get([RUNS_KEY]);
+  const runs = Array.isArray(stored[RUNS_KEY]) ? stored[RUNS_KEY] : [];
+  const idx = runs.findIndex((r) => r && r.runId === runId);
+  if (idx === -1) return;
+  runs[idx] = { ...runs[idx], ...patch };
+  await chrome.storage.local.set({ [RUNS_KEY]: runs });
 }
 
 function withTimeout(promise, ms, label) {
@@ -126,44 +156,117 @@ async function sendToTabRobust(tabId, message) {
 }
 
 async function inputPrompt(prompt) {
+  const runId = makeRunId();
+  const sentAt = Date.now();
+
   const tab = await ensureChatGPTTab();
   if (tab.id == null) throw new Error('No tab id');
 
+  await chrome.storage.local.set({ lastRunId: runId, lastRunAt: sentAt, lastPrompt: prompt, lastTabId: tab.id });
+  await appendRun({
+    runId,
+    prompt,
+    sentAt,
+    status: 'sending',
+    tabId: tab.id,
+    chatUrl: null,
+    chatId: null,
+    assistantMessageId: null,
+    result: null,
+    resultAt: null,
+  });
+
   try {
     const enhancedPrompt = enhancePromptWithJsonRequest(prompt);
-    const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt });
-    await chrome.storage.local.set({ lastRunAt: Date.now(), lastPrompt: prompt, lastTabId: tab.id });
+    const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
+
+    // content.js trả về meta (chatUrl/chatId)
+    if (response && typeof response === 'object') {
+      await updateRun(runId, {
+        status: response.status === 'sent' ? 'sent' : 'failed',
+        chatUrl: response.chatUrl || null,
+        chatId: response.chatId || null,
+      });
+      if (response.chatUrl || response.chatId) {
+        await chrome.storage.local.set({ lastChatUrl: response.chatUrl || null, lastChatId: response.chatId || null });
+      }
+    } else {
+      await updateRun(runId, { status: 'sent' });
+    }
 
     // Schedule a poll to capture result even when popup is closed.
     await chrome.alarms.clear(ALARMS.POLL);
     chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
-    return response;
+    return { status: 'ok', runId };
   } catch (error) {
     // content script might not be ready yet; retry once after short delay.
     await delay(1500);
     try {
       const enhancedPrompt = enhancePromptWithJsonRequest(prompt);
-      const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt });
-      await chrome.storage.local.set({ lastRunAt: Date.now(), lastPrompt: prompt, lastTabId: tab.id });
+      const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
+
+      if (response && typeof response === 'object') {
+        await updateRun(runId, {
+          status: response.status === 'sent' ? 'sent' : 'failed',
+          chatUrl: response.chatUrl || null,
+          chatId: response.chatId || null,
+        });
+        if (response.chatUrl || response.chatId) {
+          await chrome.storage.local.set({ lastChatUrl: response.chatUrl || null, lastChatId: response.chatId || null });
+        }
+      } else {
+        await updateRun(runId, { status: 'sent' });
+      }
+
       await chrome.alarms.clear(ALARMS.POLL);
       chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
-      return response;
+      return { status: 'ok', runId };
     } catch (finalError) {
       // Keep the worker stable; let caller decide how to surface this.
+      await updateRun(runId, { status: 'failed', error: String(finalError?.message || finalError) });
       throw finalError;
     }
   }
 }
 
-async function fetchLatestResult() {
+async function fetchLatestResult(runId) {
   const tabs = await queryChatGPTTabs();
   if (tabs.length === 0 || tabs[0].id == null) return null;
 
   try {
-    const response = await sendToTabRobust(tabs[0].id, { action: 'get_result' });
+    const response = await sendToTabRobust(tabs[0].id, {
+      action: 'get_result',
+      wait: true,
+      timeoutMs: 15 * 60 * 1000,
+      stableMs: 1500,
+    });
     const resultText = response && typeof response.result === 'string' ? response.result : null;
     if (resultText) {
       await chrome.storage.local.set({ lastResult: resultText, lastResultAt: Date.now() });
+
+      if (response && typeof response === 'object') {
+        const patch = {
+          result: resultText,
+          resultAt: Date.now(),
+          chatUrl: response.chatUrl || null,
+          chatId: response.chatId || null,
+          assistantMessageId: response.assistantMessageId || null,
+          status: 'completed',
+        };
+        const effectiveRunId = runId || (await chrome.storage.local.get(['lastRunId'])).lastRunId;
+        await updateRun(effectiveRunId, patch);
+        await chrome.storage.local.set({
+          lastChatUrl: response.chatUrl || null,
+          lastChatId: response.chatId || null,
+          lastAssistantMessageId: response.assistantMessageId || null,
+        });
+      }
+    } else {
+      // Nếu chưa có kết quả ổn định (hoặc timeout), poll lại sau một chút.
+      if (response && typeof response === 'object' && (response.status === 'timeout' || response.status === 'generating')) {
+        await chrome.alarms.clear(ALARMS.POLL);
+        chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 8000 });
+      }
     }
     return resultText;
   } catch {
@@ -249,7 +352,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 
   if (alarm.name === ALARMS.POLL) {
-    fetchLatestResult().catch(() => {});
+    chrome.storage.local.get(['lastRunId']).then((s) => fetchLatestResult(s.lastRunId).catch(() => {}));
   }
 });
 
@@ -269,20 +372,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ status: 'error', error: 'missing_prompt' });
         return;
       }
-      await inputPrompt(prompt);
-      sendResponse({ status: 'ok' });
+      const r = await inputPrompt(prompt);
+      sendResponse({ status: 'ok', runId: r.runId });
       return;
     }
 
     if (request.action === 'get_result') {
-      const latest = await fetchLatestResult();
+      const storedRun = await chrome.storage.local.get(['lastRunId']);
+      const latest = await fetchLatestResult(storedRun.lastRunId);
       if (latest) {
-        sendResponse({ result: latest, source: 'live' });
+        sendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
         return;
       }
 
       const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
       sendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
+      return;
+    }
+
+    if (request.action === 'get_runs') {
+      const stored = await chrome.storage.local.get([RUNS_KEY]);
+      const runs = Array.isArray(stored[RUNS_KEY]) ? stored[RUNS_KEY] : [];
+      sendResponse({ status: 'ok', runs });
       return;
     }
 
