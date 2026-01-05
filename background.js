@@ -190,6 +190,15 @@ async function onBoot() {
   await setupCheckAlarm();
   await setupAutoRunAlarm();
   await ensureChatGPTTab();
+
+  // Side Panel behavior (Chrome 114+)
+  try {
+    if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    }
+  } catch {
+    // ignore
+  }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -198,6 +207,23 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   onBoot().catch((e) => console.error('onStartup boot error:', e));
+});
+
+// Fallback: if openPanelOnActionClick is not supported, try to open explicitly.
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    if (!tab || tab.id == null) return;
+    if (!chrome.sidePanel) return;
+
+    if (chrome.sidePanel.setOptions) {
+      await chrome.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel.html', enabled: true });
+    }
+    if (chrome.sidePanel.open) {
+      await chrome.sidePanel.open({ tabId: tab.id });
+    }
+  } catch {
+    // ignore
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
