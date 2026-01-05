@@ -7,14 +7,18 @@
     "storage",
     "tabs",
     "scripting",
-    "alarms"
+    "alarms",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://chatgpt.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_title": "ChatGPT Assistant"
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "background": {
     "service_worker": "background.js"
