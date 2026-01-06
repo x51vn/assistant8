@@ -29,12 +29,14 @@ function copyExtensionStatic() {
       const root = __dirname;
       const outDir = path.resolve(root, 'dist');
 
-      await copyFile(path.resolve(root, 'manifest.json'), path.resolve(outDir, 'manifest.json'));
-      await copyFile(path.resolve(root, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
-      await copyFile(path.resolve(root, 'popup.html'), path.resolve(outDir, 'popup.html'));
-      await copyFile(path.resolve(root, 'styles.css'), path.resolve(outDir, 'styles.css'));
+      const staticDir = path.resolve(root, 'src', 'extension');
 
-      const imagesDir = path.resolve(root, 'images');
+      await copyFile(path.resolve(staticDir, 'manifest.json'), path.resolve(outDir, 'manifest.json'));
+      await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
+      await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
+      await copyFile(path.resolve(staticDir, 'styles.css'), path.resolve(outDir, 'styles.css'));
+
+      const imagesDir = path.resolve(staticDir, 'images');
       await copyDir(imagesDir, path.resolve(outDir, 'images'));
     },
   };
