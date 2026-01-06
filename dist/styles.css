@@ -133,6 +133,20 @@ h2 {
   margin-bottom: 12px;
 }
 
+.results-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  margin-bottom: 12px;
+}
+
+.results-actions .primary-btn,
+.results-actions .secondary-btn {
+  margin-right: 0;
+  margin-bottom: 0;
+  flex: 1 1 auto;
+}
+
 .primary-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
