@@ -112,3 +112,7 @@ chatgpt-extension/
 ## License
 
 Không xác định
+
+```
+npm --prefix "D:\dtx8\chatgpt-extension" run build; git -C "D:\dtx8\chatgpt-extension" status -sb
+```
