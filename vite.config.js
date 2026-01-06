@@ -35,6 +35,7 @@ function copyExtensionStatic() {
       await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
       await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
       await copyFile(path.resolve(staticDir, 'styles.css'), path.resolve(outDir, 'styles.css'));
+      await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
 
       const imagesDir = path.resolve(staticDir, 'images');
       await copyDir(imagesDir, path.resolve(outDir, 'images'));

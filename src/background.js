@@ -1,6 +1,8 @@
 // Background Service Worker (MV3)
 // Mục tiêu: ổn định, ít race condition, lưu lastResult để popup hiển thị nhanh.
 
+import { applyPromptTemplate } from './promptTemplate.js';
+
 const DEFAULTS = {
   prompt: '',
   autoRun: false,
@@ -133,11 +135,6 @@ async function ensureContentScriptInjected(tabId) {
   }
 }
 
-function enhancePromptWithJsonRequest(userPrompt) {
-  if (!userPrompt || !userPrompt.trim()) return userPrompt;
-  return userPrompt.trim() + '\n\nPlease respond ONLY with valid JSON in ```json\n...\n``` format.';
-}
-
 function isNoReceiverError(error) {
   const msg = String(error && error.message ? error.message : error);
   return msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist');
@@ -177,7 +174,7 @@ async function inputPrompt(prompt) {
   });
 
   try {
-    const enhancedPrompt = enhancePromptWithJsonRequest(prompt);
+    const enhancedPrompt = await applyPromptTemplate(prompt);
     const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
 
     // content.js trả về meta (chatUrl/chatId)
@@ -203,7 +200,7 @@ async function inputPrompt(prompt) {
     // content script might not be ready yet; retry once after short delay.
     await delay(1500);
     try {
-      const enhancedPrompt = enhancePromptWithJsonRequest(prompt);
+      const enhancedPrompt = await applyPromptTemplate(prompt);
       const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
 
       if (response && typeof response === 'object') {
