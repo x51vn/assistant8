@@ -182,8 +182,9 @@ async function inputPrompt(prompt) {
 
     // content.js trả về meta (chatUrl/chatId)
     if (response && typeof response === 'object') {
+      const ok = response.status === 'sent' || response.status === 'accepted';
       await updateRun(runId, {
-        status: response.status === 'sent' ? 'sent' : 'failed',
+        status: ok ? 'sent' : 'failed',
         chatUrl: response.chatUrl || null,
         chatId: response.chatId || null,
       });
@@ -206,8 +207,9 @@ async function inputPrompt(prompt) {
       const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
 
       if (response && typeof response === 'object') {
+        const ok = response.status === 'sent' || response.status === 'accepted';
         await updateRun(runId, {
-          status: response.status === 'sent' ? 'sent' : 'failed',
+          status: ok ? 'sent' : 'failed',
           chatUrl: response.chatUrl || null,
           chatId: response.chatId || null,
         });
@@ -374,6 +376,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       const r = await inputPrompt(prompt);
       sendResponse({ status: 'ok', runId: r.runId });
+      return;
+    }
+
+    if (request.action === 'prompt_sent') {
+      const runId = typeof request.runId === 'string' ? request.runId : null;
+      const chatUrl = typeof request.chatUrl === 'string' ? request.chatUrl : null;
+      const chatId = typeof request.chatId === 'string' ? request.chatId : null;
+
+      if (runId) {
+        await updateRun(runId, { status: 'sent', chatUrl, chatId });
+      }
+
+      if (chatUrl || chatId) {
+        await chrome.storage.local.set({ lastChatUrl: chatUrl || null, lastChatId: chatId || null });
+      }
+
+      sendResponse({ status: 'ok' });
       return;
     }
 

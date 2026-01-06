@@ -24,6 +24,112 @@ function findEditor() {
   );
 }
 
+function findNewChatButton() {
+  return (
+    document.querySelector('a[data-testid="create-new-chat-button"]') ||
+    document.querySelector('a[data-sidebar-item="true"][href="/"]')
+  );
+}
+
+const PENDING_PROMPT_KEY = '__chatgpt_assistant_pending_prompt_v1';
+
+function readPendingPrompt() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_PROMPT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.prompt !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingPrompt(pending) {
+  try {
+    sessionStorage.setItem(PENDING_PROMPT_KEY, JSON.stringify(pending));
+  } catch {
+    // ignore
+  }
+}
+
+function clearPendingPrompt() {
+  try {
+    sessionStorage.removeItem(PENDING_PROMPT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function triggerNewChatNavigation() {
+  const btn = findNewChatButton();
+  if (btn instanceof HTMLElement) {
+    btn.click();
+    return;
+  }
+  // Fallback: navigate to home which typically starts a new chat.
+  try {
+    location.assign('https://chatgpt.com/');
+  } catch {
+    // ignore
+  }
+}
+
+function getConversationMessageCount() {
+  // In an empty/new chat, there should be no user/assistant messages.
+  return document.querySelectorAll('div[data-message-author-role="user"], div[data-message-author-role="assistant"]').length;
+}
+
+async function waitForEmptyNewChat({ startUrl, timeoutMs = 20000 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const editor = findEditor();
+    const msgCount = getConversationMessageCount();
+    const urlChanged = typeof startUrl === 'string' ? location.href !== startUrl : true;
+
+    // Conditions for "safe to send": editor exists AND conversation is empty AND we are not still stuck on the old chat URL.
+    if (editor && msgCount === 0 && (urlChanged || !location.pathname.startsWith('/c/'))) {
+      return true;
+    }
+
+    await sleep(200);
+  }
+  return false;
+}
+
+async function ensureNewChatSession(timeoutMs = 15000) {
+  // Always try to start a fresh chat; if already on new-chat screen, this is a no-op.
+  const startUrl = location.href;
+  const btn = findNewChatButton();
+
+  if (btn instanceof HTMLElement) {
+    btn.click();
+  } else {
+    // Fallback: navigate to home which typically starts a new chat.
+    try {
+      location.assign('https://chatgpt.com/');
+    } catch {
+      // ignore
+    }
+  }
+
+  // Wait for navigation (if any) and editor to re-appear.
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const editor = findEditor();
+    if (editor) {
+      // Ensure we are not still on the old chat URL.
+      if (location.href !== startUrl || !location.pathname.startsWith('/c/')) {
+        return true;
+      }
+    }
+    await sleep(200);
+  }
+
+  // Even if URL didn't change (UI variations), proceed if editor exists.
+  return !!findEditor();
+}
+
 async function waitForEditor(timeoutMs = 20000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -71,8 +177,15 @@ function setNativeValue(el, value) {
   el.appendChild(p);
 }
 
-async function inputAndSendPrompt(prompt) {
-  const editor = await waitForEditor();
+async function inputAndSendPrompt(prompt, options = {}) {
+  const createNewChat = options.createNewChat !== false;
+  const editorTimeoutMs = Number.isFinite(options.editorTimeoutMs) ? options.editorTimeoutMs : 20000;
+  if (createNewChat) {
+    await ensureNewChatSession();
+    await sleep(300);
+  }
+
+  const editor = await waitForEditor(editorTimeoutMs);
   if (!editor) {
     console.warn('[ChatGPT Assistant] editor not found');
     return false;
@@ -119,6 +232,47 @@ async function inputAndSendPrompt(prompt) {
     new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter' })
   );
   return true;
+}
+
+async function trySendPendingPromptOnce() {
+  const pending = readPendingPrompt();
+  if (!pending) return false;
+
+  if (pending.createNewChat) {
+    const ready = await waitForEmptyNewChat({ startUrl: pending.startUrl, timeoutMs: 20000 });
+    if (!ready) return false;
+  }
+
+  const ok = await inputAndSendPrompt(pending.prompt, { createNewChat: false, editorTimeoutMs: 4000 });
+  if (!ok) return false;
+
+  clearPendingPrompt();
+
+  try {
+    const meta = getChatMeta();
+    chrome.runtime.sendMessage({ action: 'prompt_sent', runId: pending.runId || null, ...meta });
+  } catch {
+    // ignore
+  }
+
+  return true;
+}
+
+async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const pending = readPendingPrompt();
+    if (!pending) return;
+
+    try {
+      const ok = await trySendPendingPromptOnce();
+      if (ok) return;
+    } catch {
+      // ignore and retry
+    }
+
+    await sleep(500);
+  }
 }
 
 function getLatestAssistantMessage() {
@@ -204,14 +358,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'input_prompt') {
     const prompt = typeof request.prompt === 'string' ? request.prompt : '';
     const runId = typeof request.runId === 'string' ? request.runId : null;
-    inputAndSendPrompt(prompt).then((ok) => {
-      // URL/chatId có thể đổi sau khi gửi; chờ nhẹ rồi đọc.
-      setTimeout(() => {
-        const meta = getChatMeta();
-        sendResponse({ status: ok ? 'sent' : 'failed', runId, ...meta });
-      }, 150);
-    });
-    return true;
+    const createNewChat = request.newChat !== false;
+
+    writePendingPrompt({ prompt, runId, queuedAt: Date.now(), createNewChat, startUrl: location.href });
+    if (createNewChat) triggerNewChatNavigation();
+    drainPendingPrompt({ timeoutMs: 30000 }).catch(() => {});
+
+    try {
+      const meta = getChatMeta();
+      sendResponse({ status: 'accepted', runId, ...meta });
+    } catch {
+      // ignore
+    }
+    return;
   }
 
   if (request.action === 'get_result') {
@@ -239,5 +398,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+drainPendingPrompt({ timeoutMs: 30000 }).catch(() => {});
 
 console.log('[ChatGPT Assistant] content script ready');

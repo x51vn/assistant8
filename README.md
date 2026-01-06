@@ -1,5 +1,22 @@
 # ChatGPT Assistant Extension
 
+## Build (Vite)
+
+Project now includes a Vite build pipeline to bundle scripts and output a clean MV3 extension folder in `dist/`.
+
+- Install deps: `npm install`
+- Build: `npm run build`
+- Load in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `chatgpt-extension/dist` folder.
+
+### Source structure
+
+- `src/` contains build inputs (JS entrypoints + UI modules).
+- Root files (`manifest.json`, `sidepanel.html`, `popup.html`, `styles.css`, `images/`) are treated as static extension assets and are copied into `dist/` during build.
+
+### Docs
+
+- Additional documentation lives in `docs/`.
+
 Một Chrome extension tự động hóa việc mở ChatGPT và xử lý prompt.
 
 ## Tính năng
@@ -13,13 +30,15 @@ Một Chrome extension tự động hóa việc mở ChatGPT và xử lý prompt
 
 ```
 chatgpt-extension/
-├── manifest.json       # Cấu hình extension (Manifest v3)
-├── background.js       # Service Worker - quản lý các task định kỳ
-├── content.js          # Content Script - tương tác với ChatGPT
-├── popup.html          # Giao diện popup
-├── popup.js            # Logic popup
-├── styles.css          # Styling
-└── README.md          # Tài liệu này
+├── dist/               # Extension folder để “Load unpacked”
+├── src/                # Source (Vite inputs)
+├── manifest.json       # Static asset (copied into dist/)
+├── popup.html          # Static asset (copied into dist/)
+├── sidepanel.html      # Static asset (copied into dist/)
+├── styles.css          # Static asset (copied into dist/)
+├── images/             # Static assets (copied into dist/)
+├── docs/               # Tài liệu bổ sung
+└── README.md           # Overview
 ```
 
 ## Cài đặt
@@ -27,7 +46,7 @@ chatgpt-extension/
 1. Mở Chrome và truy cập `chrome://extensions/`
 2. Bật "Developer mode" (góc trên bên phải)
 3. Nhấn "Load unpacked"
-4. Chọn thư mục `chatgpt-extension`
+4. Chọn thư mục `chatgpt-extension/dist`
 
 ## Hướng dẫn sử dụng
 
@@ -45,17 +64,17 @@ chatgpt-extension/
 
 ## Cách hoạt động
 
-### Background Service Worker (`background.js`)
+### Background Service Worker
 - Kiểm tra mỗi 5 phút xem tab ChatGPT có mở không
 - Nếu chưa mở, sẽ mở tab mới
 - Xử lý các yêu cầu từ popup và content script
 
-### Content Script (`content.js`)
+### Content Script
 - Tìm input field trên trang ChatGPT
 - Nhập prompt và gửi
 - Lấy kết quả từ tin nhắn gần nhất của assistant
 
-### Popup (`popup.html` + `popup.js`)
+### Popup / Sidepanel UI
 - Giao diện người dùng với 2 tab: Kết quả và Cấu hình
 - Lưu cài đặt vào Chrome Storage
 - Gửi request tới background để xử lý

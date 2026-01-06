@@ -9,7 +9,6 @@
 # Node and npm
 node_modules/
 npm-debug.log*
-package-lock.json
 
 # Chrome Extension specific
 chrome-extension-backup/
@@ -31,7 +30,6 @@ Thumbs.db
 test-results/
 
 # Build output (if any)
-dist/
 build/
 out/
 
