@@ -273,6 +273,21 @@ async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
 
     await sleep(500);
   }
+
+  // Timeout: notify background that prompt couldn't be sent
+  const pending = readPendingPrompt();
+  if (pending && pending.runId) {
+    try {
+      chrome.runtime.sendMessage({
+        action: 'prompt_failed',
+        runId: pending.runId,
+        error: 'timeout_sending_prompt',
+      });
+    } catch {
+      // ignore
+    }
+    clearPendingPrompt();
+  }
 }
 
 function getLatestAssistantMessage() {
@@ -353,7 +368,21 @@ async function waitForStableAssistantResponse({ timeoutMs = 15 * 60 * 1000, stab
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (!request || typeof request.action !== 'string') return;
+  let responded = false;
+  const safeSendResponse = (payload) => {
+    if (responded) return;
+    responded = true;
+    try {
+      sendResponse(payload);
+    } catch {
+      // ignore
+    }
+  };
+
+  if (!request || typeof request.action !== 'string') {
+    safeSendResponse({ status: 'error', error: 'invalid_request' });
+    return true;
+  }
 
   if (request.action === 'input_prompt') {
     const prompt = typeof request.prompt === 'string' ? request.prompt : '';
@@ -364,39 +393,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (createNewChat) triggerNewChatNavigation();
     drainPendingPrompt({ timeoutMs: 30000 }).catch(() => {});
 
+    let meta = {};
     try {
-      const meta = getChatMeta();
-      sendResponse({ status: 'accepted', runId, ...meta });
+      meta = getChatMeta();
     } catch {
       // ignore
     }
+    safeSendResponse({ status: 'accepted', runId, ...meta });
     return;
   }
 
   if (request.action === 'get_result') {
     (async () => {
-      const meta = getChatMeta();
+      let meta = {};
+      try {
+        meta = getChatMeta();
+      } catch {
+        // ignore
+      }
+
       const wait = !!request.wait;
       const timeoutMs = Number.isFinite(request.timeoutMs) ? request.timeoutMs : 15 * 60 * 1000;
       const stableMs = Number.isFinite(request.stableMs) ? request.stableMs : 1500;
 
       if (!wait) {
         const latest = getLatestAssistantMessageMeta();
-        sendResponse({ status: 'ok', result: latest.text, assistantMessageId: latest.messageId, ...meta });
+        safeSendResponse({ status: 'ok', result: latest.text, assistantMessageId: latest.messageId, ...meta });
         return;
       }
 
       const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs });
       const latest = getLatestAssistantMessageMeta();
-      sendResponse({
+      safeSendResponse({
         status: waited.status,
         result: waited.text,
         assistantMessageId: latest.messageId,
         ...meta,
       });
-    })();
+    })().catch((e) => {
+      console.error('content get_result error:', e);
+      let meta = {};
+      try {
+        meta = getChatMeta();
+      } catch {
+        // ignore
+      }
+      safeSendResponse({ status: 'error', error: String(e && e.message ? e.message : e), ...meta });
+    });
     return true;
   }
+
+  // Unknown action
+  safeSendResponse({ status: 'error', error: 'unknown_action', action: request.action });
+  return true;
 });
 drainPendingPrompt({ timeoutMs: 30000 }).catch(() => {});
 

@@ -109,10 +109,79 @@ chatgpt-extension/
 2. Quay lại `chrome://extensions/`
 3. Nhấn nút Reload cho extension
 
+## Build, Commit & Push
+
+### Bước 1: Build Extension
+```bash
+npm run build
+```
+
+**Kết quả:** Tạo ra thư mục `dist/` chứa extension được packaged (chính thức + static assets).
+
+### Bước 2: Kiểm tra thay đổi
+```bash
+git status
+```
+
+**Kết quả:** Xem danh sách các file đã thay đổi (staging area + working tree).
+
+### Bước 3: Thêm các file vào staging
+```bash
+# Thêm tất cả file đã thay đổi
+git add .
+
+# Hoặc thêm từng file cụ thể
+git add src/background.js src/content.js README.md
+```
+
+### Bước 4: Commit thay đổi
+```bash
+git commit -m "Fix: Ensure message listener always responds (no 'channel closed' warnings)
+
+- Add safeSendResponse pattern to content.js listener
+- Wrap getChatMeta() safely in get_result handler
+- Add prompt_failed notification when drainPendingPrompt times out
+- Add debug logging to sendToTabRobust for retry tracking
+- Handle unknown actions with proper error responses"
+```
+
+**Lưu ý commit message:**
+- Dòng đầu: tóm tắt < 50 ký tự
+- Dòng trắng
+- Chi tiết: mô tả thay đổi từng mục đích
+
+### Bước 5: Push code lên remote
+```bash
+# Đẩy branch hiện tại
+git push origin main
+
+# Hoặc đẩy với tracking (lần đầu tiên)
+git push -u origin main
+
+# Kiểm tra trạng thái
+git log --oneline -5
+```
+
+### Quy trình đầy đủ (một lần)
+```bash
+npm run build
+git add .
+git commit -m "Fix: Message listener response handling and error notifications"
+git push origin main
+```
+
+### Kiểm tra kết quả
+```bash
+# Xem lịch sử commit
+git log --oneline
+
+# Xem chi tiết commit cuối
+git show
+
+# Xem trạng thái so với remote
+git status
+```
+
 ## License
 
 Không xác định
-
-```
-npm --prefix "D:\dtx8\chatgpt-extension" run build; git -C "D:\dtx8\chatgpt-extension" status -sb
-```

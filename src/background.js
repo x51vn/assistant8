@@ -146,8 +146,10 @@ async function sendToTabRobust(tabId, message) {
   } catch (error) {
     if (!isNoReceiverError(error)) throw error;
     // Content script not ready/injected yet → inject and retry once.
+    console.log(`[sendToTabRobust] No receiver on tab ${tabId}, injecting content script...`);
     await ensureContentScriptInjected(tabId);
     await delay(350);
+    console.log(`[sendToTabRobust] Retrying message to tab ${tabId}`);
     return await sendToTab(tabId, message);
   }
 }
@@ -356,23 +358,37 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  let responded = false;
+  const safeSendResponse = (payload) => {
+    if (responded) return;
+    responded = true;
+    try {
+      sendResponse(payload);
+    } catch {
+      // ignore
+    }
+  };
+
   (async () => {
-    if (!request || typeof request.action !== 'string') return;
+    if (!request || typeof request.action !== 'string') {
+      safeSendResponse({ status: 'error', error: 'invalid_request' });
+      return;
+    }
 
     if (request.action === 'ensure_chatgpt_open') {
       await ensureChatGPTTab();
-      sendResponse({ status: 'ok' });
+      safeSendResponse({ status: 'ok' });
       return;
     }
 
     if (request.action === 'send_prompt') {
       const prompt = typeof request.prompt === 'string' ? request.prompt.trim() : '';
       if (!prompt) {
-        sendResponse({ status: 'error', error: 'missing_prompt' });
+        safeSendResponse({ status: 'error', error: 'missing_prompt' });
         return;
       }
       const r = await inputPrompt(prompt);
-      sendResponse({ status: 'ok', runId: r.runId });
+      safeSendResponse({ status: 'ok', runId: r.runId });
       return;
     }
 
@@ -389,7 +405,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         await chrome.storage.local.set({ lastChatUrl: chatUrl || null, lastChatId: chatId || null });
       }
 
-      sendResponse({ status: 'ok' });
+      safeSendResponse({ status: 'ok' });
       return;
     }
 
@@ -397,33 +413,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const storedRun = await chrome.storage.local.get(['lastRunId']);
       const latest = await fetchLatestResult(storedRun.lastRunId);
       if (latest) {
-        sendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
+        safeSendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
         return;
       }
 
       const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
-      sendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
+      safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
       return;
     }
 
     if (request.action === 'get_runs') {
       const stored = await chrome.storage.local.get([RUNS_KEY]);
       const runs = Array.isArray(stored[RUNS_KEY]) ? stored[RUNS_KEY] : [];
-      sendResponse({ status: 'ok', runs });
+      safeSendResponse({ status: 'ok', runs });
       return;
     }
 
     if (request.action === 'get_status') {
       const status = await chrome.storage.local.get(['lastRunAt', 'lastResultAt']);
-      sendResponse({ status: 'ok', ...status });
+      safeSendResponse({ status: 'ok', ...status });
+      return;
     }
+
+    if (request.action === 'prompt_failed') {
+      const runId = typeof request.runId === 'string' ? request.runId : null;
+      const error = typeof request.error === 'string' ? request.error : 'unknown_error';
+      if (runId) {
+        await updateRun(runId, { status: 'failed', error });
+      }
+      safeSendResponse({ status: 'ok' });
+      return;
+    }
+
+    safeSendResponse({ status: 'error', error: 'unknown_action', action: request.action });
   })().catch((e) => {
     console.error('onMessage handler error:', e);
-    try {
-      sendResponse({ status: 'error', error: String(e && e.message ? e.message : e) });
-    } catch {
-      // ignore
-    }
+    safeSendResponse({ status: 'error', error: String(e && e.message ? e.message : e) });
   });
 
   return true;
