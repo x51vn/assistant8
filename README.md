@@ -109,65 +109,86 @@ chatgpt-extension/
 2. Quay lại `chrome://extensions/`
 3. Nhấn nút Reload cho extension
 
-## Build, Commit & Push
+## Build, Commit & Push (Production Ready)
+
+### Cài đặt Git (Lần đầu tiên)
+```bash
+# Fix line ending warnings (Windows/Linux compatibility)
+git config core.autocrlf true
+```
+
+**Lý do:** Tự động chuyển CRLF → LF khi commit, tránh warning và conflict.
 
 ### Bước 1: Build Extension
 ```bash
 npm run build
 ```
 
-**Kết quả:** Tạo ra thư mục `dist/` chứa extension được packaged (chính thức + static assets).
+**Kết quả:** 
+- Tạo `dist/` folder chứa extension bundled (JS + static assets)
+- **Sourcemap DISABLED** (không sinh `.map` files, giảm kích thước)
+- File output: `ui.js`, `background.js`, `content.js` (~5-10KB mỗi file)
 
 ### Bước 2: Kiểm tra thay đổi
 ```bash
 git status
 ```
 
-**Kết quả:** Xem danh sách các file đã thay đổi (staging area + working tree).
+**Kết quả:** Xem danh sách files đã thay đổi (staging area + working tree).
 
 ### Bước 3: Thêm các file vào staging
 ```bash
-# Thêm tất cả file đã thay đổi
+# Cách 1: Thêm chỉ source code + docs (RECOMMENDED)
+git add src/ README.md vite.config.js .gitignore package*.json
+
+# Cách 2: Thêm tất cả (nếu cần update dist/)
 git add .
 
-# Hoặc thêm từng file cụ thể
-git add src/background.js src/content.js README.md
+# Kiểm tra lại
+git diff --cached --stat
 ```
+
+**Ghi chú:**
+- `src/` chứa source code (luôn commit)
+- `dist/` là build output (chỉ commit nếu không có CI/CD)
+- `.gitignore` bỏ qua `*.map` files (sourcemap)
 
 ### Bước 4: Commit thay đổi
 ```bash
-git commit -m "Fix: Ensure message listener always responds (no 'channel closed' warnings)
+git commit -m "Chủ đề: Tóm tắt thay đổi < 50 ký tự
 
-- Add safeSendResponse pattern to content.js listener
-- Wrap getChatMeta() safely in get_result handler
-- Add prompt_failed notification when drainPendingPrompt times out
-- Add debug logging to sendToTabRobust for retry tracking
-- Handle unknown actions with proper error responses"
+- Điểm chi tiết 1
+- Điểm chi tiết 2
+- Điểm chi tiết 3"
 ```
 
-**Lưu ý commit message:**
-- Dòng đầu: tóm tắt < 50 ký tự
-- Dòng trắng
-- Chi tiết: mô tả thay đổi từng mục đích
+**Ví dụ thực tế:**
+```bash
+git commit -m "Fix: Message listener response handling
+
+- Add safeSendResponse pattern to prevent channel closing
+- Wrap getChatMeta() safely in get_result handler
+- Notify background on prompt_failed timeout
+- Add debug logging to sendToTabRobust retry
+- Handle unknown actions with error responses"
+```
 
 ### Bước 5: Push code lên remote
 ```bash
 # Đẩy branch hiện tại
-git push origin main
+git push origin side-panel
 
-# Hoặc đẩy với tracking (lần đầu tiên)
-git push -u origin main
-
-# Kiểm tra trạng thái
+# Kiểm tra log (5 commit gần nhất)
 git log --oneline -5
 ```
 
 ### Quy trình đầy đủ (một lần)
 ```bash
 npm run build
-git add .
-git commit -m "Fix: Message listener response handling and error notifications"
-git push origin main
+git add src/ README.md vite.config.js .gitignore
+git status                                        # Review trước
+git commit -m "Feature: Brief description"
+git push origin side-panel
 ```
 
 ### Kiểm tra kết quả
@@ -175,11 +196,34 @@ git push origin main
 # Xem lịch sử commit
 git log --oneline
 
-# Xem chi tiết commit cuối
+# Xem chi tiết commit cuối cùng
 git show
 
-# Xem trạng thái so với remote
+# Kiểm tra branch status
 git status
+
+# Xem diff so với remote
+git diff origin/side-panel
+```
+
+### Troubleshooting
+
+**Q: "fatal: refusing to merge unrelated histories"**
+```bash
+git pull origin side-panel --allow-unrelated-histories
+```
+
+**Q: "CRLF will be replaced by LF"**
+```bash
+# Đã được fix bằng: git config core.autocrlf true
+# Không cần lo lắng
+```
+
+**Q: Quên commit message format?**
+```bash
+# Sửa commit cuối cùng
+git commit --amend -m "New message"
+git push origin side-panel --force-with-lease
 ```
 
 ## License

@@ -29,9 +29,13 @@ Thumbs.db
 .coverage/
 test-results/
 
-# Build output (if any)
+# Build output
 build/
 out/
+dist/*.map
+
+# Source map files (generated during build, not needed in git)
+*.map
 
 # Temporary files
 *.tmp
