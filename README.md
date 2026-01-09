@@ -1,5 +1,16 @@
 # ChatGPT Assistant Extension
 
+## Version 2.0 - Cập nhật mới! 🎉
+
+**Tính năng mới**:
+- 📝 **Lịch sử Chat**: Lưu và xem lại 100 chat gần nhất
+- 🐛 **Quản lý Lỗi**: Theo dõi lỗi với CRUD đầy đủ (Thêm/Sửa/Xóa/Đọc)
+- ⚡ **Giảm Lag**: Cache chat-id và response để truy cập nhanh
+- 🎨 **UI cải tiến**: 4 tabs hiện đại với modal và animations
+
+👉 Xem chi tiết: [docs/UPDATE_v2.0.md](docs/UPDATE_v2.0.md)  
+👉 Hướng dẫn: [docs/USER_GUIDE_vi.md](docs/USER_GUIDE_vi.md)
+
 ## Build (Vite)
 
 Project now includes a Vite build pipeline to bundle scripts and output a clean MV3 extension folder in `dist/`.
@@ -21,10 +32,17 @@ Một Chrome extension tự động hóa việc mở ChatGPT và xử lý prompt
 
 ## Tính năng
 
+### Core Features
 1. **Mở ChatGPT định kỳ** - Tự động mở tab ChatGPT mỗi 5 phút nếu chưa mở
 2. **Gửi Prompt tự động** - Gửi prompt được cấu hình tới ChatGPT
-3. **Hiển thị Kết quả** - Nhận và hiển thị kết quả từ ChatGPT
+3. **Hiển thị Kết quả** - Nhận và hiển thị kết quả từ ChatGPT với cache nhanh
 4. **Cấu hình linh hoạt** - Lưu prompt và cài đặt
+
+### New in v2.0
+5. **Lịch sử Chat** - Lưu trữ 100 chat gần nhất với chat-id và response
+6. **Quản lý Lỗi** - Hệ thống CRUD để theo dõi và quản lý lỗi đã gặp
+7. **Performance** - Giảm lag với cache và lưu trữ thông minh
+8. **UI/UX** - Giao diện 4 tabs với modal, animations, và color-coding
 
 ## Cấu trúc Project
 

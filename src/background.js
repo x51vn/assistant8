@@ -17,6 +17,10 @@ const ALARMS = {
 
 const RUNS_KEY = 'runs';
 const MAX_RUNS = 50;
+const CHAT_HISTORY_KEY = 'chatHistory';
+const MAX_CHAT_HISTORY = 100;
+const ERROR_LIST_KEY = 'errorList';
+const MAX_ERRORS = 50;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,6 +51,51 @@ async function updateRun(runId, patch) {
   if (idx === -1) return;
   runs[idx] = { ...runs[idx], ...patch };
   await chrome.storage.local.set({ [RUNS_KEY]: runs });
+}
+
+async function saveChatHistory(entry) {
+  const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+  const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+  history.unshift(entry);
+  if (history.length > MAX_CHAT_HISTORY) history.length = MAX_CHAT_HISTORY;
+  await chrome.storage.local.set({ [CHAT_HISTORY_KEY]: history });
+}
+
+async function addError(error) {
+  const stored = await chrome.storage.local.get([ERROR_LIST_KEY]);
+  const errors = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
+  const errorEntry = {
+    id: makeRunId(),
+    timestamp: Date.now(),
+    ...error
+  };
+  errors.unshift(errorEntry);
+  if (errors.length > MAX_ERRORS) errors.length = MAX_ERRORS;
+  await chrome.storage.local.set({ [ERROR_LIST_KEY]: errors });
+  return errorEntry;
+}
+
+async function updateError(errorId, updates) {
+  const stored = await chrome.storage.local.get([ERROR_LIST_KEY]);
+  const errors = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
+  const idx = errors.findIndex((e) => e && e.id === errorId);
+  if (idx === -1) return null;
+  errors[idx] = { ...errors[idx], ...updates, updatedAt: Date.now() };
+  await chrome.storage.local.set({ [ERROR_LIST_KEY]: errors });
+  return errors[idx];
+}
+
+async function deleteError(errorId) {
+  const stored = await chrome.storage.local.get([ERROR_LIST_KEY]);
+  const errors = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
+  const filtered = errors.filter((e) => e && e.id !== errorId);
+  await chrome.storage.local.set({ [ERROR_LIST_KEY]: filtered });
+  return true;
+}
+
+async function getErrors() {
+  const stored = await chrome.storage.local.get([ERROR_LIST_KEY]);
+  return Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
 }
 
 function withTimeout(promise, ms, label) {
@@ -246,11 +295,12 @@ async function fetchLatestResult(runId) {
       await chrome.storage.local.set({ lastResult: resultText, lastResultAt: Date.now() });
 
       if (response && typeof response === 'object') {
+        const chatId = response.chatId || null;
         const patch = {
           result: resultText,
           resultAt: Date.now(),
           chatUrl: response.chatUrl || null,
-          chatId: response.chatId || null,
+          chatId: chatId,
           assistantMessageId: response.assistantMessageId || null,
           status: 'completed',
         };
@@ -258,9 +308,22 @@ async function fetchLatestResult(runId) {
         await updateRun(effectiveRunId, patch);
         await chrome.storage.local.set({
           lastChatUrl: response.chatUrl || null,
-          lastChatId: response.chatId || null,
+          lastChatId: chatId,
           lastAssistantMessageId: response.assistantMessageId || null,
         });
+
+        // Save to chat history for future reference
+        if (chatId) {
+          const runData = await chrome.storage.local.get(['lastPrompt']);
+          await saveChatHistory({
+            chatId: chatId,
+            chatUrl: response.chatUrl || null,
+            prompt: runData.lastPrompt || '',
+            response: resultText,
+            timestamp: Date.now(),
+            runId: effectiveRunId
+          });
+        }
       }
     } else {
       // Nếu chưa có kết quả ổn định (hoặc timeout), poll lại sau một chút.
@@ -432,6 +495,72 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'get_status') {
       const status = await chrome.storage.local.get(['lastRunAt', 'lastResultAt']);
       safeSendResponse({ status: 'ok', ...status });
+      return;
+    }
+
+    if (request.action === 'get_chat_history') {
+      const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+      const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+      safeSendResponse({ status: 'ok', history });
+      return;
+    }
+
+    if (request.action === 'get_chat_by_id') {
+      const chatId = typeof request.chatId === 'string' ? request.chatId : null;
+      if (!chatId) {
+        safeSendResponse({ status: 'error', error: 'missing_chat_id' });
+        return;
+      }
+      const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+      const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+      const chat = history.find(c => c.chatId === chatId);
+      safeSendResponse({ status: 'ok', chat: chat || null });
+      return;
+    }
+
+    if (request.action === 'add_error') {
+      const errorData = {
+        title: typeof request.title === 'string' ? request.title : 'Lỗi không xác định',
+        description: typeof request.description === 'string' ? request.description : '',
+        type: typeof request.type === 'string' ? request.type : 'general',
+        severity: typeof request.severity === 'string' ? request.severity : 'medium'
+      };
+      const error = await addError(errorData);
+      safeSendResponse({ status: 'ok', error });
+      return;
+    }
+
+    if (request.action === 'update_error') {
+      const errorId = typeof request.errorId === 'string' ? request.errorId : null;
+      if (!errorId) {
+        safeSendResponse({ status: 'error', error: 'missing_error_id' });
+        return;
+      }
+      const updates = {
+        title: request.title,
+        description: request.description,
+        type: request.type,
+        severity: request.severity
+      };
+      const updated = await updateError(errorId, updates);
+      safeSendResponse({ status: 'ok', error: updated });
+      return;
+    }
+
+    if (request.action === 'delete_error') {
+      const errorId = typeof request.errorId === 'string' ? request.errorId : null;
+      if (!errorId) {
+        safeSendResponse({ status: 'error', error: 'missing_error_id' });
+        return;
+      }
+      await deleteError(errorId);
+      safeSendResponse({ status: 'ok' });
+      return;
+    }
+
+    if (request.action === 'get_errors') {
+      const errors = await getErrors();
+      safeSendResponse({ status: 'ok', errors });
       return;
     }
 

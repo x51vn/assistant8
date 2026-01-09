@@ -1,15 +1,23 @@
-export function setActivePage({ resultsPage, settingsPage, resultsBtn, settingsBtn, page }) {
-  if (!resultsPage || !settingsPage || !resultsBtn || !settingsBtn) return;
+export function setActivePage({ resultsPage, historyPage, errorsPage, settingsPage, resultsBtn, historyBtn, errorsBtn, settingsBtn, page }) {
+  const pages = [resultsPage, historyPage, errorsPage, settingsPage];
+  const btns = [resultsBtn, historyBtn, errorsBtn, settingsBtn];
 
-  if (page === 'results') {
+  // Remove active from all pages and buttons
+  pages.forEach(p => p?.classList.remove('active'));
+  btns.forEach(b => b?.classList.remove('active'));
+
+  // Add active to selected page and button
+  if (page === 'results' && resultsPage && resultsBtn) {
     resultsPage.classList.add('active');
-    settingsPage.classList.remove('active');
     resultsBtn.classList.add('active');
-    settingsBtn.classList.remove('active');
-  } else {
+  } else if (page === 'history' && historyPage && historyBtn) {
+    historyPage.classList.add('active');
+    historyBtn.classList.add('active');
+  } else if (page === 'errors' && errorsPage && errorsBtn) {
+    errorsPage.classList.add('active');
+    errorsBtn.classList.add('active');
+  } else if (page === 'settings' && settingsPage && settingsBtn) {
     settingsPage.classList.add('active');
-    resultsPage.classList.remove('active');
     settingsBtn.classList.add('active');
-    resultsBtn.classList.remove('active');
   }
 }
