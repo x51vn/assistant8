@@ -39,6 +39,10 @@ function copyExtensionStatic() {
 
       const imagesDir = path.resolve(staticDir, 'images');
       await copyDir(imagesDir, path.resolve(outDir, 'images'));
+
+      // Copy prompts directory
+      const promptsDir = path.resolve(root, 'src', 'prompts');
+      await copyDir(promptsDir, path.resolve(outDir, 'prompts'));
     },
   };
 }

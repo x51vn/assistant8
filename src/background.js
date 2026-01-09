@@ -3,6 +3,7 @@
 
 import { applyPromptTemplate } from './promptTemplate.js';
 import * as ChatGPTSession from './chatgptSession.js';
+import { loadAndRender } from './promptLoader.js';
 
 const DEFAULTS = {
   prompt: '',
@@ -207,37 +208,54 @@ async function sendToTabRobust(tabId, message) {
   }
 }
 
-function buildEvaluationPrompt(currentPrompt, previousPrompt, previousResult) {
-  return `${currentPrompt}
+async function buildEvaluationPrompt(currentPrompt, previousPrompt, previousResult) {
+  return await loadAndRender('evaluation', {
+    currentPrompt,
+    previousPrompt,
+    previousResult
+  });
+}
 
----
+async function buildRetrospectivePrompt(chatHistory, errors) {
+  const recentHistory = chatHistory.slice(-5); // Last 5 runs
+  const criticalErrors = errors.filter(e => e.severity === 'high' || e.severity === 'critical');
+  const recentErrors = errors.slice(-10); // Last 10 errors
+  
+  // Build history items section
+  let historyItems = '';
+  recentHistory.forEach((item, idx) => {
+    historyItems += `### Run ${idx + 1} (${new Date(item.timestamp).toLocaleString('vi-VN')})
+**Prompt:** ${item.prompt.substring(0, 200)}${item.prompt.length > 200 ? '...' : ''}
 
-## KẾT QUẢ LẦN CHẠY TRƯỚC
+**Response:** ${item.response.substring(0, 300)}${item.response.length > 300 ? '...' : ''}
 
-**Prompt trước:**
-\`\`\`
-${previousPrompt}
-\`\`\`
+`;
+  });
 
-**Kết quả trước:**
-\`\`\`
-${previousResult}
-\`\`\`
+  // Build critical errors section
+  let criticalErrorsText = '';
+  if (criticalErrors.length > 0) {
+    criticalErrors.forEach(err => {
+      criticalErrorsText += `- **${err.title}** (${err.severity}): ${err.description}\n`;
+    });
+  } else {
+    criticalErrorsText = '(Không có lỗi nghiêm trọng)\n';
+  }
 
----
+  // Build recent errors section
+  let recentErrorsText = '';
+  recentErrors.forEach(err => {
+    recentErrorsText += `- **${err.title}** (${err.severity}, ${err.type}): ${err.description.substring(0, 100)}${err.description.length > 100 ? '...' : ''}\n`;
+  });
 
-**YÊU CẦU ĐÁNH GIÁ:**
-
-Hãy phân tích kết quả lần chạy trước và:
-
-1. **Đánh giá chất lượng:** Kết quả có đạt mục tiêu không? Còn thiếu sót gì?
-2. **Đề xuất cải tiến:** 
-   - Cần THÊM mã nào để hoàn thiện?
-   - Cần BỚT/XÓA mã nào thừa hoặc sai?
-   - Cần ĐỔI HƯỚNG tiếp cận nào khác tốt hơn?
-3. **Giải thích lý do:** Tại sao cần thay đổi? Lợi ích gì?
-
-Sau đó, hãy thực hiện prompt hiện tại với những cải tiến dựa trên đánh giá trên.`;
+  return await loadAndRender('retrospective', {
+    historyCount: recentHistory.length,
+    historyItems,
+    criticalErrorCount: criticalErrors.length,
+    criticalErrors: criticalErrorsText,
+    recentErrorCount: recentErrors.length,
+    recentErrors: recentErrorsText
+  });
 }
 
 async function inputPrompt(prompt) {
@@ -639,6 +657,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'get_errors') {
       const errors = await getErrors();
       safeSendResponse({ status: 'ok', errors });
+      return;
+    }
+
+    if (request.action === 'run_retrospective') {
+      try {
+        // Get chat history and errors
+        const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY, ERROR_LIST_KEY]);
+        const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+        const errors = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
+        
+        // Build retrospective prompt
+        const prompt = buildRetrospectivePrompt(history, errors);
+        
+        // Send to ChatGPT
+        const result = await inputPrompt(prompt);
+        
+        safeSendResponse({ status: 'ok', runId: result.runId });
+      } catch (err) {
+        console.error('run_retrospective error:', err);
+        safeSendResponse({ status: 'error', error: String(err?.message || err) });
+      }
       return;
     }
 

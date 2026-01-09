@@ -27,6 +27,7 @@ import { loadCachedResultFast } from './storage.js';
 
     errorList: byId('errorList'),
     addErrorBtn: byId('addErrorBtn'),
+    retrospectiveBtn: byId('retrospectiveBtn'),
     errorModal: byId('errorModal'),
     errorModalTitle: byId('errorModalTitle'),
     closeErrorModal: byId('closeErrorModal'),

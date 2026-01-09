@@ -3,7 +3,7 @@ export function setupErrors(dom) {
     errorsBtn, errorsPage, errorList, addErrorBtn,
     errorModal, errorModalTitle, closeErrorModal, cancelErrorBtn,
     errorTitleInput, errorDescInput, errorTypeInput, errorSeverityInput,
-    saveErrorBtn
+    saveErrorBtn, retrospectiveBtn
   } = dom;
 
   let currentErrorId = null;
@@ -183,6 +183,73 @@ export function setupErrors(dom) {
   // Event listeners
   if (addErrorBtn) {
     addErrorBtn.addEventListener('click', openAddModal);
+  }
+
+  if (retrospectiveBtn) {
+    retrospectiveBtn.addEventListener('click', async () => {
+      if (!confirm('Bắt đầu phân tích retrospective? Điều này sẽ gửi lịch sử và lỗi đến ChatGPT để phân tích.')) return;
+      
+      retrospectiveBtn.disabled = true;
+      retrospectiveBtn.textContent = '⏳ Đang phân tích...';
+      
+      chrome.runtime.sendMessage({ action: 'run_retrospective' }, (response) => {
+        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+          alert('Lỗi khi chạy retrospective!');
+          retrospectiveBtn.disabled = false;
+          retrospectiveBtn.textContent = '🔍 Retrospective';
+          return;
+        }
+        
+        const runId = response.runId;
+        
+        // Poll for result
+        let pollCount = 0;
+        const maxPolls = 100;
+        
+        const pollInterval = setInterval(() => {
+          pollCount++;
+          retrospectiveBtn.textContent = `⏳ Đang chờ (${pollCount * 3}s)...`;
+          
+          if (pollCount > maxPolls) {
+            clearInterval(pollInterval);
+            retrospectiveBtn.disabled = false;
+            retrospectiveBtn.textContent = '🔍 Retrospective';
+            alert('Timeout: Không nhận được kết quả sau 5 phút.');
+            return;
+          }
+          
+          chrome.runtime.sendMessage({ action: 'get_result' }, (pollResponse) => {
+            if (chrome.runtime.lastError) {
+              clearInterval(pollInterval);
+              retrospectiveBtn.disabled = false;
+              retrospectiveBtn.textContent = '🔍 Retrospective';
+              return;
+            }
+            
+            if (pollResponse && pollResponse.result && pollResponse.source === 'live') {
+              clearInterval(pollInterval);
+              retrospectiveBtn.disabled = false;
+              retrospectiveBtn.textContent = '🔍 Retrospective';
+              
+              // Save result as new error entry (type: retrospective)
+              const timestamp = Date.now();
+              const title = `Retrospective - ${new Date(timestamp).toLocaleString('vi-VN')}`;
+              
+              chrome.runtime.sendMessage({
+                action: 'add_error',
+                title: title,
+                description: pollResponse.result,
+                type: 'general',
+                severity: 'low'
+              }, () => {
+                loadErrors();
+                alert('Phân tích retrospective hoàn tất! Đã lưu vào danh sách lỗi.');
+              });
+            }
+          });
+        }, 3000);
+      });
+    });
   }
 
   if (closeErrorModal) {
