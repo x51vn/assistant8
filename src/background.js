@@ -487,8 +487,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'ensure_chatgpt_open') {
-      await ensureChatGPTTab();
-      safeSendResponse({ status: 'ok' });
+      try {
+        await ensureChatGPTTab();
+        safeSendResponse({ status: 'ok' });
+      } catch (err) {
+        console.error('ensure_chatgpt_open error:', err);
+        safeSendResponse({ status: 'error', error: String(err?.message || err) });
+      }
       return;
     }
 
@@ -498,38 +503,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         safeSendResponse({ status: 'error', error: 'missing_prompt' });
         return;
       }
-      const r = await inputPrompt(prompt);
-      safeSendResponse({ status: 'ok', runId: r.runId });
+      try {
+        const r = await inputPrompt(prompt);
+        safeSendResponse({ status: 'ok', runId: r.runId });
+      } catch (err) {
+        console.error('send_prompt error:', err);
+        safeSendResponse({ status: 'error', error: String(err?.message || err) });
+      }
       return;
     }
 
     if (request.action === 'prompt_sent') {
-      const runId = typeof request.runId === 'string' ? request.runId : null;
-      const chatUrl = typeof request.chatUrl === 'string' ? request.chatUrl : null;
-      const chatId = typeof request.chatId === 'string' ? request.chatId : null;
+      try {
+        const runId = typeof request.runId === 'string' ? request.runId : null;
+        const chatUrl = typeof request.chatUrl === 'string' ? request.chatUrl : null;
+        const chatId = typeof request.chatId === 'string' ? request.chatId : null;
 
-      if (runId) {
-        await updateRun(runId, { status: 'sent', chatUrl, chatId });
+        if (runId) {
+          await updateRun(runId, { status: 'sent', chatUrl, chatId });
+        }
+
+        if (chatUrl || chatId) {
+          await chrome.storage.local.set({ lastChatUrl: chatUrl || null, lastChatId: chatId || null });
+        }
+
+        safeSendResponse({ status: 'ok' });
+      } catch (err) {
+        console.error('prompt_sent error:', err);
+        safeSendResponse({ status: 'error', error: String(err?.message || err) });
       }
-
-      if (chatUrl || chatId) {
-        await chrome.storage.local.set({ lastChatUrl: chatUrl || null, lastChatId: chatId || null });
-      }
-
-      safeSendResponse({ status: 'ok' });
       return;
     }
 
     if (request.action === 'get_result') {
-      const storedRun = await chrome.storage.local.get(['lastRunId']);
-      const latest = await fetchLatestResult(storedRun.lastRunId);
-      if (latest) {
-        safeSendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
-        return;
-      }
+      try {
+        const storedRun = await chrome.storage.local.get(['lastRunId']);
+        const latest = await fetchLatestResult(storedRun.lastRunId);
+        if (latest) {
+          safeSendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
+          return;
+        }
 
-      const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
-      safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
+        const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
+        safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
+      } catch (err) {
+        console.error('get_result error:', err);
+        // Still return cached result even if fetch fails
+        const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
+        safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache', error: String(err?.message || err) });
+      }
       return;
     }
 
