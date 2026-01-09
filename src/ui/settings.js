@@ -6,6 +6,7 @@ export function setupSettings(dom) {
   const {
     promptInput,
     autoRunCheckbox,
+    evaluatePreviousCheckbox,
     intervalInput,
     saveBtn,
     sendBtn,
@@ -28,6 +29,7 @@ export function setupSettings(dom) {
     const settings = {
       prompt,
       autoRun: !!autoRunCheckbox?.checked,
+      evaluatePrevious: !!evaluatePreviousCheckbox?.checked,
       interval: parseInt(intervalInput?.value, 10) || 5,
     };
 
@@ -38,6 +40,7 @@ export function setupSettings(dom) {
   resetBtn?.addEventListener('click', () => {
     if (promptInput) promptInput.value = '';
     if (autoRunCheckbox) autoRunCheckbox.checked = false;
+    if (evaluatePreviousCheckbox) evaluatePreviousCheckbox.checked = false;
     if (intervalInput) intervalInput.value = 5;
     chrome.storage.local.clear();
     showStatus(saveStatus, 'Reset cấu hình!', 'info');
@@ -72,5 +75,5 @@ export function setupSettings(dom) {
     });
   });
 
-  loadSettings({ promptInput, autoRunCheckbox, intervalInput });
+  loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput });
 }

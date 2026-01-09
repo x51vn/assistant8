@@ -39,6 +39,7 @@ import { loadCachedResultFast } from './storage.js';
 
     promptInput: byId('promptInput'),
     autoRunCheckbox: byId('autoRunCheckbox'),
+    evaluatePreviousCheckbox: byId('evaluatePreviousCheckbox'),
     intervalInput: byId('intervalInput'),
     saveBtn: byId('saveBtn'),
     sendBtn: byId('sendBtn'),

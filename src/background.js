@@ -7,6 +7,7 @@ const DEFAULTS = {
   prompt: '',
   autoRun: false,
   interval: 5,
+  evaluatePrevious: false,
 };
 
 const ALARMS = {
@@ -107,20 +108,22 @@ function withTimeout(promise, ms, label) {
 }
 
 async function getSettings() {
-  const settings = await chrome.storage.local.get(['prompt', 'autoRun', 'interval']);
+  const settings = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious']);
   return {
     prompt: typeof settings.prompt === 'string' ? settings.prompt : DEFAULTS.prompt,
     autoRun: !!settings.autoRun,
     interval: Number.isFinite(settings.interval) ? settings.interval : DEFAULTS.interval,
+    evaluatePrevious: !!settings.evaluatePrevious,
   };
 }
 
 async function ensureDefaults() {
-  const existing = await chrome.storage.local.get(['prompt', 'autoRun', 'interval']);
+  const existing = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious']);
   const toSet = {};
   if (typeof existing.prompt !== 'string') toSet.prompt = DEFAULTS.prompt;
   if (typeof existing.autoRun !== 'boolean') toSet.autoRun = DEFAULTS.autoRun;
   if (!Number.isFinite(existing.interval)) toSet.interval = DEFAULTS.interval;
+  if (typeof existing.evaluatePrevious !== 'boolean') toSet.evaluatePrevious = DEFAULTS.evaluatePrevious;
   if (Object.keys(toSet).length) await chrome.storage.local.set(toSet);
 }
 
@@ -203,6 +206,39 @@ async function sendToTabRobust(tabId, message) {
   }
 }
 
+function buildEvaluationPrompt(currentPrompt, previousPrompt, previousResult) {
+  return `${currentPrompt}
+
+---
+
+## KẾT QUẢ LẦN CHẠY TRƯỚC
+
+**Prompt trước:**
+\`\`\`
+${previousPrompt}
+\`\`\`
+
+**Kết quả trước:**
+\`\`\`
+${previousResult}
+\`\`\`
+
+---
+
+**YÊU CẦU ĐÁNH GIÁ:**
+
+Hãy phân tích kết quả lần chạy trước và:
+
+1. **Đánh giá chất lượng:** Kết quả có đạt mục tiêu không? Còn thiếu sót gì?
+2. **Đề xuất cải tiến:** 
+   - Cần THÊM mã nào để hoàn thiện?
+   - Cần BỚT/XÓA mã nào thừa hoặc sai?
+   - Cần ĐỔI HƯỚNG tiếp cận nào khác tốt hơn?
+3. **Giải thích lý do:** Tại sao cần thay đổi? Lợi ích gì?
+
+Sau đó, hãy thực hiện prompt hiện tại với những cải tiến dựa trên đánh giá trên.`;
+}
+
 async function inputPrompt(prompt) {
   const runId = makeRunId();
   const sentAt = Date.now();
@@ -210,10 +246,22 @@ async function inputPrompt(prompt) {
   const tab = await ensureChatGPTTab();
   if (tab.id == null) throw new Error('No tab id');
 
-  await chrome.storage.local.set({ lastRunId: runId, lastRunAt: sentAt, lastPrompt: prompt, lastTabId: tab.id });
+  // Check if we should append previous result
+  const settings = await getSettings();
+  let finalPrompt = prompt;
+  
+  if (settings.evaluatePrevious) {
+    const stored = await chrome.storage.local.get(['lastResult', 'lastPrompt']);
+    if (stored.lastResult && stored.lastResult.trim()) {
+      // Build evaluation prompt with previous result
+      finalPrompt = buildEvaluationPrompt(prompt, stored.lastPrompt || '', stored.lastResult);
+    }
+  }
+
+  await chrome.storage.local.set({ lastRunId: runId, lastRunAt: sentAt, lastPrompt: finalPrompt, lastTabId: tab.id });
   await appendRun({
     runId,
-    prompt,
+    prompt: finalPrompt,
     sentAt,
     status: 'sending',
     tabId: tab.id,
@@ -225,7 +273,7 @@ async function inputPrompt(prompt) {
   });
 
   try {
-    const enhancedPrompt = await applyPromptTemplate(prompt);
+    const enhancedPrompt = await applyPromptTemplate(finalPrompt);
     const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
 
     // content.js trả về meta (chatUrl/chatId)

@@ -5,7 +5,7 @@ export function setupNavigation(dom) {
   const { 
     resultsBtn, historyBtn, errorsBtn, settingsBtn, 
     resultsPage, historyPage, errorsPage, settingsPage, 
-    promptInput, autoRunCheckbox, intervalInput 
+    promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput 
   } = dom;
 
   resultsBtn?.addEventListener('click', () => {
@@ -38,6 +38,6 @@ export function setupNavigation(dom) {
       resultsBtn, historyBtn, errorsBtn, settingsBtn, 
       page: 'settings' 
     });
-    loadSettings({ promptInput, autoRunCheckbox, intervalInput });
+    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput });
   });
 }
