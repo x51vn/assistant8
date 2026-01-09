@@ -403,6 +403,116 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
 
+  // New modular actions
+  if (request.action === 'create_new_session') {
+    (async () => {
+      try {
+        const success = await ensureNewChatSession();
+        const meta = getChatMeta();
+        safeSendResponse({ success, ...meta });
+      } catch (e) {
+        safeSendResponse({ success: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === 'send_input') {
+    (async () => {
+      try {
+        const prompt = typeof request.prompt === 'string' ? request.prompt : '';
+        const createNewChat = request.createNewChat !== false;
+        const runId = typeof request.runId === 'string' ? request.runId : null;
+
+        const success = await inputAndSendPrompt(prompt, { createNewChat });
+        const meta = getChatMeta();
+        safeSendResponse({ status: success ? 'sent' : 'failed', runId, ...meta });
+      } catch (e) {
+        safeSendResponse({ status: 'error', error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === 'get_output') {
+    (async () => {
+      try {
+        const wait = request.wait !== false;
+        const timeoutMs = Number.isFinite(request.timeoutMs) ? request.timeoutMs : 15 * 60 * 1000;
+        const stableMs = Number.isFinite(request.stableMs) ? request.stableMs : 1500;
+
+        const meta = getChatMeta();
+
+        if (!wait) {
+          const latest = getLatestAssistantMessageMeta();
+          safeSendResponse({ result: latest.text, assistantMessageId: latest.messageId, status: 'ok', ...meta });
+          return;
+        }
+
+        const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs });
+        const latest = getLatestAssistantMessageMeta();
+        safeSendResponse({
+          result: waited.text || latest.text,
+          assistantMessageId: latest.messageId,
+          status: waited.status,
+          ...meta
+        });
+      } catch (e) {
+        safeSendResponse({ status: 'error', error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === 'check_response_status') {
+    try {
+      const generating = isGenerating();
+      const latest = getLatestAssistantMessageMeta();
+      const hasContent = !!latest.text;
+      const messageCount = getConversationMessageCount();
+
+      safeSendResponse({
+        ready: !generating && hasContent,
+        generating,
+        hasContent,
+        messageCount
+      });
+    } catch (e) {
+      safeSendResponse({ ready: false, generating: false, hasContent: false, error: String(e?.message || e) });
+    }
+    return true;
+  }
+
+  if (request.action === 'get_chat_metadata') {
+    try {
+      const meta = getChatMeta();
+      safeSendResponse(meta);
+    } catch (e) {
+      safeSendResponse({ chatId: null, chatUrl: null, error: String(e?.message || e) });
+    }
+    return true;
+  }
+
+  if (request.action === 'get_message_count') {
+    try {
+      const count = getConversationMessageCount();
+      safeSendResponse({ count });
+    } catch (e) {
+      safeSendResponse({ count: 0, error: String(e?.message || e) });
+    }
+    return true;
+  }
+
+  if (request.action === 'clear_conversation') {
+    try {
+      triggerNewChatNavigation();
+      safeSendResponse({ success: true });
+    } catch (e) {
+      safeSendResponse({ success: false, error: String(e?.message || e) });
+    }
+    return true;
+  }
+
   if (request.action === 'get_result') {
     (async () => {
       let meta = {};

@@ -2,6 +2,7 @@
 // Mục tiêu: ổn định, ít race condition, lưu lastResult để popup hiển thị nhanh.
 
 import { applyPromptTemplate } from './promptTemplate.js';
+import * as ChatGPTSession from './chatgptSession.js';
 
 const DEFAULTS = {
   prompt: '',
@@ -274,21 +275,27 @@ async function inputPrompt(prompt) {
 
   try {
     const enhancedPrompt = await applyPromptTemplate(finalPrompt);
-    const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
+    
+    // Use modular session management
+    const sendResult = await ChatGPTSession.sendInput(tab.id, enhancedPrompt, { 
+      createNewChat: true,
+      runId: runId 
+    });
 
-    // content.js trả về meta (chatUrl/chatId)
-    if (response && typeof response === 'object') {
-      const ok = response.status === 'sent' || response.status === 'accepted';
+    if (sendResult.success) {
       await updateRun(runId, {
-        status: ok ? 'sent' : 'failed',
-        chatUrl: response.chatUrl || null,
-        chatId: response.chatId || null,
+        status: 'sent',
+        chatUrl: sendResult.chatUrl || null,
+        chatId: sendResult.chatId || null,
       });
-      if (response.chatUrl || response.chatId) {
-        await chrome.storage.local.set({ lastChatUrl: response.chatUrl || null, lastChatId: response.chatId || null });
+      if (sendResult.chatUrl || sendResult.chatId) {
+        await chrome.storage.local.set({ 
+          lastChatUrl: sendResult.chatUrl || null, 
+          lastChatId: sendResult.chatId || null 
+        });
       }
     } else {
-      await updateRun(runId, { status: 'sent' });
+      await updateRun(runId, { status: 'failed', error: sendResult.error || 'unknown_error' });
     }
 
     // Schedule a poll to capture result even when popup is closed.
@@ -296,31 +303,33 @@ async function inputPrompt(prompt) {
     chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
     return { status: 'ok', runId };
   } catch (error) {
-    // content script might not be ready yet; retry once after short delay.
+    // Retry once after short delay
     await delay(1500);
     try {
-      const enhancedPrompt = await applyPromptTemplate(prompt);
-      const response = await sendToTabRobust(tab.id, { action: 'input_prompt', prompt: enhancedPrompt, runId });
+      const enhancedPrompt = await applyPromptTemplate(finalPrompt);
+      const sendResult = await ChatGPTSession.sendInput(tab.id, enhancedPrompt, { 
+        createNewChat: true,
+        runId: runId 
+      });
 
-      if (response && typeof response === 'object') {
-        const ok = response.status === 'sent' || response.status === 'accepted';
+      if (sendResult.success) {
         await updateRun(runId, {
-          status: ok ? 'sent' : 'failed',
-          chatUrl: response.chatUrl || null,
-          chatId: response.chatId || null,
+          status: 'sent',
+          chatUrl: sendResult.chatUrl || null,
+          chatId: sendResult.chatId || null,
         });
-        if (response.chatUrl || response.chatId) {
-          await chrome.storage.local.set({ lastChatUrl: response.chatUrl || null, lastChatId: response.chatId || null });
+        if (sendResult.chatUrl || sendResult.chatId) {
+          await chrome.storage.local.set({ 
+            lastChatUrl: sendResult.chatUrl || null, 
+            lastChatId: sendResult.chatId || null 
+          });
         }
-      } else {
-        await updateRun(runId, { status: 'sent' });
       }
 
       await chrome.alarms.clear(ALARMS.POLL);
       chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
       return { status: 'ok', runId };
     } catch (finalError) {
-      // Keep the worker stable; let caller decide how to surface this.
       await updateRun(runId, { status: 'failed', error: String(finalError?.message || finalError) });
       throw finalError;
     }
@@ -332,50 +341,49 @@ async function fetchLatestResult(runId) {
   if (tabs.length === 0 || tabs[0].id == null) return null;
 
   try {
-    const response = await sendToTabRobust(tabs[0].id, {
-      action: 'get_result',
+    // Use modular session management
+    const outputResult = await ChatGPTSession.getOutput(tabs[0].id, {
       wait: true,
       timeoutMs: 15 * 60 * 1000,
-      stableMs: 1500,
+      stableMs: 1500
     });
-    const resultText = response && typeof response.result === 'string' ? response.result : null;
+    
+    const resultText = outputResult.success && outputResult.result ? outputResult.result : null;
     if (resultText) {
       await chrome.storage.local.set({ lastResult: resultText, lastResultAt: Date.now() });
 
-      if (response && typeof response === 'object') {
-        const chatId = response.chatId || null;
-        const patch = {
-          result: resultText,
-          resultAt: Date.now(),
-          chatUrl: response.chatUrl || null,
-          chatId: chatId,
-          assistantMessageId: response.assistantMessageId || null,
-          status: 'completed',
-        };
-        const effectiveRunId = runId || (await chrome.storage.local.get(['lastRunId'])).lastRunId;
-        await updateRun(effectiveRunId, patch);
-        await chrome.storage.local.set({
-          lastChatUrl: response.chatUrl || null,
-          lastChatId: chatId,
-          lastAssistantMessageId: response.assistantMessageId || null,
-        });
+      const chatId = outputResult.chatId || null;
+      const patch = {
+        result: resultText,
+        resultAt: Date.now(),
+        chatUrl: outputResult.chatUrl || null,
+        chatId: chatId,
+        assistantMessageId: outputResult.assistantMessageId || null,
+        status: 'completed',
+      };
+      const effectiveRunId = runId || (await chrome.storage.local.get(['lastRunId'])).lastRunId;
+      await updateRun(effectiveRunId, patch);
+      await chrome.storage.local.set({
+        lastChatUrl: outputResult.chatUrl || null,
+        lastChatId: chatId,
+        lastAssistantMessageId: outputResult.assistantMessageId || null,
+      });
 
-        // Save to chat history for future reference
-        if (chatId) {
-          const runData = await chrome.storage.local.get(['lastPrompt']);
-          await saveChatHistory({
-            chatId: chatId,
-            chatUrl: response.chatUrl || null,
-            prompt: runData.lastPrompt || '',
-            response: resultText,
-            timestamp: Date.now(),
-            runId: effectiveRunId
-          });
-        }
+      // Save to chat history for future reference
+      if (chatId) {
+        const runData = await chrome.storage.local.get(['lastPrompt']);
+        await saveChatHistory({
+          chatId: chatId,
+          chatUrl: outputResult.chatUrl || null,
+          prompt: runData.lastPrompt || '',
+          response: resultText,
+          timestamp: Date.now(),
+          runId: effectiveRunId
+        });
       }
     } else {
       // Nếu chưa có kết quả ổn định (hoặc timeout), poll lại sau một chút.
-      if (response && typeof response === 'object' && (response.status === 'timeout' || response.status === 'generating')) {
+      if (outputResult.status === 'timeout' || outputResult.status === 'generating' || outputResult.status === 'no_result') {
         await chrome.alarms.clear(ALARMS.POLL);
         chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 8000 });
       }
