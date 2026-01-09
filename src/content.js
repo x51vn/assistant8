@@ -330,9 +330,32 @@ function getLatestAssistantMessageMeta() {
   const nodes = document.querySelectorAll('div[data-message-author-role="assistant"]');
   if (!nodes || nodes.length === 0) return { text: null, messageId: null };
   const last = nodes[nodes.length - 1];
-  const text = (last.innerText || last.textContent || '').trim() || null;
+  
+  // Try to get clean content without citations/metadata
+  // ChatGPT structure: main content is usually in .markdown or prose container
+  let text = null;
+  
+  // Strategy 1: Look for markdown/prose content wrapper
+  const markdownContent = last.querySelector('.markdown, .prose, [class*="markdown"], [class*="prose"]');
+  if (markdownContent) {
+    text = (markdownContent.innerText || markdownContent.textContent || '').trim();
+  }
+  
+  // Strategy 2: If no markdown wrapper, clone the node and remove known noise elements
+  if (!text) {
+    const clone = last.cloneNode(true);
+    // Remove citation links, metadata, and other noise
+    clone.querySelectorAll('a[href*="f319.com"], a[href*="vietstock"], button, [class*="citation"], [class*="metadata"]').forEach(el => el.remove());
+    text = (clone.innerText || clone.textContent || '').trim();
+  }
+  
+  // Strategy 3: Fallback to original behavior
+  if (!text) {
+    text = (last.innerText || last.textContent || '').trim();
+  }
+  
   const messageId = last.getAttribute('data-message-id') || null;
-  return { text, messageId };
+  return { text: text || null, messageId };
 }
 
 function isGenerating() {

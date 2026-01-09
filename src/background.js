@@ -58,11 +58,18 @@ async function updateRun(runId, patch) {
 }
 
 async function saveChatHistory(entry) {
+  console.log('[Background] saveChatHistory called, entry:', {
+    chatId: entry.chatId,
+    promptLength: entry.prompt?.length,
+    responseLength: entry.response?.length,
+    timestamp: entry.timestamp
+  });
   const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
   const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
   history.unshift(entry);
   if (history.length > MAX_CHAT_HISTORY) history.length = MAX_CHAT_HISTORY;
   await chrome.storage.local.set({ [CHAT_HISTORY_KEY]: history });
+  console.log('[Background] Chat history saved, total items:', history.length);
 }
 
 async function addError(error) {
