@@ -1,31 +1,70 @@
 # RETROSPECTIVE ANALYSIS
 
-Hãy phân tích hiện trạng dựa trên lịch sử chạy gần đây và danh sách lỗi:
+Hãy phân tích dựa trên lịch sử chạy gần đây và các ghi chú hiện có:
 
 ## LỊCH SỬ CHẠY GẦN ĐÂY ({{historyCount}} lần)
 
 {{historyItems}}
 
-## LỖI ĐÃ GHI NHẬN
+## GHI CHÚ RETROSPECTIVE HIỆN CÓ
 
-### Lỗi nghiêm trọng ({{criticalErrorCount}}):
+### Ghi chú nghiêm trọng ({{criticalErrorCount}}):
 {{criticalErrors}}
 
-### Lỗi gần đây ({{recentErrorCount}}):
+### Ghi chú gần đây ({{recentErrorCount}}):
 {{recentErrors}}
 
 ## YÊU CẦU PHÂN TÍCH
 
-Dựa trên dữ liệu trên, hãy:
+Dựa trên lịch sử và trạng thái thị trường hiện tại, hãy đánh giá:
 
-1. **Đánh giá hiện trạng thực tế thị trường**: Những xu hướng nào đang nổi lên? Công nghệ/phương pháp nào đang được sử dụng phổ biến?
+### 1. ĐÁNH GIÁ NHẬN ĐỊNH TRƯỚC ĐÓ
+- Những dự đoán/nhận định trong lịch sử ĐÚNG ở đâu? Tại sao đúng?
+- Những dự đoán/nhận định SAI ở đâu? Nguyên nhân sai lầm?
+- Pattern lặp lại: Có mẫu hình sai lệch nào xuất hiện nhiều lần?
 
-2. **Điểm mạnh (đang làm tốt)**: Những gì chúng ta đang làm đúng và nên tiếp tục?
+### 2. OUTPUT CẤU TRÚC BẮT BUỘC
 
-3. **Điểm yếu (chưa tốt)**: Những vấn đề/lỗi lặp lại, pattern anti-pattern, thiếu sót cần khắc phục?
+Hãy trả lời theo định dạng sau để dễ lưu trữ:
 
-4. **Khả năng cải thiện**: Đề xuất cụ thể để sửa chữa, tối ưu hóa code, process, hoặc thay đổi hướng đi?
+```
+## ĐIỀU CẦN PHÁT HUY (MAINTAIN)
 
-5. **Hành động tiếp theo**: Top 3-5 việc cần làm ngay để cải thiện chất lượng?
+[Mỗi item một dòng, format: "✅ [Insight chi tiết] | Evidence: [Trích dẫn từ lịch sử]"]
 
-Hãy trả lời chi tiết, có dẫn chứng cụ thể từ lịch sử và lỗi đã ghi nhận.
+1. ✅ [Điều gì đã làm đúng và hiệu quả] | Evidence: [Chứng cứ cụ thể từ history]
+2. ✅ [Phương pháp/chiến lược nào nên tiếp tục] | Evidence: [Dẫn chứng]
+...
+
+## SAI LẦM CẦN TRÁNH (AVOID)
+
+[Mỗi item một dòng, format: "❌ [Sai lầm cụ thể] | Evidence: [Trích dẫn] | Why: [Nguyên nhân]"]
+
+1. ❌ [Sai lầm nghiêm trọng cần tránh] | Evidence: [Chứng cứ] | Why: [Tại sao sai]
+2. ❌ [Anti-pattern đã xuất hiện] | Evidence: [Dẫn chứng] | Why: [Nguyên nhân]
+...
+
+## HÀNH ĐỘNG ƯU TIÊN (ACTION ITEMS)
+
+[Top 3-5 việc cần làm ngay, format: "[Priority] Action: [Hành động cụ thể]"]
+
+1. [HIGH] Action: [Việc quan trọng nhất cần làm ngay]
+2. [MEDIUM] Action: [Cải thiện cần thực hiện]
+...
+
+## METRICS ĐỂ ĐÁNH GIÁ
+
+[Tiêu chí đo lường thành công, mỗi dòng một metric]
+
+- Metric 1: [Cách đánh giá cụ thể]
+- Metric 2: [Tiêu chí kiểm tra]
+...
+```
+
+### LƯU Ý QUAN TRỌNG:
+- ✅ BẮT BUỘC tuân thủ format trên (với ✅ và ❌)
+- ✅ Evidence PHẢI trích dẫn cụ thể từ lịch sử
+- ✅ Mỗi insight phải có lý do TẠI SAO (Why)
+- ✅ Actionable: Các item phải có thể thực hiện được
+- ✅ Prioritized: Sắp xếp theo mức độ quan trọng
+

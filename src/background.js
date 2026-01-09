@@ -212,10 +212,32 @@ async function sendToTabRobust(tabId, message) {
 }
 
 async function buildEvaluationPrompt(currentPrompt, previousPrompt, previousResult) {
+  // Fetch retrospective items to include in evaluation
+  const stored = await chrome.storage.local.get([ERROR_LIST_KEY]);
+  const retroItems = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
+  
+  // Build retrospective insights section
+  let retrospectiveInsights = '';
+  if (retroItems.length > 0) {
+    // Get recent items (last 10)
+    const recentItems = retroItems.slice(-10);
+    
+    retrospectiveInsights = '### Các điểm cần lưu ý từ Retrospective:\n\n';
+    recentItems.forEach(item => {
+      const typeLabels = { general: 'Chung', prompt: 'Prompt', response: 'Response', connection: 'Kết nối', timeout: 'Timeout' };
+      const typeLabel = typeLabels[item.type] || 'Chung';
+      const severityIcon = item.severity === 'high' || item.severity === 'critical' ? '❌ [QUAN TRỌNG]' : '⚠️';
+      retrospectiveInsights += `${severityIcon} **${item.title}** (${typeLabel}): ${item.description}\n\n`;
+    });
+  } else {
+    retrospectiveInsights = '(Chưa có retrospective insights. Hãy chạy phân tích retrospective để có thêm kinh nghiệm.)\n';
+  }
+  
   return await loadAndRender('evaluation', {
     currentPrompt,
     previousPrompt,
-    previousResult
+    previousResult,
+    retrospectiveInsights
   });
 }
 
@@ -227,10 +249,12 @@ async function buildRetrospectivePrompt(chatHistory, errors) {
   // Build history items section
   let historyItems = '';
   recentHistory.forEach((item, idx) => {
+    const promptStr = typeof item.prompt === 'string' ? item.prompt : String(item.prompt);
+    const responseStr = typeof item.response === 'string' ? item.response : String(item.response);
     historyItems += `### Run ${idx + 1} (${new Date(item.timestamp).toLocaleString('vi-VN')})
-**Prompt:** ${item.prompt.substring(0, 200)}${item.prompt.length > 200 ? '...' : ''}
+**Prompt:** ${promptStr.substring(0, 200)}${promptStr.length > 200 ? '...' : ''}
 
-**Response:** ${item.response.substring(0, 300)}${item.response.length > 300 ? '...' : ''}
+**Response:** ${responseStr.substring(0, 300)}${responseStr.length > 300 ? '...' : ''}
 
 `;
   });
@@ -248,7 +272,8 @@ async function buildRetrospectivePrompt(chatHistory, errors) {
   // Build recent errors section
   let recentErrorsText = '';
   recentErrors.forEach(err => {
-    recentErrorsText += `- **${err.title}** (${err.severity}, ${err.type}): ${err.description.substring(0, 100)}${err.description.length > 100 ? '...' : ''}\n`;
+    const descStr = typeof err.description === 'string' ? err.description : String(err.description);
+    recentErrorsText += `- **${err.title}** (${err.severity}, ${err.type}): ${descStr.substring(0, 100)}${descStr.length > 100 ? '...' : ''}\n`;
   });
 
   return await loadAndRender('retrospective', {
@@ -261,11 +286,12 @@ async function buildRetrospectivePrompt(chatHistory, errors) {
   });
 }
 
-async function inputPrompt(prompt) {
+async function inputPrompt(prompt, options = {}) {
   console.log('[Background] inputPrompt called with prompt length:', prompt.length);
+  const skipHistory = options.skipHistory === true;
   const runId = makeRunId();
   const sentAt = Date.now();
-  console.log('[Background] Created runId:', runId);
+  console.log('[Background] Created runId:', runId, 'skipHistory:', skipHistory);
 
   const tab = await ensureChatGPTTab();
   console.log('[Background] ChatGPT tab:', tab.id);
@@ -284,7 +310,7 @@ async function inputPrompt(prompt) {
     }
   }
 
-  await chrome.storage.local.set({ lastRunId: runId, lastRunAt: sentAt, lastPrompt: finalPrompt, lastTabId: tab.id });
+  await chrome.storage.local.set({ lastRunId: runId, lastRunAt: sentAt, lastPrompt: finalPrompt, lastTabId: tab.id, skipHistory });
   await appendRun({
     runId,
     prompt: finalPrompt,
@@ -296,6 +322,7 @@ async function inputPrompt(prompt) {
     assistantMessageId: null,
     result: null,
     resultAt: null,
+    skipHistory
   });
 
   try {
@@ -330,7 +357,7 @@ async function inputPrompt(prompt) {
       await chrome.alarms.clear(ALARMS.POLL);
       chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
     }
-    return { status: 'ok', runId, reviewMode: settings.reviewPrompt };
+    return { status: 'ok', runId, reviewMode: settings.reviewPrompt, skipHistory };
   } catch (error) {
     // Retry once after short delay
     await delay(1500);
@@ -402,17 +429,23 @@ async function fetchLatestResult(runId) {
         lastAssistantMessageId: outputResult.assistantMessageId || null,
       });
 
-      // Save to chat history for future reference
+      // Save to chat history for future reference (skip if retrospective)
       if (chatId) {
-        const runData = await chrome.storage.local.get(['lastPrompt']);
-        await saveChatHistory({
-          chatId: chatId,
-          chatUrl: outputResult.chatUrl || null,
-          prompt: runData.lastPrompt || '',
-          response: resultText,
-          timestamp: Date.now(),
-          runId: effectiveRunId
-        });
+        const runData = await chrome.storage.local.get(['lastPrompt', 'skipHistory']);
+        const skipHistory = runData.skipHistory === true;
+        
+        if (!skipHistory) {
+          await saveChatHistory({
+            chatId: chatId,
+            chatUrl: outputResult.chatUrl || null,
+            prompt: runData.lastPrompt || '',
+            response: resultText,
+            timestamp: Date.now(),
+            runId: effectiveRunId
+          });
+        } else {
+          console.log('[Background] Skipping chat history save for retrospective/special query');
+        }
       }
     } else {
       // Nếu chưa có kết quả ổn định (hoặc timeout), poll lại sau một chút.
@@ -631,6 +664,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return;
     }
 
+    if (request.action === 'open_chat_url') {
+      const chatId = typeof request.chatId === 'string' ? request.chatId : null;
+      const chatUrl = typeof request.chatUrl === 'string' ? request.chatUrl : null;
+      
+      console.log('[Background] Opening chat:', { chatId, chatUrl });
+      
+      // Construct URL
+      let url = chatUrl;
+      if (!url && chatId) {
+        url = `https://chatgpt.com/c/${chatId}`;
+      }
+      if (!url) {
+        safeSendResponse({ status: 'error', error: 'missing_url_or_chatId' });
+        return;
+      }
+      
+      try {
+        // Check if there's already a ChatGPT tab
+        const tabs = await queryChatGPTTabs();
+        if (tabs.length > 0 && tabs[0].id != null) {
+          // Navigate existing tab
+          await chrome.tabs.update(tabs[0].id, { url, active: true });
+          safeSendResponse({ status: 'ok', tabId: tabs[0].id });
+        } else {
+          // Create new tab
+          const newTab = await chrome.tabs.create({ url, active: true });
+          safeSendResponse({ status: 'ok', tabId: newTab.id });
+        }
+      } catch (err) {
+        console.error('[Background] open_chat_url error:', err);
+        safeSendResponse({ status: 'error', error: String(err?.message || err) });
+      }
+      return;
+    }
+
     if (request.action === 'get_chat_by_id') {
       const chatId = typeof request.chatId === 'string' ? request.chatId : null;
       if (!chatId) {
@@ -699,16 +767,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'run_retrospective') {
       try {
-        // Get chat history and errors
+        // Get chat history and retrospective items
         const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY, ERROR_LIST_KEY]);
         const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
         const errors = Array.isArray(stored[ERROR_LIST_KEY]) ? stored[ERROR_LIST_KEY] : [];
         
-        // Build retrospective prompt
-        const prompt = buildRetrospectivePrompt(history, errors);
+        // Build retrospective prompt from history + items
+        const prompt = await buildRetrospectivePrompt(history, errors);
         
-        // Send to ChatGPT
-        const result = await inputPrompt(prompt);
+        // Send to ChatGPT with skipHistory flag
+        const result = await inputPrompt(prompt, { skipHistory: true });
         
         safeSendResponse({ status: 'ok', runId: result.runId });
       } catch (err) {

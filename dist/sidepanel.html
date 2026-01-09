@@ -12,7 +12,7 @@
       <div class="nav-buttons">
         <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="historyBtn" class="nav-btn">Lịch sử</button>
-        <button id="errorsBtn" class="nav-btn">Lỗi</button>
+        <button id="errorsBtn" class="nav-btn">Retrospective</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
       </div>
     </header>
@@ -50,17 +50,17 @@
     <div id="errorsPage" class="page">
       <div class="content">
         <div class="page-header">
-          <h2>Quản lý Lỗi</h2>
+          <h2>Retrospective</h2>
           <div>
-            <button id="retrospectiveBtn" class="secondary-btn">🔍 Retrospective</button>
+            <button id="retrospectiveBtn" class="secondary-btn">🔍 Phân tích</button>
             <button id="clearErrorsBtn" class="icon-btn" title="Xóa tất cả">🗑️</button>
           </div>
         </div>
         <div id="errorList" class="error-list">
-          <p class="empty-state">Chưa có lỗi được ghi nhận.</p>
+          <p class="empty-state">Chưa có retrospective. Bấm 'Phân tích' để tạo.</p>
         </div>
         <div style="padding: 16px; text-align: center;">
-          <button id="addErrorBtn" class="primary-btn">+ Thêm lỗi</button>
+          <button id="addErrorBtn" class="primary-btn">+ Thêm ghi chú</button>
         </div>
       </div>
     </div>
@@ -128,7 +128,7 @@
   <div id="errorModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="errorModalTitle">Thêm Lỗi</h3>
+        <h3 id="errorModalTitle">Thêm Retrospective Item</h3>
         <button class="modal-close" id="closeErrorModal">&times;</button>
       </div>
       <div class="modal-body">

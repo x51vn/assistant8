@@ -47,14 +47,27 @@ export function setupHistory(dom) {
   function showHistoryDetail(item) {
     if (!item) return;
     
-    // Navigate to results page and display the full response
-    const resultsBtn = document.getElementById('resultsBtn');
-    const resultText = document.getElementById('resultText');
+    console.log('[History] Opening chat:', item.chatId);
     
-    if (resultsBtn) resultsBtn.click();
-    if (resultText) {
-      resultText.textContent = `--- Lịch sử Chat ---\n\nChat ID: ${item.chatId}\nThời gian: ${new Date(item.timestamp).toLocaleString('vi-VN')}\n\nPrompt:\n${item.prompt}\n\nResponse:\n${item.response}`;
-    }
+    // Open ChatGPT tab with the specific chat ID
+    chrome.runtime.sendMessage({ 
+      action: 'open_chat_url', 
+      chatId: item.chatId,
+      chatUrl: item.chatUrl 
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[History] Error opening chat:', chrome.runtime.lastError);
+        alert('Không thể mở chat. Vui lòng thử lại.');
+        return;
+      }
+      
+      if (response && response.status === 'ok') {
+        console.log('[History] Chat opened in tab:', response.tabId);
+      } else {
+        console.error('[History] Failed to open chat:', response);
+        alert('Không thể mở chat.');
+      }
+    });
   }
 
   function loadHistory() {
