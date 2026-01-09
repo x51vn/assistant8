@@ -9,7 +9,6 @@
 # Node and npm
 node_modules/
 npm-debug.log*
-package-lock.json
 
 # Chrome Extension specific
 chrome-extension-backup/
@@ -30,10 +29,13 @@ Thumbs.db
 .coverage/
 test-results/
 
-# Build output (if any)
-dist/
+# Build output
 build/
 out/
+dist/*.map
+
+# Source map files (generated during build, not needed in git)
+*.map
 
 # Temporary files
 *.tmp

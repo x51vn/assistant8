@@ -6,10 +6,9 @@
   <title>ChatGPT Assistant</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="popup">
   <div class="container">
     <header>
-      <h1>ChatGPT Assistant</h1>
       <div class="nav-buttons">
         <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
@@ -19,9 +18,10 @@
     <!-- Results Page -->
     <div id="resultsPage" class="page active">
       <div class="content">
-        <h2>Kết quả xử lý</h2>
-        <button id="runBtn" class="primary-btn">Chạy ngay</button>
-        <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+        <div class="results-actions">
+          <button id="runBtn" class="primary-btn">Chạy ngay</button>
+          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+        </div>
         
         <div id="resultBox" class="result-box">
           <p id="resultText" class="result-text">Chưa có kết quả. Nhấn "Chạy ngay" để bắt đầu.</p>
@@ -74,6 +74,6 @@
     </div>
   </div>
 
-  <script src="popup.js"></script>
+  <script src="ui.js"></script>
 </body>
 </html>

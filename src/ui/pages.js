@@ -1,0 +1,23 @@
+export function setActivePage({ resultsPage, historyPage, errorsPage, settingsPage, resultsBtn, historyBtn, errorsBtn, settingsBtn, page }) {
+  const pages = [resultsPage, historyPage, errorsPage, settingsPage];
+  const btns = [resultsBtn, historyBtn, errorsBtn, settingsBtn];
+
+  // Remove active from all pages and buttons
+  pages.forEach(p => p?.classList.remove('active'));
+  btns.forEach(b => b?.classList.remove('active'));
+
+  // Add active to selected page and button
+  if (page === 'results' && resultsPage && resultsBtn) {
+    resultsPage.classList.add('active');
+    resultsBtn.classList.add('active');
+  } else if (page === 'history' && historyPage && historyBtn) {
+    historyPage.classList.add('active');
+    historyBtn.classList.add('active');
+  } else if (page === 'errors' && errorsPage && errorsBtn) {
+    errorsPage.classList.add('active');
+    errorsBtn.classList.add('active');
+  } else if (page === 'settings' && settingsPage && settingsBtn) {
+    settingsPage.classList.add('active');
+    settingsBtn.classList.add('active');
+  }
+}

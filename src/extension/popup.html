@@ -1,27 +1,28 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ChatGPT Assistant</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="popup">
   <div class="container">
     <header>
-      <h1>ChatGPT Assistant</h1>
       <div class="nav-buttons">
         <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
       </div>
     </header>
 
+    <!-- Results Page -->
     <div id="resultsPage" class="page active">
       <div class="content">
-        <h2>Kết quả xử lý</h2>
-        <button id="runBtn" class="primary-btn">Chạy ngay</button>
-        <button id="refreshBtn" class="secondary-btn">Làm mới</button>
-
+        <div class="results-actions">
+          <button id="runBtn" class="primary-btn">Chạy ngay</button>
+          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+        </div>
+        
         <div id="resultBox" class="result-box">
           <p id="resultText" class="result-text">Chưa có kết quả. Nhấn "Chạy ngay" để bắt đầu.</p>
           <div id="loadingSpinner" class="spinner hidden"></div>
@@ -29,14 +30,15 @@
       </div>
     </div>
 
+    <!-- Settings Page -->
     <div id="settingsPage" class="page">
       <div class="content">
         <h2>Cấu hình</h2>
-
+        
         <div class="form-group">
           <label for="promptInput">Prompt:</label>
-          <textarea
-            id="promptInput"
+          <textarea 
+            id="promptInput" 
             class="textarea-input"
             placeholder="Nhập prompt để gửi tới ChatGPT..."
           ></textarea>
@@ -44,21 +46,21 @@
 
         <div class="form-group">
           <label>
-            <input type="checkbox" id="autoRunCheckbox" />
+            <input type="checkbox" id="autoRunCheckbox">
             Chạy tự động (mỗi 5 phút)
           </label>
         </div>
 
         <div class="form-group">
           <label for="intervalInput">Khoảng thời gian (phút):</label>
-          <input
-            type="number"
+          <input 
+            type="number" 
             id="intervalInput"
             min="1"
             max="1440"
             value="5"
             class="number-input"
-          />
+          >
         </div>
 
         <div class="button-group">
@@ -72,6 +74,6 @@
     </div>
   </div>
 
-  <script src="sidepanel.js"></script>
+  <script src="ui.js"></script>
 </body>
 </html>

@@ -34,5 +34,11 @@
       "js": ["content.js"],
       "all_frames": false
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["prompts/*.md"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
