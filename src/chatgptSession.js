@@ -31,6 +31,7 @@ export async function createNewSession(tabId) {
  * @param {number} tabId - The tab ID where ChatGPT is open
  * @param {string} prompt - The prompt to send
  * @param {Object} options - Additional options
+ * @param {boolean} options.reviewOnly - If true, only fill prompt without sending
  * @returns {Promise<{success: boolean, chatId?: string, chatUrl?: string, error?: string}>}
  */
 export async function sendInput(tabId, prompt, options = {}) {
@@ -39,10 +40,11 @@ export async function sendInput(tabId, prompt, options = {}) {
       action: 'send_input',
       prompt: prompt,
       createNewChat: options.createNewChat !== false,
-      runId: options.runId || null
+      runId: options.runId || null,
+      reviewOnly: options.reviewOnly || false
     });
     
-    if (response && (response.status === 'sent' || response.status === 'accepted')) {
+    if (response && (response.status === 'sent' || response.status === 'accepted' || response.status === 'filled')) {
       return {
         success: true,
         chatId: response.chatId || null,

@@ -367,6 +367,11 @@ label input[type="checkbox"] {
   margin-bottom: 0;
 }
 
+.page-header > div {
+  display: flex;
+  gap: 8px;
+}
+
 .icon-btn {
   background: transparent;
   border: none;

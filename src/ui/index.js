@@ -18,6 +18,7 @@ import { loadCachedResultFast } from './storage.js';
     settingsPage: byId('settingsPage'),
 
     runBtn: byId('runBtn'),
+    stopBtn: byId('stopBtn'),
     refreshBtn: byId('refreshBtn'),
     resultText: byId('resultText'),
     loadingSpinner: byId('loadingSpinner'),
@@ -41,6 +42,7 @@ import { loadCachedResultFast } from './storage.js';
     promptInput: byId('promptInput'),
     autoRunCheckbox: byId('autoRunCheckbox'),
     evaluatePreviousCheckbox: byId('evaluatePreviousCheckbox'),
+    reviewPromptCheckbox: byId('reviewPromptCheckbox'),
     intervalInput: byId('intervalInput'),
     saveBtn: byId('saveBtn'),
     sendBtn: byId('sendBtn'),

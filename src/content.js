@@ -179,6 +179,7 @@ function setNativeValue(el, value) {
 
 async function inputAndSendPrompt(prompt, options = {}) {
   const createNewChat = options.createNewChat !== false;
+  const reviewOnly = options.reviewOnly === true;
   const editorTimeoutMs = Number.isFinite(options.editorTimeoutMs) ? options.editorTimeoutMs : 20000;
   if (createNewChat) {
     await ensureNewChatSession();
@@ -195,19 +196,41 @@ async function inputAndSendPrompt(prompt, options = {}) {
   const isContentEditable = !(editor instanceof HTMLTextAreaElement);
 
   if (isContentEditable) {
-    // ProseMirror: execCommand thường khiến app nhận text tốt hơn DOM set thuần.
+    // ProseMirror: Clear existing content first
     try {
-      // Clear existing content
       editor.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a', ctrlKey: true }));
       editor.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a', ctrlKey: true }));
       document.execCommand('selectAll');
       document.execCommand('delete');
-      document.execCommand('insertText', false, prompt);
     } catch {
-      setNativeValue(editor, prompt);
+      setNativeValue(editor, '');
     }
 
-    // Trigger events để UI enable nút gửi.
+    // Insert text in chunks to avoid paste issues with long prompts
+    const chunkSize = 200; // Characters per chunk
+    const chunks = [];
+    for (let i = 0; i < prompt.length; i += chunkSize) {
+      chunks.push(prompt.substring(i, i + chunkSize));
+    }
+
+    console.log(`[Content] Inserting prompt in ${chunks.length} chunks of ~${chunkSize} chars`);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      try {
+        document.execCommand('insertText', false, chunks[i]);
+      } catch {
+        // Fallback: append to existing content
+        const currentText = editor.textContent || '';
+        setNativeValue(editor, currentText + chunks[i]);
+      }
+      
+      // Small delay between chunks for very long prompts
+      if (i < chunks.length - 1 && chunks.length > 5) {
+        await sleep(50);
+      }
+    }
+
+    // Trigger events to enable send button
     editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prompt }));
     editor.dispatchEvent(new Event('change', { bubbles: true }));
   } else {
@@ -217,6 +240,11 @@ async function inputAndSendPrompt(prompt, options = {}) {
   }
 
   await sleep(300);
+
+  // If reviewOnly, stop here without sending
+  if (reviewOnly) {
+    return true;
+  }
 
   const sendBtn = findSendButton();
   if (sendBtn) {
@@ -405,12 +433,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // New modular actions
   if (request.action === 'create_new_session') {
+    console.log('[Content] Received create_new_session action');
     (async () => {
       try {
         const success = await ensureNewChatSession();
         const meta = getChatMeta();
+        console.log('[Content] New session created, success:', success, 'meta:', meta);
         safeSendResponse({ success, ...meta });
       } catch (e) {
+        console.error('[Content] create_new_session error:', e);
         safeSendResponse({ success: false, error: String(e?.message || e) });
       }
     })();
@@ -418,16 +449,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'send_input') {
+    console.log('[Content] Received send_input action, prompt length:', request.prompt?.length, 'reviewOnly:', request.reviewOnly);
     (async () => {
       try {
         const prompt = typeof request.prompt === 'string' ? request.prompt : '';
         const createNewChat = request.createNewChat !== false;
+        const reviewOnly = request.reviewOnly === true;
         const runId = typeof request.runId === 'string' ? request.runId : null;
 
-        const success = await inputAndSendPrompt(prompt, { createNewChat });
+        const success = await inputAndSendPrompt(prompt, { createNewChat, reviewOnly });
         const meta = getChatMeta();
-        safeSendResponse({ status: success ? 'sent' : 'failed', runId, ...meta });
+        const status = reviewOnly ? 'filled' : (success ? 'sent' : 'failed');
+        console.log('[Content] send_input result, status:', status, 'meta:', meta);
+        safeSendResponse({ status, runId, ...meta });
       } catch (e) {
+        console.error('[Content] send_input error:', e);
         safeSendResponse({ status: 'error', error: String(e?.message || e) });
       }
     })();
@@ -435,6 +471,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'get_output') {
+    console.log('[Content] Received get_output action, wait:', request.wait);
     (async () => {
       try {
         const wait = request.wait !== false;
@@ -445,12 +482,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         if (!wait) {
           const latest = getLatestAssistantMessageMeta();
+          console.log('[Content] get_output (no wait), result length:', latest.text?.length || 0);
           safeSendResponse({ result: latest.text, assistantMessageId: latest.messageId, status: 'ok', ...meta });
           return;
         }
 
         const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs });
         const latest = getLatestAssistantMessageMeta();
+        console.log('[Content] get_output (waited), result length:', (waited.text || latest.text)?.length || 0, 'status:', waited.status);
         safeSendResponse({
           result: waited.text || latest.text,
           assistantMessageId: latest.messageId,
@@ -458,6 +497,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           ...meta
         });
       } catch (e) {
+        console.error('[Content] get_output error:', e);
         safeSendResponse({ status: 'error', error: String(e?.message || e) });
       }
     })();

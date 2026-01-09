@@ -18,8 +18,9 @@ export function setupHistory(dom) {
 
   function truncate(text, maxLength = 100) {
     if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+    const str = typeof text === 'string' ? text : String(text);
+    if (str.length <= maxLength) return str;
+    return str.substring(0, maxLength) + '...';
   }
 
   function renderHistoryItem(item) {
@@ -57,7 +58,9 @@ export function setupHistory(dom) {
   }
 
   function loadHistory() {
+    console.log('[History] Loading history...');
     chrome.runtime.sendMessage({ action: 'get_chat_history' }, (response) => {
+      console.log('[History] get_chat_history response:', { count: response?.history?.length || 0 });
       if (chrome.runtime.lastError || !response || response.status !== 'ok') {
         if (historyList) {
           historyList.innerHTML = '<p class="empty-state">Lỗi tải lịch sử.</p>';
@@ -79,6 +82,8 @@ export function setupHistory(dom) {
         const itemEl = renderHistoryItem(item);
         historyList.appendChild(itemEl);
       });
+      
+      console.log('[History] Rendered', history.length, 'history items');
     });
   }
 
@@ -94,6 +99,26 @@ export function setupHistory(dom) {
       loadHistory();
     });
   }
+
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', () => {
+      if (!confirm('Bạn có chắc muốn xóa toàn bộ lịch sử chat?')) return;
+      
+      console.log('[History] Clearing all history...');
+      chrome.runtime.sendMessage({ action: 'clear_chat_history' }, (response) => {
+        console.log('[History] Clear response:', response);
+        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+          alert('Lỗi khi xóa lịch sử!');
+          return;
+        }
+        loadHistory();
+      });
+    });
+  }
+
+  // Load history immediately on startup
+  loadHistory();
 
   return { loadHistory };
 }

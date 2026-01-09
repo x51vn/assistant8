@@ -185,14 +185,47 @@ export function setupErrors(dom) {
     addErrorBtn.addEventListener('click', openAddModal);
   }
 
+  const clearErrorsBtn = document.getElementById('clearErrorsBtn');
+  if (clearErrorsBtn) {
+    clearErrorsBtn.addEventListener('click', () => {
+      if (!confirm('Bạn có chắc muốn xóa toàn bộ danh sách lỗi?')) return;
+      
+      console.log('[Errors] Clearing all errors...');
+      chrome.runtime.sendMessage({ action: 'clear_errors' }, (response) => {
+        console.log('[Errors] Clear response:', response);
+        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+          alert('Lỗi khi xóa danh sách!');
+          return;
+        }
+        loadErrors();
+      });
+    });
+  }
+
   if (retrospectiveBtn) {
+    let retrospectivePollInterval = null;
+
     retrospectiveBtn.addEventListener('click', async () => {
+      console.log('[Errors] Retrospective button clicked');
+      // If currently polling, stop it
+      if (retrospectivePollInterval) {
+        console.log('[Errors] Stopping retrospective poll');
+        clearInterval(retrospectivePollInterval);
+        retrospectivePollInterval = null;
+        retrospectiveBtn.disabled = false;
+        retrospectiveBtn.textContent = '🔍 Retrospective';
+        alert('Đã dừng phân tích.');
+        return;
+      }
+
       if (!confirm('Bắt đầu phân tích retrospective? Điều này sẽ gửi lịch sử và lỗi đến ChatGPT để phân tích.')) return;
       
-      retrospectiveBtn.disabled = true;
+      retrospectiveBtn.disabled = false; // Keep enabled to allow stopping
       retrospectiveBtn.textContent = '⏳ Đang phân tích...';
       
+      console.log('[Errors] Sending run_retrospective message...');
       chrome.runtime.sendMessage({ action: 'run_retrospective' }, (response) => {
+        console.log('[Errors] run_retrospective response:', response);
         if (chrome.runtime.lastError || !response || response.status !== 'ok') {
           alert('Lỗi khi chạy retrospective!');
           retrospectiveBtn.disabled = false;
@@ -201,33 +234,33 @@ export function setupErrors(dom) {
         }
         
         const runId = response.runId;
+        console.log('[Errors] Starting retrospective poll for runId:', runId);
         
-        // Poll for result
+        // Poll for result (no timeout - wait indefinitely)
         let pollCount = 0;
-        const maxPolls = 100;
         
-        const pollInterval = setInterval(() => {
+        retrospectivePollInterval = setInterval(() => {
           pollCount++;
-          retrospectiveBtn.textContent = `⏳ Đang chờ (${pollCount * 3}s)...`;
+          const minutes = Math.floor(pollCount * 3 / 60);
+          const seconds = (pollCount * 3) % 60;
+          const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+          retrospectiveBtn.textContent = `⏳ ${timeStr} (Click để dừng)`;
           
-          if (pollCount > maxPolls) {
-            clearInterval(pollInterval);
-            retrospectiveBtn.disabled = false;
-            retrospectiveBtn.textContent = '🔍 Retrospective';
-            alert('Timeout: Không nhận được kết quả sau 5 phút.');
-            return;
-          }
-          
+          console.log('[Errors] Retrospective poll attempt', pollCount);
           chrome.runtime.sendMessage({ action: 'get_result' }, (pollResponse) => {
+            console.log('[Errors] Poll response:', { hasResult: !!pollResponse?.result, source: pollResponse?.source });
             if (chrome.runtime.lastError) {
-              clearInterval(pollInterval);
+              clearInterval(retrospectivePollInterval);
+              retrospectivePollInterval = null;
               retrospectiveBtn.disabled = false;
               retrospectiveBtn.textContent = '🔍 Retrospective';
               return;
             }
             
             if (pollResponse && pollResponse.result && pollResponse.source === 'live') {
-              clearInterval(pollInterval);
+              console.log('[Errors] Got live retrospective result, stopping poll');
+              clearInterval(retrospectivePollInterval);
+              retrospectivePollInterval = null;
               retrospectiveBtn.disabled = false;
               retrospectiveBtn.textContent = '🔍 Retrospective';
               

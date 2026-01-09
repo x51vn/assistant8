@@ -10,6 +10,7 @@ const DEFAULTS = {
   autoRun: false,
   interval: 5,
   evaluatePrevious: false,
+  reviewPrompt: false,
 };
 
 const ALARMS = {
@@ -110,22 +111,24 @@ function withTimeout(promise, ms, label) {
 }
 
 async function getSettings() {
-  const settings = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious']);
+  const settings = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious', 'reviewPrompt']);
   return {
     prompt: typeof settings.prompt === 'string' ? settings.prompt : DEFAULTS.prompt,
     autoRun: !!settings.autoRun,
     interval: Number.isFinite(settings.interval) ? settings.interval : DEFAULTS.interval,
     evaluatePrevious: !!settings.evaluatePrevious,
+    reviewPrompt: !!settings.reviewPrompt,
   };
 }
 
 async function ensureDefaults() {
-  const existing = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious']);
+  const existing = await chrome.storage.local.get(['prompt', 'autoRun', 'interval', 'evaluatePrevious', 'reviewPrompt']);
   const toSet = {};
   if (typeof existing.prompt !== 'string') toSet.prompt = DEFAULTS.prompt;
   if (typeof existing.autoRun !== 'boolean') toSet.autoRun = DEFAULTS.autoRun;
   if (!Number.isFinite(existing.interval)) toSet.interval = DEFAULTS.interval;
   if (typeof existing.evaluatePrevious !== 'boolean') toSet.evaluatePrevious = DEFAULTS.evaluatePrevious;
+  if (typeof existing.reviewPrompt !== 'boolean') toSet.reviewPrompt = DEFAULTS.reviewPrompt;
   if (Object.keys(toSet).length) await chrome.storage.local.set(toSet);
 }
 
@@ -259,14 +262,18 @@ async function buildRetrospectivePrompt(chatHistory, errors) {
 }
 
 async function inputPrompt(prompt) {
+  console.log('[Background] inputPrompt called with prompt length:', prompt.length);
   const runId = makeRunId();
   const sentAt = Date.now();
+  console.log('[Background] Created runId:', runId);
 
   const tab = await ensureChatGPTTab();
+  console.log('[Background] ChatGPT tab:', tab.id);
   if (tab.id == null) throw new Error('No tab id');
 
   // Check if we should append previous result
   const settings = await getSettings();
+  console.log('[Background] Settings:', { evaluatePrevious: settings.evaluatePrevious, reviewPrompt: settings.reviewPrompt });
   let finalPrompt = prompt;
   
   if (settings.evaluatePrevious) {
@@ -297,12 +304,14 @@ async function inputPrompt(prompt) {
     // Use modular session management
     const sendResult = await ChatGPTSession.sendInput(tab.id, enhancedPrompt, { 
       createNewChat: true,
-      runId: runId 
+      runId: runId,
+      reviewOnly: settings.reviewPrompt
     });
 
     if (sendResult.success) {
+      const status = settings.reviewPrompt ? 'filled' : 'sent';
       await updateRun(runId, {
-        status: 'sent',
+        status: status,
         chatUrl: sendResult.chatUrl || null,
         chatId: sendResult.chatId || null,
       });
@@ -316,10 +325,12 @@ async function inputPrompt(prompt) {
       await updateRun(runId, { status: 'failed', error: sendResult.error || 'unknown_error' });
     }
 
-    // Schedule a poll to capture result even when popup is closed.
-    await chrome.alarms.clear(ALARMS.POLL);
-    chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
-    return { status: 'ok', runId };
+    // Only schedule poll if not review mode
+    if (!settings.reviewPrompt) {
+      await chrome.alarms.clear(ALARMS.POLL);
+      chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
+    }
+    return { status: 'ok', runId, reviewMode: settings.reviewPrompt };
   } catch (error) {
     // Retry once after short delay
     await delay(1500);
@@ -327,12 +338,14 @@ async function inputPrompt(prompt) {
       const enhancedPrompt = await applyPromptTemplate(finalPrompt);
       const sendResult = await ChatGPTSession.sendInput(tab.id, enhancedPrompt, { 
         createNewChat: true,
-        runId: runId 
+        runId: runId,
+        reviewOnly: settings.reviewPrompt
       });
 
       if (sendResult.success) {
+        const status = settings.reviewPrompt ? 'filled' : 'sent';
         await updateRun(runId, {
-          status: 'sent',
+          status: status,
           chatUrl: sendResult.chatUrl || null,
           chatId: sendResult.chatId || null,
         });
@@ -344,9 +357,11 @@ async function inputPrompt(prompt) {
         }
       }
 
-      await chrome.alarms.clear(ALARMS.POLL);
-      chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
-      return { status: 'ok', runId };
+      if (!settings.reviewPrompt) {
+        await chrome.alarms.clear(ALARMS.POLL);
+        chrome.alarms.create(ALARMS.POLL, { when: Date.now() + 12000 });
+      }
+      return { status: 'ok', runId, reviewMode: settings.reviewPrompt };
     } catch (finalError) {
       await updateRun(runId, { status: 'failed', error: String(finalError?.message || finalError) });
       throw finalError;
@@ -525,15 +540,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'send_prompt') {
       const prompt = typeof request.prompt === 'string' ? request.prompt.trim() : '';
+      console.log('[Background] Received send_prompt action, prompt length:', prompt.length);
       if (!prompt) {
+        console.error('[Background] Missing prompt');
         safeSendResponse({ status: 'error', error: 'missing_prompt' });
         return;
       }
       try {
+        console.log('[Background] Calling inputPrompt...');
         const r = await inputPrompt(prompt);
-        safeSendResponse({ status: 'ok', runId: r.runId });
+        console.log('[Background] inputPrompt result:', r);
+        safeSendResponse({ status: 'ok', runId: r.runId, reviewMode: r.reviewMode });
       } catch (err) {
-        console.error('send_prompt error:', err);
+        console.error('[Background] send_prompt error:', err);
         safeSendResponse({ status: 'error', error: String(err?.message || err) });
       }
       return;
@@ -562,18 +581,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'get_result') {
+      console.log('[Background] Received get_result action');
       try {
         const storedRun = await chrome.storage.local.get(['lastRunId']);
+        console.log('[Background] Last runId:', storedRun.lastRunId);
         const latest = await fetchLatestResult(storedRun.lastRunId);
         if (latest) {
+          console.log('[Background] Got live result, length:', latest.length);
           safeSendResponse({ result: latest, source: 'live', runId: storedRun.lastRunId || null });
           return;
         }
 
+        console.log('[Background] No live result, returning cached');
         const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
         safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache' });
       } catch (err) {
-        console.error('get_result error:', err);
+        console.error('[Background] get_result error:', err);
         // Still return cached result even if fetch fails
         const stored = await chrome.storage.local.get(['lastResult', 'lastResultAt']);
         safeSendResponse({ result: stored.lastResult || null, lastResultAt: stored.lastResultAt || null, source: 'cache', error: String(err?.message || err) });
@@ -598,6 +621,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
       const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
       safeSendResponse({ status: 'ok', history });
+      return;
+    }
+
+    if (request.action === 'clear_chat_history') {
+      console.log('[Background] Clearing chat history');
+      await chrome.storage.local.set({ [CHAT_HISTORY_KEY]: [] });
+      safeSendResponse({ status: 'ok' });
       return;
     }
 
@@ -657,6 +687,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'get_errors') {
       const errors = await getErrors();
       safeSendResponse({ status: 'ok', errors });
+      return;
+    }
+
+    if (request.action === 'clear_errors') {
+      console.log('[Background] Clearing all errors');
+      await chrome.storage.local.set({ [ERROR_LIST_KEY]: [] });
+      safeSendResponse({ status: 'ok' });
       return;
     }
 
