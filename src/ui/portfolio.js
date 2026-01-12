@@ -1,4 +1,5 @@
 const PORTFOLIO_KEY = 'portfolio';
+const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 
 export async function initPortfolio({
   portfolioPage,
@@ -12,20 +13,36 @@ export async function initPortfolio({
   evaluateBtn,
   editingStockId = null
 }) {
-  // Load initial portfolio
+  // Load initial portfolio and prompt
   await loadPortfolioUI(portfolioTable);
+  await loadPortfolioPrompt(promptInput);
 
   // Add stock button
   addStockBtn?.addEventListener('click', () => openAddStockModal(portfolioTable));
+  
+  // Keep backward compatibility - remove addCashBtn listener
 
   // Evaluate button
   evaluateBtn?.addEventListener('click', async () => {
     const prompt = promptInput?.value.trim();
     if (!prompt) {
-      alert('Vui lòng nhập prompt');
+      alert('Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
       return;
     }
-    await evaluatePortfolio(prompt);
+    
+    try {
+      // Auto-save prompt before evaluating
+      await chrome.storage.local.set({ [PORTFOLIO_PROMPT_KEY]: prompt });
+      console.log('[Portfolio] Prompt saved');
+      
+      // Wait for evaluate to complete
+      const success = await evaluatePortfolio(prompt);
+      if (!success) {
+        console.error('[Portfolio] Failed to evaluate portfolio');
+      }
+    } catch (err) {
+      console.error('[Portfolio] Evaluate error:', err);
+    }
   });
 
   // Clear portfolio button
@@ -61,18 +78,44 @@ export async function loadPortfolioUI(table) {
     return;
   }
 
-  portfolio.forEach((stock, idx) => {
+  // Sort: regular stocks first, CASH always at the end
+  // Create a copy with index mapping to preserve original indices
+  const indexedPortfolio = portfolio.map((stock, originalIdx) => ({ stock, originalIdx }));
+  indexedPortfolio.sort((a, b) => {
+    if (a.stock.code === 'CASH') return 1;
+    if (b.stock.code === 'CASH') return -1;
+    return 0;
+  });
+
+  indexedPortfolio.forEach(({ stock, originalIdx }) => {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${stock.code}</td>
-      <td>${stock.entry}</td>
-      <td>${stock.quantity}</td>
-      <td>${(stock.entry * stock.quantity).toFixed(2)}</td>
-      <td style="text-align: center;">
-        <button class="edit-btn" data-id="${idx}" title="Sửa">✏️</button>
-        <button class="delete-btn" data-id="${idx}" title="Xóa">🗑️</button>
-      </td>
-    `;
+    const isCash = stock.code === 'CASH';
+    
+    if (isCash) {
+      row.style.backgroundColor = '#f0f9ff';
+      row.style.fontWeight = 'bold';
+      row.innerHTML = `
+        <td>${stock.code}</td>
+        <td>-</td>
+        <td>${stock.quantity.toFixed(2)}</td>
+        <td>${stock.quantity.toFixed(2)}</td>
+        <td style="text-align: center;">
+          <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
+          <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
+        </td>
+      `;
+    } else {
+      row.innerHTML = `
+        <td>${stock.code}</td>
+        <td>${stock.entry}</td>
+        <td>${stock.quantity}</td>
+        <td>${(stock.entry * stock.quantity).toFixed(2)}</td>
+        <td style="text-align: center;">
+          <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
+          <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
+        </td>
+      `;
+    }
     table.appendChild(row);
   });
 
@@ -104,29 +147,66 @@ function openAddStockModal(portfolioTable) {
   const entryInput = modal.querySelector('#stockEntryInput');
   const quantityInput = modal.querySelector('#stockQuantityInput');
   const saveBtn = modal.querySelector('#saveStockBtn');
+  const entryLabel = modal.querySelector('label[for="stockEntryInput"]');
+  const quantityLabel = modal.querySelector('label[for="stockQuantityInput"]');
 
-  titleEl.textContent = 'Thêm mã chứng khoán';
+  if (!titleEl || !codeInput || !entryInput || !quantityInput || !saveBtn) {
+    console.error('[Portfolio] Modal elements not found');
+    return;
+  }
+
+  titleEl.textContent = 'Thêm/Sửa mã (hoặc CASH)';
   codeInput.value = '';
   entryInput.value = '';
   quantityInput.value = '';
+  
+  // Reset to stock mode
+  if (entryLabel) entryLabel.style.display = '';
+  if (quantityLabel) quantityLabel.textContent = 'Khối lượng:';
+  entryInput.style.display = '';
+  codeInput.placeholder = 'VNM, BID, CASH, ...';
+  codeInput.disabled = false;
+  codeInput.style.backgroundColor = '';
 
   modal.classList.remove('hidden');
 
-  // Remove old listeners
-  const newSaveBtn = saveBtn.cloneNode(true);
-  saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+  // Remove old listeners - properly clean up before replacing
+  const saveBtn_current = modal.querySelector('#saveStockBtn');
+  const newSaveBtn = saveBtn_current.cloneNode(true);
+  saveBtn_current.parentNode.replaceChild(newSaveBtn, saveBtn_current);
 
   newSaveBtn.addEventListener('click', async () => {
     const code = codeInput.value.trim().toUpperCase();
     const entry = parseFloat(entryInput.value);
     const quantity = parseFloat(quantityInput.value);
 
-    if (!code || isNaN(entry) || isNaN(quantity)) {
-      alert('Vui lòng điền đầy đủ thông tin');
+    if (!code || isNaN(quantity)) {
+      alert('Vui lòng nhập Mã và Khối lượng');
+      return;
+    }
+    
+    // For CASH, entry is not needed
+    if (code !== 'CASH' && isNaN(entry)) {
+      alert('Vui lòng nhập Entry');
       return;
     }
 
-    await addStock(code, entry, quantity);
+    const portfolio = await getPortfolio();
+    const existingIdx = portfolio.findIndex(s => s.code === code);
+    
+    if (existingIdx >= 0) {
+      // Stock already exists - add to quantity
+      const existing = portfolio[existingIdx];
+      const newQuantity = existing.quantity + quantity;
+      await updateStock(existingIdx, code, existing.entry, newQuantity);
+      console.log(`[Portfolio] Updated ${code}: +${quantity} (Total: ${newQuantity})`);
+    } else {
+      // New stock
+      const finalEntry = code === 'CASH' ? 1 : entry;
+      await addStock(code, finalEntry, quantity);
+      console.log(`[Portfolio] Added ${code}: ${quantity}`);
+    }
+    
     modal.classList.add('hidden');
     await loadPortfolioUI(portfolioTable);
   });
@@ -145,28 +225,61 @@ function openEditStockModal(id, portfolioTable) {
     const entryInput = modal.querySelector('#stockEntryInput');
     const quantityInput = modal.querySelector('#stockQuantityInput');
     const saveBtn = modal.querySelector('#saveStockBtn');
+    const entryLabel = modal.querySelector('label[for="stockEntryInput"]');
+    const quantityLabel = modal.querySelector('label[for="stockQuantityInput"]');
 
-    titleEl.textContent = 'Sửa mã chứng khoán';
+    if (!titleEl || !codeInput || !entryInput || !quantityInput || !saveBtn) {
+      console.error('[Portfolio] Modal elements not found');
+      return;
+    }
+
+    const isCash = stock.code === 'CASH';
+    titleEl.textContent = isCash ? 'Sửa CASH' : 'Sửa mã chứng khoán';
     codeInput.value = stock.code;
     entryInput.value = stock.entry;
     quantityInput.value = stock.quantity;
+    
+    // Hide entry field for cash
+    if (isCash) {
+      if (entryLabel) entryLabel.style.display = 'none';
+      if (quantityLabel) quantityLabel.textContent = 'Số tiền sẵn sàng:';
+      entryInput.style.display = 'none';
+      codeInput.disabled = true;
+    } else {
+      if (entryLabel) entryLabel.style.display = '';
+      if (quantityLabel) quantityLabel.textContent = 'Khối lượng:';
+      entryInput.style.display = '';
+      codeInput.disabled = false;
+    }
 
     modal.classList.remove('hidden');
 
-    const newSaveBtn = saveBtn.cloneNode(true);
-    saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+    // Remove old listeners - properly clean up before replacing
+    const saveBtn_old = modal.querySelector('#saveStockBtn');
+    const newSaveBtn = saveBtn_old.cloneNode(true);
+    saveBtn_old.parentNode.replaceChild(newSaveBtn, saveBtn_old);
 
     newSaveBtn.addEventListener('click', async () => {
-      const code = codeInput.value.trim().toUpperCase();
-      const entry = parseFloat(entryInput.value);
+      const isCash = stock.code === 'CASH';
+      const code = codeInput.value.trim();
       const quantity = parseFloat(quantityInput.value);
 
-      if (!code || isNaN(entry) || isNaN(quantity)) {
-        alert('Vui lòng điền đầy đủ thông tin');
+      if (isNaN(quantity)) {
+        alert('Vui lòng điền thông tin');
         return;
       }
-
-      await updateStock(id, code, entry, quantity);
+      
+      if (isCash) {
+        // For cash, always use entry=1
+        await updateStock(id, code, 1, quantity);
+      } else {
+        const entry = parseFloat(entryInput.value);
+        if (!code || isNaN(entry)) {
+          alert('Vui lòng điền đầy đủ thông tin');
+          return;
+        }
+        await updateStock(id, code, entry, quantity);
+      }
       modal.classList.add('hidden');
       await loadPortfolioUI(portfolioTable);
     });
@@ -176,6 +289,12 @@ function openEditStockModal(id, portfolioTable) {
 export async function getPortfolio() {
   const stored = await chrome.storage.local.get([PORTFOLIO_KEY]);
   return Array.isArray(stored[PORTFOLIO_KEY]) ? stored[PORTFOLIO_KEY] : [];
+}
+
+export async function loadPortfolioPrompt(promptInput) {
+  if (!promptInput) return;
+  const stored = await chrome.storage.local.get([PORTFOLIO_PROMPT_KEY]);
+  promptInput.value = stored[PORTFOLIO_PROMPT_KEY] || '';
 }
 
 export async function addStock(code, entry, quantity) {
@@ -223,18 +342,24 @@ export async function evaluatePortfolio(prompt) {
 
   console.log('[Portfolio] Evaluate request:', fullPrompt);
 
-  // Send to background to handle ChatGPT input
-  chrome.runtime.sendMessage({
-    action: 'inputPrompt',
-    prompt: fullPrompt,
-    skipHistory: false
-  }, (response) => {
-    if (response?.success) {
-      console.log('[Portfolio] Sent to ChatGPT successfully');
-      alert('Đã gửi danh mục và prompt tới ChatGPT');
-    } else {
-      console.error('[Portfolio] Error sending to ChatGPT:', response?.error);
-      alert('Lỗi khi gửi tới ChatGPT: ' + (response?.error || 'Không rõ lỗi'));
-    }
+  // Send to background to handle ChatGPT input (same as Run button)
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({
+      action: 'send_prompt',
+      prompt: fullPrompt
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[Portfolio] Error:', chrome.runtime.lastError.message);
+        resolve(false);
+        return;
+      }
+      if (!response || response.status !== 'ok') {
+        console.error('[Portfolio] Failed to send prompt:', response?.error);
+        resolve(false);
+        return;
+      }
+      console.log('[Portfolio] Sent to ChatGPT successfully, runId:', response.runId);
+      resolve(true);
+    });
   });
 }

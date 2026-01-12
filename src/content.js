@@ -97,37 +97,45 @@ async function waitForEmptyNewChat({ startUrl, timeoutMs = 20000 } = {}) {
   return false;
 }
 
-async function ensureNewChatSession(timeoutMs = 15000) {
+async function ensureNewChatSession(timeoutMs = 20000) {
   // Always try to start a fresh chat; if already on new-chat screen, this is a no-op.
   const startUrl = location.href;
   const btn = findNewChatButton();
 
   if (btn instanceof HTMLElement) {
+    console.log('[Content] Clicking new chat button');
     btn.click();
   } else {
     // Fallback: navigate to home which typically starts a new chat.
     try {
+      console.log('[Content] Navigating to chatgpt.com home');
       location.assign('https://chatgpt.com/');
     } catch {
       // ignore
     }
   }
 
-  // Wait for navigation (if any) and editor to re-appear.
+  // Wait longer for navigation and editor to re-appear
+  // Add extra wait time to account for page loading
+  await sleep(800);
+  
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const editor = findEditor();
     if (editor) {
       // Ensure we are not still on the old chat URL.
       if (location.href !== startUrl || !location.pathname.startsWith('/c/')) {
+        console.log('[Content] New chat session ready');
         return true;
       }
     }
-    await sleep(200);
+    await sleep(300);
   }
 
   // Even if URL didn't change (UI variations), proceed if editor exists.
-  return !!findEditor();
+  const finalEditor = findEditor();
+  console.log('[Content] Timeout reached, editor found:', !!finalEditor);
+  return !!finalEditor;
 }
 
 async function waitForEditor(timeoutMs = 20000) {
@@ -180,17 +188,18 @@ function setNativeValue(el, value) {
 async function inputAndSendPrompt(prompt, options = {}) {
   const createNewChat = options.createNewChat !== false;
   const reviewOnly = options.reviewOnly === true;
-  const editorTimeoutMs = Number.isFinite(options.editorTimeoutMs) ? options.editorTimeoutMs : 20000;
+  const editorTimeoutMs = Number.isFinite(options.editorTimeoutMs) ? options.editorTimeoutMs : 25000;
   if (createNewChat) {
     await ensureNewChatSession();
-    await sleep(300);
+    await sleep(500); // More time for DOM to fully settle
   }
 
   const editor = await waitForEditor(editorTimeoutMs);
   if (!editor) {
-    console.warn('[ChatGPT Assistant] editor not found');
+    console.error('[ChatGPT Assistant] editor not found after', editorTimeoutMs, 'ms');
     return false;
   }
+  console.log('[Content] Editor found and ready');
 
   editor.focus();
   const isContentEditable = !(editor instanceof HTMLTextAreaElement);
@@ -239,15 +248,28 @@ async function inputAndSendPrompt(prompt, options = {}) {
     editor.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  await sleep(300);
+  await sleep(500); // Wait longer for send button to become enabled
 
   // If reviewOnly, stop here without sending
   if (reviewOnly) {
+    console.log('[Content] Review mode - returning without sending');
     return true;
   }
 
-  const sendBtn = findSendButton();
-  if (sendBtn) {
+  // Wait for send button to appear and be enabled (max 5s)
+  let sendBtn = null;
+  const btnStartTime = Date.now();
+  while (Date.now() - btnStartTime < 5000) {
+    sendBtn = findSendButton();
+    if (sendBtn && !sendBtn.disabled) {
+      console.log('[Content] Send button found and enabled');
+      break;
+    }
+    await sleep(200);
+  }
+
+  if (sendBtn && !sendBtn.disabled) {
+    console.log('[Content] Clicking send button');
     sendBtn.click();
     return true;
   }

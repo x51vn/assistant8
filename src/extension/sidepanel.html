@@ -10,14 +10,39 @@
   <div class="container">
     <header>
       <div class="nav-buttons">
-        <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="portfolioBtn" class="nav-btn">Danh mục</button>
+        <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="errorsBtn" class="nav-btn">Retrospective</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
       </div>
     </header>
 
-    <div id="resultsPage" class="page active">
+    <div id="portfolioPage" class="page active">
+      <div class="content">
+        <table id="portfolioTable" class="portfolio-table">
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Entry</th>
+              <th>Khối lượng</th>
+              <th>Giá trị</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" style="text-align: center; padding: 20px;">Chưa có mã nào. Nhấn "+ Thêm/Sửa mã" để thêm.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="button-group" style="margin-top: 16px;">
+          <button id="addStockBtn" class="primary-btn">+ Thêm/Sửa mã</button>
+          <button id="evaluateBtn" class="primary-btn">🔍 Đánh giá</button>
+          <button id="clearPortfolioBtn" class="secondary-btn">🗑️ Xóa tất cả</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="resultsPage" class="page">
       <div class="content">
         <!-- Results Actions -->
         <div class="results-actions" style="padding: 16px;">
@@ -38,45 +63,6 @@
           <div id="historyList" class="history-list">
             <p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="portfolioPage" class="page">
-      <div class="content">
-        <div class="page-header">
-          <h2>Danh mục chứng khoán</h2>
-          <button id="addStockBtn" class="primary-btn">+ Thêm mã</button>
-        </div>
-
-        <div class="form-group">
-          <label for="portfolioPromptInput">Prompt đánh giá:</label>
-          <textarea
-            id="portfolioPromptInput"
-            class="textarea-input"
-            placeholder="Nhập prompt để ChatGPT đánh giá danh mục..."
-            rows="4"
-          ></textarea>
-        </div>
-
-        <table id="portfolioTable" class="portfolio-table">
-          <thead>
-            <tr>
-              <th>Mã</th>
-              <th>Entry</th>
-              <th>Khối lượng</th>
-              <th>Giá trị</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td colspan="5" style="text-align: center; padding: 20px;">Chưa có mã nào. Nhấn "+ Thêm mã" để thêm.</td></tr>
-          </tbody>
-        </table>
-
-        <div class="button-group" style="margin-top: 16px;">
-          <button id="evaluateBtn" class="primary-btn">🔍 Đánh giá</button>
-          <button id="clearPortfolioBtn" class="secondary-btn">🗑️ Xóa tất cả</button>
         </div>
       </div>
     </div>
@@ -149,13 +135,36 @@
           />
         </div>
 
-        <div class="button-group">
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
+          <h3 style="margin-top: 0;">Prompt đánh giá danh mục</h3>
+          <div class="form-group">
+            <textarea
+              id="portfolioPromptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để ChatGPT đánh giá danh mục (gồm tất cả các mã và CASH)..."
+              rows="4"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi kèm danh mục khi bạn nút 'Đánh giá' trong tab Danh mục.</p>
+          </div>
+        </div>
+
+        <div class="button-group" style="margin-top: 24px;">
           <button id="saveBtn" class="primary-btn">Lưu cấu hình</button>
           <button id="sendBtn" class="secondary-btn">Gửi ngay</button>
           <button id="resetBtn" class="secondary-btn">Reset</button>
         </div>
 
         <div id="saveStatus" class="status-message"></div>
+
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
+          <h3 style="margin-top: 0;">Sao lưu & Khôi phục</h3>
+          <div class="button-group">
+            <button id="exportBtn" class="secondary-btn">💾 Xuất dữ liệu</button>
+            <button id="importBtn" class="secondary-btn">📂 Nhập dữ liệu</button>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+          </div>
+          <div id="backupStatus" class="status-message"></div>
+        </div>
       </div>
     </div>
   </div>

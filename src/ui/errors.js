@@ -88,7 +88,16 @@ export function setupErrors(dom) {
     if (errorDescInput) errorDescInput.value = error.description || '';
     if (errorTypeInput) errorTypeInput.value = error.type || 'general';
     if (errorSeverityInput) errorSeverityInput.value = error.severity || 'medium';
-    if (errorModal) errorModal.classList.remove('hidden');
+    if (errorModal) {
+      errorModal.classList.remove('hidden');
+      // Remove old listeners from saveBtn to prevent multiple triggers
+      const oldSaveBtn = errorModal.querySelector('#saveErrorBtn');
+      if (oldSaveBtn) {
+        const newSaveBtn = oldSaveBtn.cloneNode(true);
+        oldSaveBtn.parentNode.replaceChild(newSaveBtn, oldSaveBtn);
+        newSaveBtn.addEventListener('click', saveError);
+      }
+    }
   }
 
   function closeModal() {

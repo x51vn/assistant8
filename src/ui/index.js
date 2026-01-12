@@ -4,6 +4,7 @@ import { setupResults } from './results.js';
 import { setupSettings } from './settings.js';
 import { setupHistory } from './history.js';
 import { setupErrors } from './errors.js';
+import { setupBackup } from './backup.js';
 import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
 
@@ -56,12 +57,17 @@ import { loadCachedResultFast } from './storage.js';
     sendBtn: byId('sendBtn'),
     resetBtn: byId('resetBtn'),
     saveStatus: byId('saveStatus'),
+    exportBtn: byId('exportBtn'),
+    importBtn: byId('importBtn'),
+    importFileInput: byId('importFileInput'),
+    backupStatus: byId('backupStatus'),
   };
 
   setupNavigation(dom);
 
   setupResults(dom);
   setupSettings(dom);
+  setupBackup(dom);
   setupHistory(dom);
   setupErrors(dom);
   initPortfolio({
