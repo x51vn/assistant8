@@ -11,12 +11,10 @@ import { loadCachedResultFast } from './storage.js';
   const dom = {
     resultsBtn: byId('resultsBtn'),
     portfolioBtn: byId('portfolioBtn'),
-    historyBtn: byId('historyBtn'),
     errorsBtn: byId('errorsBtn'),
     settingsBtn: byId('settingsBtn'),
     resultsPage: byId('resultsPage'),
     portfolioPage: byId('portfolioPage'),
-    historyPage: byId('historyPage'),
     errorsPage: byId('errorsPage'),
     settingsPage: byId('settingsPage'),
 

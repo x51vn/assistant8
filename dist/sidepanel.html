@@ -12,7 +12,6 @@
       <div class="nav-buttons">
         <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="portfolioBtn" class="nav-btn">Danh mục</button>
-        <button id="historyBtn" class="nav-btn">Lịch sử</button>
         <button id="errorsBtn" class="nav-btn">Retrospective</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
       </div>
@@ -20,15 +19,32 @@
 
     <div id="resultsPage" class="page active">
       <div class="content">
-        <div id="resultBox" class="result-box">
-          <p id="resultText" class="result-text">Chưa có kết quả. Nhấn "Chạy ngay" để bắt đầu.</p>
-          <div id="loadingSpinner" class="spinner hidden"></div>
+        <!-- Results Section -->
+        <div class="results-section">
+          <div id="resultBox" class="result-box">
+            <p id="resultText" class="result-text">Chưa có kết quả. Nhấn "Chạy ngay" để bắt đầu.</p>
+            <div id="loadingSpinner" class="spinner hidden"></div>
+          </div>
+
+          <div class="results-actions" style="padding: 16px; border-top: 1px solid #eee;">
+            <button id="runBtn" class="primary-btn">Chạy ngay</button>
+            <button id="stopBtn" class="secondary-btn" style="display: none;">Dừng chờ</button>
+            <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+          </div>
         </div>
 
-        <div class="results-actions" style="padding: 16px; border-top: 1px solid #eee;">
-          <button id="runBtn" class="primary-btn">Chạy ngay</button>
-          <button id="stopBtn" class="secondary-btn" style="display: none;">Dừng chờ</button>
-          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+        <!-- History Section -->
+        <div class="history-section" style="border-top: 1px solid #eee; margin-top: 16px; padding-top: 16px;">
+          <div class="page-header">
+            <h3 style="margin: 0;">Lịch sử Chat</h3>
+            <div>
+              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mới">🔄</button>
+              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả">🗑️</button>
+            </div>
+          </div>
+          <div id="historyList" class="history-list">
+            <p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -73,19 +89,6 @@
     </div>
 
     <div id="historyPage" class="page">
-      <div class="content">
-        <div class="page-header">
-          <h2>Lịch sử Chat</h2>
-          <div>
-            <button id="refreshHistoryBtn" class="icon-btn" title="Làm mới">🔄</button>
-            <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả">🗑️</button>
-          </div>
-        </div>
-        <div id="historyList" class="history-list">
-          <p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>
-        </div>
-      </div>
-    </div>
 
     <div id="errorsPage" class="page">
       <div class="content">

@@ -1,6 +1,6 @@
-export function setActivePage({ resultsPage, portfolioPage, historyPage, errorsPage, settingsPage, resultsBtn, portfolioBtn, historyBtn, errorsBtn, settingsBtn, page }) {
-  const pages = [resultsPage, portfolioPage, historyPage, errorsPage, settingsPage];
-  const btns = [resultsBtn, portfolioBtn, historyBtn, errorsBtn, settingsBtn];
+export function setActivePage({ resultsPage, portfolioPage, errorsPage, settingsPage, resultsBtn, portfolioBtn, errorsBtn, settingsBtn, page }) {
+  const pages = [resultsPage, portfolioPage, errorsPage, settingsPage];
+  const btns = [resultsBtn, portfolioBtn, errorsBtn, settingsBtn];
 
   // Remove active from all pages and buttons
   pages.forEach(p => p?.classList.remove('active'));
@@ -13,9 +13,6 @@ export function setActivePage({ resultsPage, portfolioPage, historyPage, errorsP
   } else if (page === 'portfolio' && portfolioPage && portfolioBtn) {
     portfolioPage.classList.add('active');
     portfolioBtn.classList.add('active');
-  } else if (page === 'history' && historyPage && historyBtn) {
-    historyPage.classList.add('active');
-    historyBtn.classList.add('active');
   } else if (page === 'errors' && errorsPage && errorsBtn) {
     errorsPage.classList.add('active');
     errorsBtn.classList.add('active');
