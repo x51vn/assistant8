@@ -2,6 +2,8 @@ import { setActivePage } from './pages.js';
 import { showStatus } from './status.js';
 import { loadSettings } from './storage.js';
 
+const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
+
 export function setupSettings(dom) {
   const {
     promptInput,
@@ -17,13 +19,18 @@ export function setupSettings(dom) {
     settingsPage,
     resultsBtn,
     settingsBtn,
-    getAndDisplayResult,
+    portfolioPromptInput,
   } = dom;
+
+  // Load portfolio prompt on init
+  loadPortfolioPrompt(portfolioPromptInput);
 
   saveBtn?.addEventListener('click', async () => {
     const prompt = (promptInput?.value || '').trim();
+    const portfolioPrompt = (portfolioPromptInput?.value || '').trim();
+    
     if (!prompt) {
-      showStatus(saveStatus, 'Vui lòng nhập prompt!', 'error');
+      showStatus(saveStatus, 'Vui lòng nhập prompt chính!', 'error');
       return;
     }
 
@@ -35,7 +42,10 @@ export function setupSettings(dom) {
       interval: parseInt(intervalInput?.value, 10) || 5,
     };
 
+    // Save both regular settings and portfolio prompt in one go
     await chrome.storage.local.set(settings);
+    await chrome.storage.local.set({ [PORTFOLIO_PROMPT_KEY]: portfolioPrompt });
+    console.log('[Settings] All settings saved including portfolio prompt');
     showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
   });
 
@@ -65,13 +75,6 @@ export function setupSettings(dom) {
       }
       if (response && response.status === 'ok') {
         showStatus(saveStatus, 'Prompt đã gửi!', 'success');
-
-        setTimeout(() => {
-          setActivePage({ resultsPage, settingsPage, resultsBtn, settingsBtn, page: 'results' });
-          setTimeout(() => {
-            getAndDisplayResult?.();
-          }, 2500);
-        }, 250);
       } else {
         showStatus(saveStatus, 'Không gửi được prompt!', 'error');
       }
@@ -79,4 +82,10 @@ export function setupSettings(dom) {
   });
 
   loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, intervalInput });
+}
+
+async function loadPortfolioPrompt(portfolioPromptInput) {
+  if (!portfolioPromptInput) return;
+  const stored = await chrome.storage.local.get([PORTFOLIO_PROMPT_KEY]);
+  portfolioPromptInput.value = stored[PORTFOLIO_PROMPT_KEY] || '';
 }

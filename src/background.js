@@ -366,10 +366,13 @@ async function inputPrompt(prompt, options = {}) {
     }
     return { status: 'ok', runId, reviewMode: settings.reviewPrompt, skipHistory };
   } catch (error) {
-    // Retry once after short delay
-    await delay(1500);
+    console.error('[Background] First attempt failed:', error?.message);
+    // Retry once after longer delay to allow page to fully load
+    console.log('[Background] Retrying after 2s...');
+    await delay(2000);
     try {
       const enhancedPrompt = await applyPromptTemplate(finalPrompt);
+      console.log('[Background] Retry attempt - sending to tab', tab.id);
       const sendResult = await ChatGPTSession.sendInput(tab.id, enhancedPrompt, { 
         createNewChat: true,
         runId: runId,
@@ -378,6 +381,7 @@ async function inputPrompt(prompt, options = {}) {
 
       if (sendResult.success) {
         const status = settings.reviewPrompt ? 'filled' : 'sent';
+        console.log('[Background] Retry successful, status:', status);
         await updateRun(runId, {
           status: status,
           chatUrl: sendResult.chatUrl || null,
@@ -397,6 +401,7 @@ async function inputPrompt(prompt, options = {}) {
       }
       return { status: 'ok', runId, reviewMode: settings.reviewPrompt };
     } catch (finalError) {
+      console.error('[Background] Retry failed:', finalError?.message);
       await updateRun(runId, { status: 'failed', error: String(finalError?.message || finalError) });
       throw finalError;
     }

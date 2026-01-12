@@ -4,24 +4,33 @@ import { setupResults } from './results.js';
 import { setupSettings } from './settings.js';
 import { setupHistory } from './history.js';
 import { setupErrors } from './errors.js';
+import { setupBackup } from './backup.js';
+import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
 
 (function init() {
   const dom = {
     resultsBtn: byId('resultsBtn'),
-    historyBtn: byId('historyBtn'),
+    portfolioBtn: byId('portfolioBtn'),
     errorsBtn: byId('errorsBtn'),
     settingsBtn: byId('settingsBtn'),
     resultsPage: byId('resultsPage'),
-    historyPage: byId('historyPage'),
+    portfolioPage: byId('portfolioPage'),
     errorsPage: byId('errorsPage'),
     settingsPage: byId('settingsPage'),
 
     runBtn: byId('runBtn'),
     stopBtn: byId('stopBtn'),
     refreshBtn: byId('refreshBtn'),
-    resultText: byId('resultText'),
-    loadingSpinner: byId('loadingSpinner'),
+
+    portfolioTable: byId('portfolioTable')?.querySelector('tbody'),
+    addStockBtn: byId('addStockBtn'),
+    portfolioPromptInput: byId('portfolioPromptInput'),
+    evaluateBtn: byId('evaluateBtn'),
+    clearPortfolioBtn: byId('clearPortfolioBtn'),
+    portfolioModal: byId('portfolioModal'),
+    closePortfolioModal: byId('closePortfolioModal'),
+    cancelPortfolioBtn: byId('cancelPortfolioBtn'),
 
     historyList: byId('historyList'),
     refreshHistoryBtn: byId('refreshHistoryBtn'),
@@ -48,16 +57,30 @@ import { loadCachedResultFast } from './storage.js';
     sendBtn: byId('sendBtn'),
     resetBtn: byId('resetBtn'),
     saveStatus: byId('saveStatus'),
+    exportBtn: byId('exportBtn'),
+    importBtn: byId('importBtn'),
+    importFileInput: byId('importFileInput'),
+    backupStatus: byId('backupStatus'),
   };
 
   setupNavigation(dom);
 
-  const { getAndDisplayResult } = setupResults(dom);
-  setupSettings({ ...dom, getAndDisplayResult });
+  setupResults(dom);
+  setupSettings(dom);
+  setupBackup(dom);
   setupHistory(dom);
   setupErrors(dom);
-
-  loadCachedResultFast(dom.resultText);
+  initPortfolio({
+    portfolioPage: dom.portfolioPage,
+    portfolioBtn: dom.portfolioBtn,
+    portfolioTable: dom.portfolioTable,
+    addStockBtn: dom.addStockBtn,
+    stockCodeInput: byId('stockCodeInput'),
+    entryInput: byId('stockEntryInput'),
+    quantityInput: byId('stockQuantityInput'),
+    promptInput: dom.portfolioPromptInput,
+    evaluateBtn: dom.evaluateBtn,
+  });
 
   try {
     chrome.runtime.sendMessage({ action: 'ensure_chatgpt_open' });

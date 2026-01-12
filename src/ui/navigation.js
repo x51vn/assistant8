@@ -3,39 +3,39 @@ import { loadSettings } from './storage.js';
 
 export function setupNavigation(dom) {
   const { 
-    resultsBtn, historyBtn, errorsBtn, settingsBtn, 
-    resultsPage, historyPage, errorsPage, settingsPage, 
+    resultsBtn, portfolioBtn, errorsBtn, settingsBtn, 
+    resultsPage, portfolioPage, errorsPage, settingsPage, 
     promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput 
   } = dom;
 
   resultsBtn?.addEventListener('click', () => {
     setActivePage({ 
-      resultsPage, historyPage, errorsPage, settingsPage, 
-      resultsBtn, historyBtn, errorsBtn, settingsBtn, 
+      resultsPage, portfolioPage, errorsPage, settingsPage, 
+      resultsBtn, portfolioBtn, errorsBtn, settingsBtn, 
       page: 'results' 
     });
   });
 
-  historyBtn?.addEventListener('click', () => {
+  portfolioBtn?.addEventListener('click', () => {
     setActivePage({ 
-      resultsPage, historyPage, errorsPage, settingsPage, 
-      resultsBtn, historyBtn, errorsBtn, settingsBtn, 
-      page: 'history' 
+      resultsPage, portfolioPage, errorsPage, settingsPage, 
+      resultsBtn, portfolioBtn, errorsBtn, settingsBtn, 
+      page: 'portfolio' 
     });
   });
 
   errorsBtn?.addEventListener('click', () => {
     setActivePage({ 
-      resultsPage, historyPage, errorsPage, settingsPage, 
-      resultsBtn, historyBtn, errorsBtn, settingsBtn, 
+      resultsPage, portfolioPage, errorsPage, settingsPage, 
+      resultsBtn, portfolioBtn, errorsBtn, settingsBtn, 
       page: 'errors' 
     });
   });
 
   settingsBtn?.addEventListener('click', () => {
     setActivePage({ 
-      resultsPage, historyPage, errorsPage, settingsPage, 
-      resultsBtn, historyBtn, errorsBtn, settingsBtn, 
+      resultsPage, portfolioPage, errorsPage, settingsPage, 
+      resultsBtn, portfolioBtn, errorsBtn, settingsBtn, 
       page: 'settings' 
     });
     loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput });
