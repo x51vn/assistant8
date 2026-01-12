@@ -7,6 +7,8 @@ import { setupErrors } from './errors.js';
 import { setupBackup } from './backup.js';
 import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
+import { setupTemplates, initializeTemplates } from './templates.js';
+import { setupSync } from './sync.js';
 
 (function init() {
   const dom = {
@@ -61,15 +63,42 @@ import { loadCachedResultFast } from './storage.js';
     importBtn: byId('importBtn'),
     importFileInput: byId('importFileInput'),
     backupStatus: byId('backupStatus'),
+    
+    // Sync
+    syncEnabledCheckbox: byId('syncEnabledCheckbox'),
+    authGoogleBtn: byId('authGoogleBtn'),
+    syncNowBtn: byId('syncNowBtn'),
+    revokeGoogleBtn: byId('revokeGoogleBtn'),
+    syncStatus: byId('syncStatus'),
+    backupsList: byId('backupsList'),
+    
+    // Templates
+    templatesBtn: byId('templatesBtn'),
+    templatesPage: byId('templatesPage'),
+    templateList: byId('templateList'),
+    newTemplateBtn: byId('newTemplateBtn'),
+    templateModal: byId('templateModal'),
+    closeTemplateModal: byId('closeTemplateModal'),
+    templateNameInput: byId('templateNameInput'),
+    templateDescInput: byId('templateDescInput'),
+    templateCategorySelect: byId('templateCategorySelect'),
+    templateContentInput: byId('templateContentInput'),
+    saveTemplateBtn: byId('saveTemplateBtn'),
+    cancelTemplateBtn: byId('cancelTemplateBtn'),
   };
+
+  // Initialize templates
+  initializeTemplates();
 
   setupNavigation(dom);
 
   setupResults(dom);
   setupSettings(dom);
   setupBackup(dom);
+  setupSync(dom);
   setupHistory(dom);
   setupErrors(dom);
+  setupTemplates(dom);
   initPortfolio({
     portfolioPage: dom.portfolioPage,
     portfolioBtn: dom.portfolioBtn,

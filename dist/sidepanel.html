@@ -13,19 +13,35 @@
         <button id="portfolioBtn" class="nav-btn">Danh mục</button>
         <button id="resultsBtn" class="nav-btn active">Kết quả</button>
         <button id="errorsBtn" class="nav-btn">Retrospective</button>
+        <button id="templatesBtn" class="nav-btn">Templates</button>
         <button id="settingsBtn" class="nav-btn">Cấu hình</button>
       </div>
     </header>
 
-    <div id="portfolioPage" class="page active">
+    <div id="portfolioPage" class="page">
       <div class="content">
+        <div id="portfolioSummary" class="portfolio-summary" style="display: none;">
+          <div class="summary-row">
+            <span>Total Entry:</span>
+            <span id="totalEntry" class="summary-value">-</span>
+          </div>
+          <div class="summary-row">
+            <span>Current Value:</span>
+            <span id="currentValue" class="summary-value">-</span>
+          </div>
+          <div class="summary-row">
+            <span>P&L:</span>
+            <span id="totalPL" class="summary-value">-</span>
+          </div>
+        </div>
         <table id="portfolioTable" class="portfolio-table">
           <thead>
             <tr>
               <th>Mã</th>
               <th>Entry</th>
+              <th>Current</th>
               <th>Khối lượng</th>
-              <th>Giá trị</th>
+              <th>P&L</th>
               <th>Hành động</th>
             </tr>
           </thead>
@@ -36,13 +52,14 @@
 
         <div class="button-group" style="margin-top: 16px;">
           <button id="addStockBtn" class="primary-btn">+ Thêm/Sửa mã</button>
+          <button id="updatePricesBtn" class="primary-btn">💰 Update Prices</button>
           <button id="evaluateBtn" class="primary-btn">🔍 Đánh giá</button>
           <button id="clearPortfolioBtn" class="secondary-btn">🗑️ Xóa tất cả</button>
         </div>
       </div>
     </div>
 
-    <div id="resultsPage" class="page">
+    <div id="resultsPage" class="page active">
       <div class="content">
         <!-- Results Actions -->
         <div class="results-actions" style="padding: 16px;">
@@ -83,6 +100,18 @@
         </div>
         <div style="padding: 16px; text-align: center;">
           <button id="addErrorBtn" class="primary-btn">+ Thêm ghi chú</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="templatesPage" class="page">
+      <div class="content">
+        <div class="page-header">
+          <h2>Prompt Templates</h2>
+          <button id="newTemplateBtn" class="primary-btn">+ New Template</button>
+        </div>
+        <div id="templateList" class="template-list">
+          <p class="empty-state">Loading templates...</p>
         </div>
       </div>
     </div>
@@ -165,6 +194,63 @@
           </div>
           <div id="backupStatus" class="status-message"></div>
         </div>
+
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
+          <h3 style="margin-top: 0;">☁️ Cloud Sync (Google Drive)</h3>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="syncEnabledCheckbox" />
+              Enable Google Drive Sync (Auto-sync every hour)
+            </label>
+            <p class="help-text">Automatically backup your data to Google Drive every hour.</p>
+          </div>
+          <div id="syncStatus" class="status-message"></div>
+          <div class="button-group" style="margin-top: 12px;">
+            <button id="authGoogleBtn" class="primary-btn">🔐 Connect Google Drive</button>
+            <button id="syncNowBtn" class="secondary-btn" style="display: none;">⬆️ Sync Now</button>
+            <button id="revokeGoogleBtn" class="secondary-btn" style="display: none;">🔓 Disconnect</button>
+          </div>
+          <div id="backupsList" style="margin-top: 12px; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Template Modal -->
+  <div id="templateModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create/Edit Template</h3>
+        <button class="modal-close" id="closeTemplateModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="templateNameInput">Template Name:</label>
+          <input type="text" id="templateNameInput" class="text-input" placeholder="e.g., Stock Analysis" />
+        </div>
+        <div class="form-group">
+          <label for="templateDescInput">Description:</label>
+          <textarea id="templateDescInput" class="textarea-input" rows="2" placeholder="Brief description..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="templateCategorySelect">Category:</label>
+          <select id="templateCategorySelect" class="select-input">
+            <option value="analysis">Analysis</option>
+            <option value="portfolio">Portfolio</option>
+            <option value="risk">Risk</option>
+            <option value="market">Market</option>
+            <option value="coding">Coding</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="templateContentInput">Template Content:</label>
+          <textarea id="templateContentInput" class="textarea-input" rows="6" placeholder="Your template text here. Use {SYMBOL}, {PORTFOLIO}, {CODE} for variables..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="saveTemplateBtn" class="primary-btn">Save Template</button>
+        <button id="cancelTemplateBtn" class="secondary-btn">Cancel</button>
       </div>
     </div>
   </div>
@@ -213,6 +299,25 @@
   </div>
 
   <!-- Portfolio Modal -->
+  <!-- Price Update Modal -->
+  <div id="priceUpdateModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Update Stock Prices</h3>
+        <button class="modal-close" id="closePriceModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="priceUpdateList" class="price-update-list">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="savePricesBtn" class="primary-btn">Save Prices</button>
+        <button id="cancelPriceBtn" class="secondary-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="portfolioModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">

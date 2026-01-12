@@ -1,6 +1,8 @@
 const PORTFOLIO_KEY = 'portfolio';
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 
+import { calculateStockPL, calculatePortfolioTotalPL, formatCurrency, formatPercent, getPLClass } from './portfolioPL.js';
+
 export async function initPortfolio({
   portfolioPage,
   portfolioBtn,
@@ -54,6 +56,12 @@ export async function initPortfolio({
     }
   });
 
+  // Update prices button
+  const updatePricesBtn = document.getElementById('updatePricesBtn');
+  updatePricesBtn?.addEventListener('click', () => {
+    openPriceUpdateModal(portfolioTable);
+  });
+
   // Modal close buttons
   const portfolioModal = document.getElementById('portfolioModal');
   const closePortfolioModal = document.getElementById('closePortfolioModal');
@@ -66,6 +74,25 @@ export async function initPortfolio({
   cancelPortfolioBtn?.addEventListener('click', () => {
     portfolioModal?.classList.add('hidden');
   });
+
+  // Price update modal handlers
+  const priceUpdateModal = document.getElementById('priceUpdateModal');
+  const closePriceModal = document.getElementById('closePriceModal');
+  const cancelPriceBtn = document.getElementById('cancelPriceBtn');
+  const savePricesBtn = document.getElementById('savePricesBtn');
+
+  closePriceModal?.addEventListener('click', () => {
+    priceUpdateModal?.classList.add('hidden');
+  });
+
+  cancelPriceBtn?.addEventListener('click', () => {
+    priceUpdateModal?.classList.add('hidden');
+  });
+
+  savePricesBtn?.addEventListener('click', async () => {
+    await savePriceUpdates(portfolioTable);
+    priceUpdateModal?.classList.add('hidden');
+  });
 }
 
 export async function loadPortfolioUI(table) {
@@ -74,8 +101,22 @@ export async function loadPortfolioUI(table) {
 
   table.innerHTML = '';
   if (portfolio.length === 0) {
-    table.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Chưa có mã nào. Nhấn "+ Thêm mã" để thêm.</td></tr>';
+    table.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Chưa có mã nào. Nhấn "+ Thêm mã" để thêm.</td></tr>';
     return;
+  }
+
+  // Calculate portfolio P&L
+  const portfolioSummary = calculatePortfolioTotalPL(portfolio);
+  
+  // Display summary
+  const summaryEl = document.getElementById('portfolioSummary');
+  if (summaryEl && portfolio.some(s => s.currentPrice)) {
+    summaryEl.style.display = 'block';
+    document.getElementById('totalEntry').textContent = formatCurrency(portfolioSummary.totalEntryValue);
+    document.getElementById('currentValue').textContent = formatCurrency(portfolioSummary.totalCurrentValue);
+    const plEl = document.getElementById('totalPL');
+    plEl.textContent = `${formatCurrency(portfolioSummary.totalPL)} ${formatPercent(portfolioSummary.totalPLPercent)}`;
+    plEl.className = `summary-value ${getPLClass(portfolioSummary.totalPL)}`;
   }
 
   // Sort: regular stocks first, CASH always at the end
@@ -97,19 +138,26 @@ export async function loadPortfolioUI(table) {
       row.innerHTML = `
         <td>${stock.code}</td>
         <td>-</td>
+        <td>-</td>
         <td>${stock.quantity.toFixed(2)}</td>
-        <td>${stock.quantity.toFixed(2)}</td>
+        <td>-</td>
         <td style="text-align: center;">
           <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
           <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
         </td>
       `;
     } else {
+      const pl = calculateStockPL(stock);
+      const plDisplay = pl 
+        ? `<span class="${getPLClass(pl.pl)}">${formatCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
+        : '-';
+      
       row.innerHTML = `
         <td>${stock.code}</td>
         <td>${stock.entry}</td>
+        <td>${stock.currentPrice || '-'}</td>
         <td>${stock.quantity}</td>
-        <td>${(stock.entry * stock.quantity).toFixed(2)}</td>
+        <td>${plDisplay}</td>
         <td style="text-align: center;">
           <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
           <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
@@ -362,4 +410,54 @@ export async function evaluatePortfolio(prompt) {
       resolve(true);
     });
   });
+}
+
+// Price update functions
+async function openPriceUpdateModal(portfolioTable) {
+  const portfolio = await getPortfolio();
+  const priceUpdateList = document.getElementById('priceUpdateList');
+  
+  if (!priceUpdateList) return;
+
+  // Filter out CASH
+  const stocks = portfolio.filter(s => s.code !== 'CASH');
+  
+  priceUpdateList.innerHTML = stocks.map(stock => `
+    <div class="price-update-item">
+      <label>${stock.code}</label>
+      <input type="number" class="price-input" data-code="${stock.code}" 
+             value="${stock.currentPrice || stock.entry}" 
+             step="0.1" min="0" placeholder="Current price" />
+      <span style="font-size: 11px; color: #666;">(Entry: ${stock.entry})</span>
+    </div>
+  `).join('');
+
+  const priceUpdateModal = document.getElementById('priceUpdateModal');
+  priceUpdateModal?.classList.remove('hidden');
+}
+
+async function savePriceUpdates(portfolioTable) {
+  const portfolio = await getPortfolio();
+  const priceInputs = document.querySelectorAll('.price-input');
+  
+  let updated = false;
+  priceInputs.forEach(input => {
+    const code = input.dataset.code;
+    const price = parseFloat(input.value);
+    
+    if (price > 0) {
+      const stock = portfolio.find(s => s.code === code);
+      if (stock) {
+        stock.currentPrice = price;
+        stock.priceUpdatedAt = new Date().toISOString();
+        updated = true;
+      }
+    }
+  });
+
+  if (updated) {
+    await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+    await loadPortfolioUI(portfolioTable);
+    console.log('[Portfolio] Prices updated');
+  }
 }
