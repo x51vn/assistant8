@@ -1,5 +1,3 @@
-import { showLoading } from './status.js';
-
 export function setupResults(dom) {
   const { runBtn, stopBtn, refreshBtn } = dom;
   let currentPollInterval = null;
@@ -9,7 +7,6 @@ export function setupResults(dom) {
       clearInterval(currentPollInterval);
       currentPollInterval = null;
     }
-    showLoading(false);
     if (runBtn) runBtn.style.display = '';
     if (stopBtn) stopBtn.style.display = 'none';
   }
@@ -20,8 +17,6 @@ export function setupResults(dom) {
     const prompt = result.prompt || 'Xin chào!';
     const promptStr = typeof prompt === 'string' ? prompt : String(prompt);
     console.log('[Results] Prompt to send:', promptStr.substring(0, 100) + '...');
-
-    showLoading(true);
     
     // Show stop button, hide run button
     if (runBtn) runBtn.style.display = 'none';
@@ -47,7 +42,7 @@ export function setupResults(dom) {
         return;
       }
       
-      // Keep loading and poll for result every 3 seconds (no timeout - wait indefinitely)
+      // Keep polling for result every 3 seconds (no timeout - wait indefinitely)
       const runId = response.runId;
       console.log('[Results] Starting poll for runId:', runId);
       let pollCount = 0;

@@ -1,10 +1,14 @@
 export function setActivePage({ resultsPage, portfolioPage, errorsPage, settingsPage, resultsBtn, portfolioBtn, errorsBtn, settingsBtn, page }) {
-  const pages = [resultsPage, portfolioPage, errorsPage, settingsPage];
-  const btns = [resultsBtn, portfolioBtn, errorsBtn, settingsBtn];
+  const pages = [resultsPage, portfolioPage, errorsPage, settingsPage].filter(Boolean);
+  const btns = [resultsBtn, portfolioBtn, errorsBtn, settingsBtn].filter(Boolean);
 
   // Remove active from all pages and buttons
-  pages.forEach(p => p?.classList.remove('active'));
-  btns.forEach(b => b?.classList.remove('active'));
+  pages.forEach(p => {
+    if (p) p.classList.remove('active');
+  });
+  btns.forEach(b => {
+    if (b) b.classList.remove('active');
+  });
 
   // Add active to selected page and button
   if (page === 'results' && resultsPage && resultsBtn) {
