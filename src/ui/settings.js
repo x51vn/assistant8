@@ -17,7 +17,6 @@ export function setupSettings(dom) {
     settingsPage,
     resultsBtn,
     settingsBtn,
-    getAndDisplayResult,
   } = dom;
 
   saveBtn?.addEventListener('click', async () => {
@@ -65,13 +64,6 @@ export function setupSettings(dom) {
       }
       if (response && response.status === 'ok') {
         showStatus(saveStatus, 'Prompt đã gửi!', 'success');
-
-        setTimeout(() => {
-          setActivePage({ resultsPage, settingsPage, resultsBtn, settingsBtn, page: 'results' });
-          setTimeout(() => {
-            getAndDisplayResult?.();
-          }, 2500);
-        }, 250);
       } else {
         showStatus(saveStatus, 'Không gửi được prompt!', 'error');
       }

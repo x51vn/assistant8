@@ -21,8 +21,6 @@ import { loadCachedResultFast } from './storage.js';
     runBtn: byId('runBtn'),
     stopBtn: byId('stopBtn'),
     refreshBtn: byId('refreshBtn'),
-    resultText: byId('resultText'),
-    loadingSpinner: byId('loadingSpinner'),
 
     portfolioTable: byId('portfolioTable')?.querySelector('tbody'),
     addStockBtn: byId('addStockBtn'),
@@ -62,8 +60,8 @@ import { loadCachedResultFast } from './storage.js';
 
   setupNavigation(dom);
 
-  const { getAndDisplayResult } = setupResults(dom);
-  setupSettings({ ...dom, getAndDisplayResult });
+  setupResults(dom);
+  setupSettings(dom);
   setupHistory(dom);
   setupErrors(dom);
   initPortfolio({
@@ -77,8 +75,6 @@ import { loadCachedResultFast } from './storage.js';
     promptInput: dom.portfolioPromptInput,
     evaluateBtn: dom.evaluateBtn,
   });
-
-  loadCachedResultFast(dom.resultText);
 
   try {
     chrome.runtime.sendMessage({ action: 'ensure_chatgpt_open' });
