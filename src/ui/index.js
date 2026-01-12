@@ -4,15 +4,18 @@ import { setupResults } from './results.js';
 import { setupSettings } from './settings.js';
 import { setupHistory } from './history.js';
 import { setupErrors } from './errors.js';
+import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
 
 (function init() {
   const dom = {
     resultsBtn: byId('resultsBtn'),
+    portfolioBtn: byId('portfolioBtn'),
     historyBtn: byId('historyBtn'),
     errorsBtn: byId('errorsBtn'),
     settingsBtn: byId('settingsBtn'),
     resultsPage: byId('resultsPage'),
+    portfolioPage: byId('portfolioPage'),
     historyPage: byId('historyPage'),
     errorsPage: byId('errorsPage'),
     settingsPage: byId('settingsPage'),
@@ -22,6 +25,15 @@ import { loadCachedResultFast } from './storage.js';
     refreshBtn: byId('refreshBtn'),
     resultText: byId('resultText'),
     loadingSpinner: byId('loadingSpinner'),
+
+    portfolioTable: byId('portfolioTable')?.querySelector('tbody'),
+    addStockBtn: byId('addStockBtn'),
+    portfolioPromptInput: byId('portfolioPromptInput'),
+    evaluateBtn: byId('evaluateBtn'),
+    clearPortfolioBtn: byId('clearPortfolioBtn'),
+    portfolioModal: byId('portfolioModal'),
+    closePortfolioModal: byId('closePortfolioModal'),
+    cancelPortfolioBtn: byId('cancelPortfolioBtn'),
 
     historyList: byId('historyList'),
     refreshHistoryBtn: byId('refreshHistoryBtn'),
@@ -56,6 +68,17 @@ import { loadCachedResultFast } from './storage.js';
   setupSettings({ ...dom, getAndDisplayResult });
   setupHistory(dom);
   setupErrors(dom);
+  initPortfolio({
+    portfolioPage: dom.portfolioPage,
+    portfolioBtn: dom.portfolioBtn,
+    portfolioTable: dom.portfolioTable,
+    addStockBtn: dom.addStockBtn,
+    stockCodeInput: byId('stockCodeInput'),
+    entryInput: byId('stockEntryInput'),
+    quantityInput: byId('stockQuantityInput'),
+    promptInput: dom.portfolioPromptInput,
+    evaluateBtn: dom.evaluateBtn,
+  });
 
   loadCachedResultFast(dom.resultText);
 
