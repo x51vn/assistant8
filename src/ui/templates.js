@@ -121,7 +121,7 @@ export function setupTemplates(dom) {
         <div class="template-actions">
           <button class="template-use-btn" data-id="${t.id}" title="Use this template">📌 Use</button>
           <button class="template-edit-btn" data-id="${t.id}" title="Edit">✏️ Edit</button>
-          <button class="template-delete-btn" data-id="${t.id}" title="Delete">🗑️ Delete</button>
+          <button class="template-delete-btn" data-id="${t.id}" title="Delete"><i class="fas fa-trash"></i> Delete</button>
         </div>
       </div>
     `).join('');

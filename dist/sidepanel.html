@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ChatGPT Assistant</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body class="sidepanel">
@@ -22,7 +23,7 @@
       <div class="content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h2 style="margin: 0;">Danh Mục</h2>
-          <span id="realtimeStatus" style="font-size: 12px; color: #999;">📊 Manual Update</span>
+          <span id="realtimeStatus" style="font-size: 12px; color: #999;"><i class="fas fa-chart-line"></i> Manual Update</span>
         </div>
         
         <div id="portfolioSummary" class="portfolio-summary" style="display: none;">
@@ -57,8 +58,8 @@
 
         <div class="button-group" style="margin-top: 16px;">
           <button id="addStockBtn" class="primary-btn">+ Thêm/Sửa mã</button>
-          <button id="updatePricesBtn" class="primary-btn">💰 Update Prices</button>
-          <button id="evaluateBtn" class="primary-btn">🔍 Đánh giá</button>
+          <button id="updatePricesBtn" class="primary-btn"><i class="fas fa-money-bill"></i> Update Prices</button>
+          <button id="evaluateBtn" class="primary-btn"><i class="fas fa-magnifying-glass"></i> Đánh giá</button>
           <button id="runBtn" class="primary-btn">Chạy ngay</button>
           <button id="refreshBtn" class="secondary-btn">Làm mới</button>
         </div>
@@ -72,8 +73,8 @@
           <div class="page-header">
             <h3 style="margin: 0;">Lịch sử Chat</h3>
             <div>
-              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mới">🔄</button>
-              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả">🗑️</button>
+              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mới"><i class="fas fa-rotate-right"></i></button>
+              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả"><i class="fas fa-trash"></i></button>
             </div>
           </div>
           <div id="historyList" class="history-list">
@@ -90,8 +91,8 @@
         <div class="page-header">
           <h2>Retrospective</h2>
           <div>
-            <button id="retrospectiveBtn" class="secondary-btn">🔍 Phân tích</button>
-            <button id="clearErrorsBtn" class="icon-btn" title="Xóa tất cả">🗑️</button>
+            <button id="retrospectiveBtn" class="secondary-btn"><i class="fas fa-magnifying-glass"></i> Phân tích</button>
+            <button id="clearErrorsBtn" class="icon-btn" title="Xóa tất cả"><i class="fas fa-trash"></i></button>
           </div>
         </div>
         <div id="errorList" class="error-list">

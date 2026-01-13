@@ -44,7 +44,7 @@ export function setupErrors(dom) {
         <div class="error-title">${error.title || 'Lỗi không xác định'}</div>
         <div class="error-actions">
           <button class="error-action-btn edit-error" title="Sửa">✏️</button>
-          <button class="error-action-btn delete-error" title="Xóa">🗑️</button>
+          <button class="error-action-btn delete-error" title="Xóa"><i class="fas fa-trash"></i></button>
         </div>
       </div>
       <div class="error-meta">
@@ -222,7 +222,7 @@ export function setupErrors(dom) {
         clearInterval(retrospectivePollInterval);
         retrospectivePollInterval = null;
         retrospectiveBtn.disabled = false;
-        retrospectiveBtn.textContent = '🔍 Retrospective';
+        retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
         alert('Đã dừng phân tích.');
         return;
       }
@@ -230,7 +230,7 @@ export function setupErrors(dom) {
       if (!confirm('Bắt đầu phân tích retrospective? Điều này sẽ gửi lịch sử và lỗi đến ChatGPT để phân tích.')) return;
       
       retrospectiveBtn.disabled = false; // Keep enabled to allow stopping
-      retrospectiveBtn.textContent = '⏳ Đang phân tích...';
+      retrospectiveBtn.innerHTML = '⏳ Đang phân tích...';
       
       console.log('[Errors] Sending run_retrospective message...');
       chrome.runtime.sendMessage({ action: 'run_retrospective' }, (response) => {
@@ -238,7 +238,7 @@ export function setupErrors(dom) {
         if (chrome.runtime.lastError || !response || response.status !== 'ok') {
           alert('Lỗi khi chạy retrospective!');
           retrospectiveBtn.disabled = false;
-          retrospectiveBtn.textContent = '🔍 Retrospective';
+          retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
           return;
         }
         
@@ -262,7 +262,7 @@ export function setupErrors(dom) {
               clearInterval(retrospectivePollInterval);
               retrospectivePollInterval = null;
               retrospectiveBtn.disabled = false;
-              retrospectiveBtn.textContent = '🔍 Retrospective';
+              retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
               return;
             }
             
@@ -271,7 +271,7 @@ export function setupErrors(dom) {
               clearInterval(retrospectivePollInterval);
               retrospectivePollInterval = null;
               retrospectiveBtn.disabled = false;
-              retrospectiveBtn.textContent = '🔍 Retrospective';
+              retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
               
               // Save result as new error entry (type: retrospective)
               const timestamp = Date.now();

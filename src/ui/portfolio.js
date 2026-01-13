@@ -163,7 +163,7 @@ export async function loadPortfolioUI(table) {
         <td>-</td>
         <td style="text-align: center;">
           <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
-          <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
+          <button class="delete-btn" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i></button>
         </td>
       `;
     } else {
@@ -180,7 +180,7 @@ export async function loadPortfolioUI(table) {
         <td>${plDisplay}</td>
         <td style="text-align: center;">
           <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
-          <button class="delete-btn" data-id="${originalIdx}" title="Xóa">🗑️</button>
+          <button class="delete-btn" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i></button>
         </td>
       `;
     }
