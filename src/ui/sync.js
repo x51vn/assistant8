@@ -24,6 +24,46 @@ const restoreFromFirestore = (backupId = null) => sendMessage('restore_from_fire
 const listBackups = (limit = 1) => sendMessage('list_backups', { limit }).then(r => r || []);
 const deleteBackup = (backupId) => sendMessage('delete_backup', { backupId });
 
+// Notes functions - One note per day model
+async function getNotes() {
+  const { notes } = await chrome.storage.local.get(['notes']);
+  return Array.isArray(notes) ? notes : [];
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+async function getTodayNote() {
+  const notes = await getNotes();
+  const today = getTodayDateKey();
+  return notes.find(n => n.dateKey === today);
+}
+
+async function saveOrUpdateNote(text) {
+  const notes = await getNotes();
+  const today = getTodayDateKey();
+  const todayNote = notes.find(n => n.dateKey === today);
+  
+  if (todayNote) {
+    // Update existing note
+    todayNote.text = text;
+    todayNote.updatedAt = Date.now();
+  } else {
+    // Create new note
+    notes.unshift({
+      id: `note_${today}`,
+      dateKey: today,
+      text,
+      date: new Date().toISOString(),
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
+  }
+  
+  await chrome.storage.local.set({ notes });
+}
+
 // Deprecated - keeping for backward compatibility
 const registerWithEmail = () => { throw new Error('Register not supported'); };
 
@@ -309,4 +349,160 @@ function showStatus(element, message, type) {
   if (!element) return;
   element.textContent = message;
   element.className = `status-message ${type}`;
+}
+
+// Notes UI Management
+export async function setupNotes() {
+  const addNoteBtn = document.getElementById('addNoteBtn');
+  const noteForm = document.getElementById('noteForm');
+  const noteInput = document.getElementById('noteInput');
+  const saveNoteBtn = document.getElementById('saveNoteBtn');
+  const cancelNoteBtn = document.getElementById('cancelNoteBtn');
+  const notesList = document.getElementById('notesList');
+  const syncStatus = document.getElementById('syncStatus');
+
+  // Show form to add/edit today's note
+  addNoteBtn?.addEventListener('click', async () => {
+    const todayNote = await getTodayNote();
+    if (todayNote) {
+      noteInput.value = todayNote.text;
+    } else {
+      noteInput.value = '';
+    }
+    noteForm.style.display = 'block';
+    noteInput.focus();
+  });
+
+  // Cancel form
+  cancelNoteBtn?.addEventListener('click', () => {
+    noteForm.style.display = 'none';
+    noteInput.value = '';
+  });
+
+  // Save or update note
+  saveNoteBtn?.addEventListener('click', async () => {
+    const text = noteInput.value.trim();
+    if (!text) {
+      alert('Please enter some notes');
+      return;
+    }
+    
+    await saveOrUpdateNote(text);
+    noteInput.value = '';
+    noteForm.style.display = 'none';
+    await loadNotesList();
+  });
+
+  // Load initial notes
+  await loadNotesList();
+}
+
+async function loadNotesList() {
+  const notes = await getNotes();
+  const notesList = document.getElementById('notesList');
+  
+  if (!notesList) return;
+
+  if (notes.length === 0) {
+    notesList.innerHTML = '<p class="empty-state">No notes yet. Click + to add today\'s notes.</p>';
+    return;
+  }
+
+  let html = '';
+  notes.forEach(note => {
+    const date = new Date(note.date).toLocaleDateString('en-US', { 
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: '2-digit'
+    });
+    const today = getTodayDateKey();
+    const canEdit = note.dateKey >= today; // Allow editing today and future dates
+    const isToday = note.dateKey === today;
+    const itemClass = isToday ? 'notes-item today' : (canEdit ? 'notes-item future' : 'notes-item');
+    const dateClass = isToday ? 'notes-item-date today' : 'notes-item-date';
+    
+    html += `
+      <div class="${itemClass}">
+        <div class="notes-item-header">
+          <div class="${dateClass}">
+            ${isToday ? '📅' : '📋'} ${date}${isToday ? ' (Today)' : ''}
+          </div>
+          <div class="notes-item-buttons">
+            <button class="ask-chatgpt-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #764ba2; cursor: pointer; padding: 0; font-size: 14px; transition: opacity 0.2s;" title="Ask ChatGPT about this note">💬</button>
+            ${canEdit ? `<button class="edit-note-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #667eea; cursor: pointer; padding: 0; font-size: 12px; transition: opacity 0.2s;" title="Edit this note">✏️</button>` : ''}
+          </div>
+        </div>
+        <div class="notes-item-text">
+          ${escapeHtml(note.text)}
+        </div>
+      </div>
+    `;
+  });
+
+  notesList.innerHTML = html;
+
+  // Add ask ChatGPT listeners for all notes
+  notesList.querySelectorAll('.ask-chatgpt-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const dateKey = btn.dataset.date;
+      const notes = await getNotes();
+      const note = notes.find(n => n.dateKey === dateKey);
+      if (note) {
+        await askChatGPT(note.text);
+      }
+    });
+  });
+
+  // Add edit listeners for editable notes (today and future)
+  notesList.querySelectorAll('.edit-note-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const dateKey = btn.dataset.date;
+      const notes = await getNotes();
+      const note = notes.find(n => n.dateKey === dateKey);
+      if (note) {
+        document.getElementById('noteInput').value = note.text;
+        document.getElementById('noteForm').style.display = 'block';
+        document.getElementById('noteInput').focus();
+      }
+    });
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Send note to ChatGPT - reuses existing send_prompt action
+async function askChatGPT(noteText) {
+  try {
+    // Use existing send_prompt action from results.js
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'send_prompt', prompt: noteText }, (response) => {
+        resolve(response);
+      });
+    });
+    
+    if (response?.status === 'ok') {
+      console.log('[Notes] Sent to ChatGPT successfully');
+      // Optional: show a brief success message
+      const syncStatus = document.getElementById('syncStatus');
+      if (syncStatus) {
+        syncStatus.textContent = '✅ Sent to ChatGPT';
+        syncStatus.className = 'status-message success';
+        setTimeout(() => {
+          syncStatus.textContent = '';
+          syncStatus.className = '';
+        }, 2000);
+      }
+    } else {
+      console.error('[Notes] Failed to send to ChatGPT:', response);
+      alert('Failed to send to ChatGPT. Make sure ChatGPT tab is open.');
+    }
+  } catch (err) {
+    console.error('[Notes] Error asking ChatGPT:', err);
+    alert('Error: ' + err.message);
+  }
 }

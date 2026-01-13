@@ -113,7 +113,7 @@ async function syncToFirebaseHandler() {
     
     console.log('[Background Firebase] Firestore ready, reading local data...');
     
-    const STORAGE_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'chatHistory', 'errorList', 'runs', 'settings', 'promptTemplates'];
+    const STORAGE_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'chatHistory', 'errorList', 'runs', 'settings', 'promptTemplates', 'notes'];
     const allData = {};
     const stored = await chrome.storage.local.get(STORAGE_KEYS);
     

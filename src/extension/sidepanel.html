@@ -11,15 +11,42 @@
   <div class="container">
     <header>
       <div class="nav-buttons">
-        <button id="portfolioBtn" class="nav-btn active">Danh mục</button>
-        <button id="resultsBtn" class="nav-btn">Kết quả</button>
-        <button id="errorsBtn" class="nav-btn">Retrospective</button>
-        <button id="templatesBtn" class="nav-btn">Templates</button>
-        <button id="settingsBtn" class="nav-btn">Cấu hình</button>
+        <button id="notesBtn" class="nav-btn active">Notes</button>
+        <button id="portfolioBtn" class="nav-btn">Portfolio</button>
+        <button id="resultsBtn" class="nav-btn">Results</button>
+        <button id="errorsBtn" class="nav-btn">Retro</button>
+        <button id="templatesBtn" class="nav-btn">Templ</button>
+        <button id="settingsBtn" class="nav-btn" title="Settings"><i class="fas fa-cog"></i></button>
       </div>
     </header>
 
-    <div id="portfolioPage" class="page active">
+    <div id="notesPage" class="page active">
+      <div class="content">
+        <div class="page-header">
+          <h2>Notes</h2>
+          <button id="addNoteBtn" class="icon-btn" title="Add/Edit today's note"><i class="fas fa-plus"></i></button>
+        </div>
+
+        <!-- Add/Edit Note Form -->
+        <div id="noteForm" style="display: none; margin-bottom: 16px; background: #f9f9f9; border: 1px solid #e0e0e0; border-left: 4px solid #667eea; padding: 12px;">
+          <div class="form-group">
+            <label>Today's Notes</label>
+            <textarea id="noteInput" class="textarea-input" placeholder="Add your tasks and notes for today..." rows="4"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="saveNoteBtn" class="primary-btn">Save</button>
+            <button id="cancelNoteBtn" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Notes List (Read-only) -->
+        <div id="notesList" class="notes-list">
+          <p class="empty-state">No notes yet. Click + to add today's notes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="portfolioPage" class="page">
       <div class="content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h2 style="margin: 0;">Danh Mục</h2>
@@ -43,12 +70,12 @@
         <table id="portfolioTable" class="portfolio-table">
           <thead>
             <tr>
-              <th>Mã</th>
+              <th>Symbol</th>
               <th>Entry</th>
               <th>Current</th>
-              <th>Khối lượng</th>
+              <th>Qty</th>
               <th>P&L</th>
-              <th>Hành động</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
