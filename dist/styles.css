@@ -59,12 +59,6 @@ header {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-header h1 {
-  font-size: 18px;
-  margin-bottom: 12px;
-  font-weight: 600;
-}
-
 .nav-buttons {
   display: flex;
   gap: 8px;
@@ -74,7 +68,7 @@ header h1 {
   flex: 1;
   padding: 8px 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.2);
   color: white;
   cursor: pointer;
@@ -175,7 +169,7 @@ h2 {
 .result-box {
   background: #f9f9f9;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 15px;
   margin-top: 15px;
   min-height: 150px;
@@ -229,7 +223,7 @@ label input[type="checkbox"] {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 13px;
   font-family: inherit;
   resize: vertical;
@@ -273,7 +267,7 @@ label input[type="checkbox"] {
 .status-message {
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 12px;
   min-height: 20px;
   display: none;
@@ -396,7 +390,7 @@ label input[type="checkbox"] {
 .history-item {
   background: #fff;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px;
   transition: box-shadow 0.3s;
   cursor: pointer;
@@ -462,7 +456,7 @@ label input[type="checkbox"] {
 .error-item {
   background: #fff;
   border-left: 4px solid #ddd;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -564,7 +558,7 @@ label input[type="checkbox"] {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
+  border-radius: 0;
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
@@ -602,25 +596,7 @@ label input[type="checkbox"] {
 }
 
 .modal-close {
-  background: transparent;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #999;
-  line-height: 1;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background 0.2s;
-}
-
-.modal-close:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #333;
+  display: none;
 }
 
 .modal-body {
@@ -642,7 +618,7 @@ label input[type="checkbox"] {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 13px;
   font-family: inherit;
   transition: border-color 0.3s ease;
@@ -713,7 +689,7 @@ label input[type="checkbox"] {
 .portfolio-summary {
   background: #f9f9f9;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px;
   margin-bottom: 16px;
 }
@@ -1016,7 +992,7 @@ label input[type="checkbox"] {
 .template-item {
   background: #fff;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px;
   transition: all 0.3s;
 }

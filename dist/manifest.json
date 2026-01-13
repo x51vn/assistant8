@@ -16,7 +16,9 @@
     "identity"
   ],
   "host_permissions": [
-    "https://chatgpt.com/*"
+    "https://chatgpt.com/*",
+    "https://iboard-query.ssi.com.vn/*",
+    "https://iboard.ssi.com.vn/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"

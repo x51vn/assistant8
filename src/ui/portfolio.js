@@ -2,6 +2,11 @@ const PORTFOLIO_KEY = 'portfolio';
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 
 import { calculateStockPL, calculatePortfolioTotalPL, formatCurrency, formatPercent, getPLClass } from './portfolioPL.js';
+import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
+
+// Global realtime client
+let realtimeClient = null;
+let currentSubscriptions = new Map(); // symbol -> unsubscribe function
 
 export async function initPortfolio({
   portfolioPage,
@@ -15,9 +20,17 @@ export async function initPortfolio({
   evaluateBtn,
   editingStockId = null
 }) {
-  // Load initial portfolio and prompt
+  // Load initial portfolio and prompt first
   await loadPortfolioUI(portfolioTable);
   await loadPortfolioPrompt(promptInput);
+  
+  // Auto-start realtime updates
+  try {
+    await startRealtimeUpdates(portfolioTable);
+    console.log('[Portfolio] Realtime updates started automatically (800ms interval)');
+  } catch (err) {
+    console.warn('[Portfolio] Failed to start realtime, will use manual updates:', err);
+  }
 
   // Add stock button
   addStockBtn?.addEventListener('click', () => openAddStockModal(portfolioTable));
@@ -56,10 +69,23 @@ export async function initPortfolio({
     }
   });
 
-  // Update prices button
+  // Update prices button - toggle realtime on/off
   const updatePricesBtn = document.getElementById('updatePricesBtn');
-  updatePricesBtn?.addEventListener('click', () => {
-    openPriceUpdateModal(portfolioTable);
+  updatePricesBtn?.addEventListener('click', async () => {
+    try {
+      if (currentSubscriptions.size > 0) {
+        // Stop realtime
+        stopRealtimeUpdates();
+        console.log('[Portfolio] Realtime stopped by user');
+      } else {
+        // Start realtime
+        await startRealtimeUpdates(portfolioTable);
+        console.log('[Portfolio] Realtime started by user');
+      }
+    } catch (err) {
+      console.error('[Portfolio] Failed to toggle realtime:', err);
+      alert('Không thể bật/tắt cập nhật realtime. Xem console để biết thêm chi tiết.');
+    }
   });
 
   // Modal close buttons
@@ -98,6 +124,9 @@ export async function initPortfolio({
 export async function loadPortfolioUI(table) {
   const portfolio = await getPortfolio();
   if (!table) return;
+
+  // Update realtime status UI
+  checkRealtimeStatus();
 
   table.innerHTML = '';
   if (portfolio.length === 0) {
@@ -459,5 +488,141 @@ async function savePriceUpdates(portfolioTable) {
     await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
     await loadPortfolioUI(portfolioTable);
     console.log('[Portfolio] Prices updated');
+  }
+}
+
+// ========== REALTIME FUNCTIONS ==========
+// NOTE: Realtime currently disabled due to CORS policy from SSI API
+// SSI only allows origin 'https://iboard.ssi.com.vn', not chrome-extension://
+// Solutions:
+//   1. Use content script proxy (inject into iboard.ssi.com.vn)
+//   2. Setup backend proxy server
+//   3. Use manual price updates (current solution)
+
+function initRealtimeClient() {
+  if (!realtimeClient) {
+    realtimeClient = new AdvancedMarketDataClient({
+      realtimeEnabled: true,
+      pollInterval: 60000, // Poll every 60 seconds
+      minUpdateInterval: 60000, // Update callback every 60 seconds
+      debug: true // Enable debug to see logs
+    });
+    
+    console.log('[Portfolio] Realtime client initialized (60s updates)');
+  }
+  return realtimeClient;
+}
+
+async function startRealtimeUpdates(portfolioTable) {
+  try {
+    if (!realtimeClient) {
+      initRealtimeClient();
+    }
+    
+    // Wait a bit for client to initialize
+    if (!realtimeClient) {
+      throw new Error('Realtime client failed to initialize');
+    }
+    
+    const portfolio = await getPortfolio();
+    const stocks = portfolio.filter(s => s.code !== 'CASH');
+    
+    if (stocks.length === 0) {
+      console.log('[Portfolio] No stocks to subscribe');
+      return;
+    }
+    
+    // Unsubscribe old ones
+    currentSubscriptions.forEach((unsubscribe, symbol) => {
+      try {
+        console.log(`[Portfolio] Unsubscribing ${symbol}`);
+        unsubscribe(); // Call the unsubscribe function
+      } catch (e) {
+        console.warn('[Portfolio] Failed to unsubscribe:', symbol, e);
+      }
+    });
+    currentSubscriptions.clear();
+  
+    // Subscribe to all stocks
+    stocks.forEach(stock => {
+      const symbol = stock.code;
+      try {
+        console.log(`[Portfolio] Subscribing to ${symbol}`);
+        const unsubscribe = realtimeClient.subscribe(symbol, async (data) => {
+          try {
+            console.log(`[Portfolio] Price update: ${symbol} = ${data.price}`);
+            // Update price in storage
+            const portfolio = await getPortfolio();
+            const stockInPortfolio = portfolio.find(s => s.code === symbol);
+            if (stockInPortfolio) {
+              stockInPortfolio.currentPrice = data.price;
+              stockInPortfolio.priceUpdatedAt = new Date().toISOString();
+              await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+              
+              // Update UI only if table exists
+              if (portfolioTable) {
+                await loadPortfolioUI(portfolioTable);
+              }
+            }
+          } catch (err) {
+            console.error(`[Portfolio] Error updating ${symbol}:`, err);
+          }
+        });
+        currentSubscriptions.set(symbol, unsubscribe); // Store unsubscribe function
+      } catch (err) {
+        console.error(`[Portfolio] Failed to subscribe ${symbol}:`, err);
+      }
+    });
+    
+    console.log(`[Portfolio] Subscribed to ${stocks.length} stocks (realtime 800ms)`);
+    
+    // Update status
+    checkRealtimeStatus();
+  } catch (err) {
+    console.error('[Portfolio] startRealtimeUpdates failed:', err);
+    throw err;
+  }
+}
+
+function stopRealtimeUpdates() {
+  if (realtimeClient) {
+    currentSubscriptions.forEach((unsubscribe, symbol) => {
+      try {
+        console.log(`[Portfolio] Stopping realtime for ${symbol}`);
+        unsubscribe(); // Call unsubscribe function
+      } catch (err) {
+        console.error(`[Portfolio] Error unsubscribing ${symbol}:`, err);
+      }
+    });
+    currentSubscriptions.clear();
+    console.log('[Portfolio] Stopped realtime updates');
+    
+    // Update status
+    checkRealtimeStatus();
+  }
+}
+
+function updateRealtimeStatus(connected) {
+  const statusEl = document.getElementById('realtimeStatus');
+  if (statusEl) {
+    statusEl.textContent = connected ? '🟢 Realtime (800ms)' : '🔴 Offline';
+    statusEl.style.color = connected ? '#4caf50' : '#999';
+  }
+}
+
+// Check and update status based on subscriptions
+function checkRealtimeStatus() {
+  const isActive = currentSubscriptions.size > 0;
+  updateRealtimeStatus(isActive);
+  
+  const updatePricesBtn = document.getElementById('updatePricesBtn');
+  if (updatePricesBtn) {
+    if (isActive) {
+      updatePricesBtn.textContent = '⏸️ Tắt Realtime';
+      updatePricesBtn.style.backgroundColor = '#4caf50';
+    } else {
+      updatePricesBtn.textContent = '▶️ Bật Realtime';
+      updatePricesBtn.style.backgroundColor = '#666';
+    }
   }
 }
