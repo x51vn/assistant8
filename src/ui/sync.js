@@ -1,18 +1,20 @@
 import { 
+  initializeFirebase,
+  authenticateFirebase,
   getSyncConfig, 
-  saveSyncConfig, 
-  authenticateGoogle, 
-  revokeGoogleAuth,
-  syncToGoogleDrive,
-  restoreFromGoogleDrive,
-  getGoogleToken,
-  getOrCreateFolder,
-  listBackupsFromDrive,
+  saveSyncConfig,
+  syncToFirestore,
+  restoreFromFirestore,
+  listBackups,
+  deleteBackup,
   schedulePeriodicSync,
   handleSyncAlarm
-} from './googleDriveSync.js';
+} from './firebaseSync.js';
 
-export function setupSync(dom) {
+// State
+let firebaseReady = false;
+
+export async function setupSync(dom) {
   const {
     syncEnabledCheckbox,
     authGoogleBtn,
@@ -25,15 +27,27 @@ export function setupSync(dom) {
 
   if (!authGoogleBtn) return;
 
-  // Initialize UI
-  initializeSyncUI();
+  // Initialize Firebase
+  try {
+    await initializeFirebase();
+    await authenticateFirebase();
+    firebaseReady = true;
+    console.log('[Sync] Firebase ready');
+  } catch (err) {
+    console.error('[Sync] Firebase init failed:', err);
+    showStatus(syncStatus, '⚠️ Firebase not available', 'error');
+    return;
+  }
 
-  // Auth button
+  // Initialize UI
+  await initializeSyncUI();
+
+  // Auth button (for Firestore, just ensures authentication)
   authGoogleBtn?.addEventListener('click', async () => {
     try {
-      showStatus(syncStatus, '⏳ Connecting to Google Drive...', 'info');
-      await authenticateGoogle();
-      showStatus(syncStatus, '✅ Successfully connected to Google Drive!', 'success');
+      showStatus(syncStatus, '⏳ Connecting to Firestore...', 'info');
+      await authenticateFirebase();
+      showStatus(syncStatus, '✅ Successfully connected to Firestore!', 'success');
       await initializeSyncUI();
     } catch (err) {
       showStatus(syncStatus, `❌ Connection failed: ${err.message}`, 'error');
@@ -44,8 +58,8 @@ export function setupSync(dom) {
   // Sync now button
   syncNowBtn?.addEventListener('click', async () => {
     try {
-      showStatus(syncStatus, '⏳ Syncing to Google Drive...', 'info');
-      const result = await syncToGoogleDrive();
+      showStatus(syncStatus, '⏳ Syncing to Firestore...', 'info');
+      const result = await syncToFirestore();
       if (result.success) {
         showStatus(syncStatus, `✅ ${result.message}`, 'success');
         await loadBackupsList();
@@ -58,15 +72,15 @@ export function setupSync(dom) {
     }
   });
 
-  // Revoke button
+  // Revoke button (clear local config)
   revokeGoogleBtn?.addEventListener('click', async () => {
-    if (confirm('Disconnect Google Drive? You can reconnect anytime.')) {
+    if (confirm('Clear sync configuration? Your Firestore backups will remain.')) {
       try {
-        await revokeGoogleAuth();
-        showStatus(syncStatus, '✅ Disconnected from Google Drive', 'success');
+        await saveSyncConfig({ syncEnabled: false });
+        showStatus(syncStatus, '✅ Sync disabled', 'success');
         await initializeSyncUI();
       } catch (err) {
-        showStatus(syncStatus, `❌ Disconnect failed: ${err.message}`, 'error');
+        showStatus(syncStatus, `❌ Failed: ${err.message}`, 'error');
       }
     }
   });
@@ -83,7 +97,7 @@ export function setupSync(dom) {
       schedulePeriodicSync(60); // Sync every 60 minutes
       showStatus(syncStatus, '✅ Auto-sync enabled', 'success');
     } else {
-      chrome.alarms.clear('googleDriveSync');
+      chrome.alarms.clear('firebaseSync');
       showStatus(syncStatus, '✅ Auto-sync disabled', 'success');
     }
   });
@@ -100,10 +114,9 @@ async function initializeSyncUI() {
 
   try {
     // Check auth status
-    const token = await getGoogleToken().catch(() => null);
     const config = await getSyncConfig();
 
-    if (token) {
+    if (firebaseReady) {
       // User is authenticated
       authGoogleBtn.style.display = 'none';
       syncNowBtn.style.display = 'inline-block';
@@ -117,14 +130,14 @@ async function initializeSyncUI() {
         syncEnabledCheckbox.checked = config.syncEnabled === true;
       }
     } else {
-      // User not authenticated
+      // Firebase not ready
       authGoogleBtn.style.display = 'inline-block';
       syncNowBtn.style.display = 'none';
       revokeGoogleBtn.style.display = 'none';
       
       const backupsList = document.getElementById('backupsList');
       if (backupsList) {
-        backupsList.innerHTML = '<p style="font-size: 12px; color: #666;">Connect to Google Drive to see backups</p>';
+        backupsList.innerHTML = '<p style="font-size: 12px; color: #666;">Connecting to Firestore...</p>';
       }
 
       if (syncEnabledCheckbox) {
@@ -138,9 +151,7 @@ async function initializeSyncUI() {
 
 async function loadBackupsList() {
   try {
-    const token = await getGoogleToken();
-    const folderId = await getOrCreateFolder(token);
-    const backups = await listBackupsFromDrive(token, folderId, 10);
+    const backups = await listBackups(10);
 
     const backupsList = document.getElementById('backupsList');
     if (!backupsList) return;
@@ -156,14 +167,19 @@ async function loadBackupsList() {
         ${backups.map(backup => `
           <div style="padding: 6px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="font-weight: 500;">${backup.name}</div>
+              <div style="font-weight: 500;">${new Date(backup.exportDate).toLocaleDateString()}</div>
               <div style="color: #666; font-size: 10px;">
-                ${new Date(backup.modifiedTime).toLocaleString()} | ${(backup.size / 1024).toFixed(1)}KB
+                ${new Date(backup.exportDate).toLocaleTimeString()} | ${backup.data ? Object.keys(backup.data).length : 0} items
               </div>
             </div>
-            <button class="restore-backup-btn" data-id="${backup.id}" style="padding: 4px 8px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-              ↓ Restore
-            </button>
+            <div style="display: flex; gap: 4px;">
+              <button class="restore-backup-btn" data-id="${backup.id}" style="padding: 4px 8px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                ↓ Restore
+              </button>
+              <button class="delete-backup-btn" data-id="${backup.id}" style="padding: 4px 8px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                🗑️
+              </button>
+            </div>
           </div>
         `).join('')}
       </div>
@@ -172,12 +188,12 @@ async function loadBackupsList() {
     // Add restore button listeners
     backupsList.querySelectorAll('.restore-backup-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
-        const fileId = e.target.dataset.id;
+        const backupId = e.target.dataset.id;
         if (confirm('Restore this backup? Current data will be overwritten.')) {
           const syncStatus = document.getElementById('syncStatus');
           try {
             showStatus(syncStatus, '⏳ Restoring from backup...', 'info');
-            const result = await restoreFromGoogleDrive(fileId);
+            const result = await restoreFromFirestore(backupId);
             if (result.success) {
               showStatus(syncStatus, `✅ ${result.message}`, 'success');
               setTimeout(() => window.location.reload(), 2000);
@@ -186,6 +202,23 @@ async function loadBackupsList() {
             }
           } catch (err) {
             showStatus(syncStatus, `❌ Restore error: ${err.message}`, 'error');
+          }
+        }
+      });
+    });
+
+    // Add delete button listeners
+    backupsList.querySelectorAll('.delete-backup-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const backupId = e.target.dataset.id;
+        if (confirm('Delete this backup? This cannot be undone.')) {
+          try {
+            const result = await deleteBackup(backupId);
+            if (result.success) {
+              await loadBackupsList();
+            }
+          } catch (err) {
+            console.error('[Sync] Delete error:', err);
           }
         }
       });
