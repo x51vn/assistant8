@@ -55,13 +55,11 @@ body.sidepanel .content {
 header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .nav-buttons {
   display: flex;
-  gap: 8px;
 }
 
 .nav-btn {
