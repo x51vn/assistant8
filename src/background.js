@@ -157,16 +157,27 @@ async function waitForTabComplete(tabId, timeoutMs = 20000) {
   throw new Error(`Tab ${tabId} not ready`);
 }
 
-async function ensureChatGPTTab() {
+async function ensureChatGPTTab(shouldRefresh = false) {
   const targetUrl = 'https://chatgpt.com/';
   const tabs = await queryChatGPTTabs();
   if (tabs.length > 0) {
     const tab = tabs[0];
     if (tab.id != null) {
-      try {
-        await withTimeout(waitForTabComplete(tab.id), 20000, 'waitForTabComplete');
-      } catch {
-        // ignore; we'll still try sending message
+      // Refresh the page if shouldRefresh is true to reactivate the page
+      if (shouldRefresh) {
+        console.log('[Background] Refreshing ChatGPT tab:', tab.id);
+        await chrome.tabs.reload(tab.id);
+        try {
+          await withTimeout(waitForTabComplete(tab.id), 20000, 'waitForTabComplete');
+        } catch {
+          // ignore; we'll still try sending message
+        }
+      } else {
+        try {
+          await withTimeout(waitForTabComplete(tab.id), 20000, 'waitForTabComplete');
+        } catch {
+          // ignore; we'll still try sending message
+        }
       }
     }
     return tab;
@@ -296,11 +307,12 @@ async function buildRetrospectivePrompt(chatHistory, errors) {
 async function inputPrompt(prompt, options = {}) {
   console.log('[Background] inputPrompt called with prompt length:', prompt.length);
   const skipHistory = options.skipHistory === true;
+  const shouldRefresh = options.shouldRefresh === true;
   const runId = makeRunId();
   const sentAt = Date.now();
-  console.log('[Background] Created runId:', runId, 'skipHistory:', skipHistory);
+  console.log('[Background] Created runId:', runId, 'skipHistory:', skipHistory, 'shouldRefresh:', shouldRefresh);
 
-  const tab = await ensureChatGPTTab();
+  const tab = await ensureChatGPTTab(shouldRefresh);
   console.log('[Background] ChatGPT tab:', tab.id);
   if (tab.id == null) throw new Error('No tab id');
 
@@ -593,7 +605,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       try {
         console.log('[Background] Calling inputPrompt...');
-        const r = await inputPrompt(prompt);
+        // Always refresh the ChatGPT tab to reactivate the page before sending prompt
+        const r = await inputPrompt(prompt, { shouldRefresh: true });
         console.log('[Background] inputPrompt result:', r);
         safeSendResponse({ status: 'ok', runId: r.runId, reviewMode: r.reviewMode });
       } catch (err) {
