@@ -1,5 +1,38 @@
 // Firebase sync via background script messaging
 let firebaseReady = false;
+let currentUser = null;
+
+async function loginWithEmail(email, password) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'firebase_login', email, password }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function registerWithEmail(email, password) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'firebase_register', email, password }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function logoutFirebase() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'firebase_logout' }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function getCurrentUser() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'get_current_user' }, (response) => {
+      resolve(response);
+    });
+  });
+}
 
 async function getSyncConfig() {
   return new Promise((resolve) => {
@@ -77,6 +110,9 @@ export async function setupSync(dom) {
 
   if (!authGoogleBtn) return;
 
+  // Create auth UI
+  createAuthUI();
+
   // Initialize Firebase via background
   try {
     const result = await new Promise((resolve) => {
@@ -100,26 +136,14 @@ export async function setupSync(dom) {
   // Initialize UI
   await initializeSyncUI();
 
-  // Auth button (for Firestore, just ensures authentication)
+  // Check current auth status
+  await updateAuthStatus();
+
+  // Auth button - now toggles login form
   authGoogleBtn?.addEventListener('click', async () => {
-    try {
-      showStatus(syncStatus, '⏳ Connecting to Firestore...', 'info');
-      const result = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'ensure_firebase_auth' }, (response) => {
-          resolve(response);
-        });
-      });
-      
-      if (result && result.success) {
-        firebaseReady = true;
-        showStatus(syncStatus, '✅ Successfully connected to Firestore!', 'success');
-        await initializeSyncUI();
-      } else {
-        throw new Error(result?.error || 'Auth failed');
-      }
-    } catch (err) {
-      showStatus(syncStatus, `❌ Connection failed: ${err.message}`, 'error');
-      console.error('[Sync] Auth error:', err);
+    const authForm = document.getElementById('firebase-auth-form');
+    if (authForm) {
+      authForm.style.display = authForm.style.display === 'none' ? 'block' : 'none';
     }
   });
 
@@ -286,17 +310,174 @@ async function loadBackupsList() {
               await loadBackupsList();
             }
           } catch (err) {
-            console.error('[Sync] Delete error:', err);
+            console.error('[Sync] Delete backup error:', err);
           }
         }
       });
     });
   } catch (err) {
     console.error('[Sync] Load backups error:', err);
-    const backupsList = document.getElementById('backupsList');
-    if (backupsList) {
-      backupsList.innerHTML = `<p style="font-size: 12px; color: #d00;">Error loading backups: ${err.message}</p>`;
+  }
+}
+
+// Create authentication UI
+function createAuthUI() {
+  const syncContainer = document.querySelector('.sync-section');
+  if (!syncContainer) return;
+
+  // Check if already exists
+  if (document.getElementById('firebase-auth-form')) return;
+
+  const authHTML = `
+    <div id="firebase-auth-form" style="display: none; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;">
+      <h3 style="margin-top: 0;">🔐 Firebase Login</h3>
+      
+      <div id="auth-status-display" style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px; display: none;">
+        <p style="margin: 0;">
+          <strong>Logged in as:</strong> <span id="current-user-email"></span>
+        </p>
+        <button id="logout-btn" style="margin-top: 10px;">Logout</button>
+      </div>
+
+      <div id="auth-forms">
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Email:</label>
+          <input type="email" id="auth-email" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="your@email.com" />
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Password:</label>
+          <input type="password" id="auth-password" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="••••••••" />
+        </div>
+
+        <button id="login-btn" style="width: 100%; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">
+          Login
+        </button>
+
+        <p style="font-size: 12px; color: #666; margin: 15px 0 0 0;">
+          ℹ️ Contact admin to create an account.
+        </p>
+      </div>
+
+      <div id="auth-message" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
+    </div>
+  `;
+
+  // Insert after the auth button
+  const authBtn = document.getElementById('authGoogleBtn');
+  if (authBtn && authBtn.parentElement) {
+    authBtn.parentElement.insertAdjacentHTML('afterend', authHTML);
+    attachAuthListeners();
+  }
+}
+
+// Attach event listeners to auth form
+function attachAuthListeners() {
+  const loginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const authMessage = document.getElementById('auth-message');
+  const authEmail = document.getElementById('auth-email');
+  const authPassword = document.getElementById('auth-password');
+
+  function showAuthMessage(message, type = 'info') {
+    if (!authMessage) return;
+    authMessage.textContent = message;
+    authMessage.style.display = 'block';
+    authMessage.style.background = type === 'error' ? '#ffebee' : type === 'success' ? '#e8f5e9' : '#e3f2fd';
+    authMessage.style.color = type === 'error' ? '#c62828' : type === 'success' ? '#2e7d32' : '#1565c0';
+  }
+
+  // Handle Enter key in password field
+  authPassword?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      loginBtn?.click();
     }
+  });
+
+  loginBtn?.addEventListener('click', async () => {
+    const email = authEmail?.value.trim();
+    const password = authPassword?.value;
+
+    if (!email || !password) {
+      showAuthMessage('Please enter email and password', 'error');
+      return;
+    }
+
+    try {
+      showAuthMessage('⏳ Logging in...', 'info');
+      const result = await loginWithEmail(email, password);
+      
+      if (result.success) {
+        showAuthMessage('✅ Login successful!', 'success');
+        await updateAuthStatus();
+        authEmail.value = '';
+        authPassword.value = '';
+        
+        // Hide the form after successful login
+        setTimeout(() => {
+          const authForm = document.getElementById('firebase-auth-form');
+          if (authForm) authForm.style.display = 'none';
+        }, 1500);
+      } else {
+        showAuthMessage(`❌ Login failed: ${result.error}`, 'error');
+      }
+    } catch (err) {
+      showAuthMessage(`❌ Error: ${err.message}`, 'error');
+    }
+  });
+
+  logoutBtn?.addEventListener('click', async () => {
+    try {
+      showAuthMessage('⏳ Logging out...', 'info');
+      await logoutFirebase();
+      showAuthMessage('✅ Logged out', 'success');
+      await updateAuthStatus();
+    } catch (err) {
+      showAuthMessage(`❌ Logout error: ${err.message}`, 'error');
+    }
+  });
+}
+
+// Update UI based on auth status
+async function updateAuthStatus() {
+  try {
+    const user = await getCurrentUser();
+    currentUser = user;
+    
+    const authStatusDisplay = document.getElementById('auth-status-display');
+    const authForms = document.getElementById('auth-forms');
+    const authBtn = document.getElementById('authGoogleBtn');
+    const syncNowBtn = document.getElementById('syncNowBtn');
+
+    if (user && user.email) {
+      // User is logged in
+      firebaseReady = true;
+      if (authStatusDisplay) {
+        document.getElementById('current-user-email').textContent = user.email;
+        authStatusDisplay.style.display = 'block';
+      }
+      if (authForms) authForms.style.display = 'none';
+      if (authBtn) authBtn.textContent = '✅ Logged In';
+      if (syncNowBtn) syncNowBtn.disabled = false;
+      
+      // Load backups list
+      await loadBackupsList();
+    } else {
+      // User not logged in
+      firebaseReady = false;
+      if (authStatusDisplay) authStatusDisplay.style.display = 'none';
+      if (authForms) authForms.style.display = 'block';
+      if (authBtn) authBtn.textContent = '🔐 Login to Firebase';
+      if (syncNowBtn) syncNowBtn.disabled = true;
+      
+      // Clear backups list
+      const backupsList = document.getElementById('backupsList');
+      if (backupsList) {
+        backupsList.innerHTML = '<p style="color: #999;">Login to view backups</p>';
+      }
+    }
+  } catch (err) {
+    console.error('[Sync] Update auth status error:', err);
   }
 }
 

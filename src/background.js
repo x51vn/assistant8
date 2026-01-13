@@ -6,7 +6,7 @@ import * as ChatGPTSession from './chatgptSession.js';
 import { loadAndRender } from './promptLoader.js';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as firebaseLimit, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 // ========== FIREBASE INITIALIZATION ==========
 const FIREBASE_CONFIG = {
@@ -52,24 +52,14 @@ async function initFirebase() {
     onAuthStateChanged(firebaseAuth, (user) => {
       firebaseUser = user;
       if (user) {
-        console.log('[Background Firebase] Auth state changed - Authenticated:', user.uid);
+        console.log('[Background Firebase] Auth state changed - Authenticated:', user.email || user.uid);
       } else {
         console.log('[Background Firebase] Auth state changed - Not authenticated');
       }
     });
     
-    // Try to authenticate anonymously immediately
-    try {
-      console.log('[Background Firebase] Attempting initial anonymous auth...');
-      const result = await signInAnonymously(firebaseAuth);
-      firebaseUser = result.user;
-      console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
-    } catch (authErr) {
-      console.warn('[Background Firebase] Initial anonymous auth failed during init, will retry on demand:', authErr.message);
-      // Don't fail init, we'll retry in ensureAuth()
-    }
-    
-    console.log('[Background Firebase] Initialization completed successfully');
+    // Don't auto-login - require explicit user login
+    console.log('[Background Firebase] Initialization completed successfully - waiting for user login');
     return true;
   } catch (err) {
     console.error('[Background Firebase] Init failed:', err);
@@ -104,35 +94,12 @@ async function ensureAuth() {
     throw new Error('Firebase Auth not properly initialized (app reference missing)');
   }
   
-  // If already authenticated, return
-  if (firebaseUser) {
-    console.log('[Background Firebase] ensureAuth: Already authenticated as:', firebaseUser.uid);
-    return firebaseUser;
+  // Check if user is logged in
+  if (!firebaseUser) {
+    throw new Error('Not authenticated. Please login first.');
   }
   
-  // Try to authenticate anonymously
-  try {
-    console.log('[Background Firebase] ensureAuth: Attempting anonymous auth with:', {
-      authExists: !!firebaseAuth,
-      appExists: !!firebaseAuth?.app,
-      hasConfig: !!firebaseAuth?.config
-    });
-    
-    const result = await signInAnonymously(firebaseAuth);
-    firebaseUser = result.user;
-    console.log('[Background Firebase] ensureAuth: Authenticated successfully:', firebaseUser.uid);
-  } catch (err) {
-    console.error('[Background Firebase] ensureAuth: Auth error:', err);
-    console.error('[Background Firebase] ensureAuth: Auth object state:', {
-      authExists: !!firebaseAuth,
-      appExists: !!firebaseAuth?.app,
-      configExists: !!firebaseAuth?.config,
-      errorCode: err?.code,
-      errorMessage: err?.message
-    });
-    throw new Error(`Firebase auth failed: ${err.message}`);
-  }
-  
+  console.log('[Background Firebase] ensureAuth: User authenticated:', firebaseUser.email || firebaseUser.uid);
   return firebaseUser;
 }
 
@@ -1062,6 +1029,72 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         safeSendResponse({ success: ready, message: 'Firebase initialized' });
       } catch (err) {
         safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'firebase_login') {
+      try {
+        await firebaseInitPromise;
+        if (!firebaseAuth) throw new Error('Firebase not initialized');
+        
+        const email = request.email;
+        const password = request.password;
+        
+        if (!email || !password) {
+          throw new Error('Email and password required');
+        }
+        
+        console.log('[Background Firebase] Attempting login for:', email);
+        const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+        firebaseUser = userCredential.user;
+        
+        console.log('[Background Firebase] Login successful:', firebaseUser.email);
+        safeSendResponse({ 
+          success: true, 
+          user: { 
+            uid: firebaseUser.uid, 
+            email: firebaseUser.email 
+          } 
+        });
+      } catch (err) {
+        console.error('[Background Firebase] Login error:', err);
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'firebase_logout') {
+      try {
+        await firebaseInitPromise;
+        if (!firebaseAuth) throw new Error('Firebase not initialized');
+        
+        await signOut(firebaseAuth);
+        firebaseUser = null;
+        
+        console.log('[Background Firebase] Logout successful');
+        safeSendResponse({ success: true });
+      } catch (err) {
+        console.error('[Background Firebase] Logout error:', err);
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'get_current_user') {
+      try {
+        await firebaseInitPromise;
+        
+        if (firebaseUser) {
+          safeSendResponse({ 
+            uid: firebaseUser.uid, 
+            email: firebaseUser.email 
+          });
+        } else {
+          safeSendResponse(null);
+        }
+      } catch (err) {
+        safeSendResponse(null);
       }
       return;
     }
