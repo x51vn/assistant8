@@ -28,16 +28,33 @@ let firebaseInitPromise = null;
 
 async function initFirebase() {
   try {
-    firebaseApp = initializeApp(FIREBASE_CONFIG);
-    firebaseDb = getFirestore(firebaseApp);
-    firebaseAuth = getAuth(firebaseApp);
+    console.log('[Background Firebase] Initializing app with config:', {
+      projectId: FIREBASE_CONFIG.projectId,
+      authDomain: FIREBASE_CONFIG.authDomain
+    });
     
-    console.log('[Background Firebase] App, Firestore, and Auth initialized');
+    firebaseApp = initializeApp(FIREBASE_CONFIG);
+    console.log('[Background Firebase] App initialized:', firebaseApp.name);
+    
+    firebaseDb = getFirestore(firebaseApp);
+    console.log('[Background Firebase] Firestore initialized');
+    
+    firebaseAuth = getAuth(firebaseApp);
+    console.log('[Background Firebase] Auth initialized:', firebaseAuth);
+    
+    // Verify Auth is actually initialized
+    if (!firebaseAuth || !firebaseAuth.app) {
+      throw new Error('Auth object not properly initialized - missing app reference');
+    }
+    
+    console.log('[Background Firebase] App, Firestore, and Auth initialized successfully');
     
     onAuthStateChanged(firebaseAuth, (user) => {
       firebaseUser = user;
       if (user) {
-        console.log('[Background Firebase] Authenticated:', user.uid);
+        console.log('[Background Firebase] Auth state changed - Authenticated:', user.uid);
+      } else {
+        console.log('[Background Firebase] Auth state changed - Not authenticated');
       }
     });
     
@@ -48,11 +65,11 @@ async function initFirebase() {
       firebaseUser = result.user;
       console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
     } catch (authErr) {
-      console.warn('[Background Firebase] Initial anonymous auth failed, will retry on demand:', authErr.message);
+      console.warn('[Background Firebase] Initial anonymous auth failed during init, will retry on demand:', authErr.message);
       // Don't fail init, we'll retry in ensureAuth()
     }
     
-    console.log('[Background Firebase] Initialization completed');
+    console.log('[Background Firebase] Initialization completed successfully');
     return true;
   } catch (err) {
     console.error('[Background Firebase] Init failed:', err);
@@ -78,7 +95,13 @@ async function ensureAuth() {
   // Check if Firebase Auth is initialized
   if (!firebaseAuth) {
     console.error('[Background Firebase] ensureAuth: firebaseAuth is null after init');
-    throw new Error('Firebase Auth not initialized');
+    throw new Error('Firebase Auth not initialized (firebaseAuth is null)');
+  }
+  
+  // Verify Auth object has app reference
+  if (!firebaseAuth.app) {
+    console.error('[Background Firebase] ensureAuth: firebaseAuth.app is missing');
+    throw new Error('Firebase Auth not properly initialized (app reference missing)');
   }
   
   // If already authenticated, return
@@ -89,12 +112,24 @@ async function ensureAuth() {
   
   // Try to authenticate anonymously
   try {
-    console.log('[Background Firebase] ensureAuth: Attempting anonymous auth...');
+    console.log('[Background Firebase] ensureAuth: Attempting anonymous auth with:', {
+      authExists: !!firebaseAuth,
+      appExists: !!firebaseAuth?.app,
+      hasConfig: !!firebaseAuth?.config
+    });
+    
     const result = await signInAnonymously(firebaseAuth);
     firebaseUser = result.user;
     console.log('[Background Firebase] ensureAuth: Authenticated successfully:', firebaseUser.uid);
   } catch (err) {
     console.error('[Background Firebase] ensureAuth: Auth error:', err);
+    console.error('[Background Firebase] ensureAuth: Auth object state:', {
+      authExists: !!firebaseAuth,
+      appExists: !!firebaseAuth?.app,
+      configExists: !!firebaseAuth?.config,
+      errorCode: err?.code,
+      errorMessage: err?.message
+    });
     throw new Error(`Firebase auth failed: ${err.message}`);
   }
   
