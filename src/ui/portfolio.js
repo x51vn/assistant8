@@ -60,15 +60,6 @@ export async function initPortfolio({
     }
   });
 
-  // Clear portfolio button
-  const clearBtn = document.getElementById('clearPortfolioBtn');
-  clearBtn?.addEventListener('click', async () => {
-    if (confirm('Xác nhận xóa tất cả mã trong danh mục?')) {
-      await chrome.storage.local.set({ [PORTFOLIO_KEY]: [] });
-      await loadPortfolioUI(portfolioTable);
-    }
-  });
-
   // Update prices button - toggle realtime on/off
   const updatePricesBtn = document.getElementById('updatePricesBtn');
   updatePricesBtn?.addEventListener('click', async () => {

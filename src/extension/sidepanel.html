@@ -59,20 +59,14 @@
           <button id="addStockBtn" class="primary-btn">+ Thêm/Sửa mã</button>
           <button id="updatePricesBtn" class="primary-btn">💰 Update Prices</button>
           <button id="evaluateBtn" class="primary-btn">🔍 Đánh giá</button>
-          <button id="clearPortfolioBtn" class="secondary-btn">🗑️ Xóa tất cả</button>
+          <button id="runBtn" class="primary-btn">Chạy ngay</button>
+          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
         </div>
       </div>
     </div>
 
     <div id="resultsPage" class="page">
       <div class="content">
-        <!-- Results Actions -->
-        <div class="results-actions" style="padding: 16px;">
-          <button id="runBtn" class="primary-btn">Chạy ngay</button>
-          <button id="stopBtn" class="secondary-btn" style="display: none;">Dừng chờ</button>
-          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
-        </div>
-
         <!-- History Section -->
         <div class="history-section" style="border-top: 1px solid #eee; margin-top: 16px; padding-top: 16px;">
           <div class="page-header">
@@ -152,9 +146,10 @@
 
         <div class="form-group">
           <label>
-            <input type="checkbox" id="autoRunCheckbox" />
-            Chạy tự động (mỗi 5 phút)
+            <input type="checkbox" id="realtimeEnabledCheckbox" />
+            Bật cập nhật giá realtime (mỗi 60 giây)
           </label>
+          <p class="help-text">Tự động cập nhật giá từ SSI API mỗi phút một lần.</p>
         </div>
 
         <div class="form-group">

@@ -29,7 +29,6 @@ import { setupSync } from './sync.js';
     addStockBtn: byId('addStockBtn'),
     portfolioPromptInput: byId('portfolioPromptInput'),
     evaluateBtn: byId('evaluateBtn'),
-    clearPortfolioBtn: byId('clearPortfolioBtn'),
     portfolioModal: byId('portfolioModal'),
     closePortfolioModal: byId('closePortfolioModal'),
     cancelPortfolioBtn: byId('cancelPortfolioBtn'),
