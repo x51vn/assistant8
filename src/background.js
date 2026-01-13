@@ -24,6 +24,7 @@ let firebaseApp = null;
 let firebaseDb = null;
 let firebaseAuth = null;
 let firebaseUser = null;
+let firebaseInitPromise = null;
 
 async function initFirebase() {
   try {
@@ -38,15 +39,13 @@ async function initFirebase() {
       }
     });
     
-    // Try to authenticate anonymously
-    if (!firebaseUser) {
-      try {
-        const result = await signInAnonymously(firebaseAuth);
-        firebaseUser = result.user;
-        console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
-      } catch (err) {
-        console.warn('[Background Firebase] Anonymous auth not yet, will retry on demand:', err.message);
-      }
+    // Try to authenticate anonymously immediately
+    try {
+      const result = await signInAnonymously(firebaseAuth);
+      firebaseUser = result.user;
+      console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
+    } catch (authErr) {
+      console.warn('[Background Firebase] Initial anonymous auth failed, will retry on demand:', authErr.message);
     }
     
     console.log('[Background Firebase] Initialized successfully');
@@ -57,17 +56,27 @@ async function initFirebase() {
   }
 }
 
-// Ensure Firebase is initialized
-initFirebase().catch(err => console.error('[Background] Firebase init error:', err));
+// Initialize Firebase and store the promise
+firebaseInitPromise = initFirebase().catch(err => {
+  console.error('[Background] Firebase init error:', err);
+  return false;
+});
 
 // ========== FIREBASE SYNC HANDLERS ==========
 async function ensureAuth() {
+  // Wait for Firebase initialization to complete
+  await firebaseInitPromise;
+  
   if (!firebaseUser) {
     try {
+      if (!firebaseAuth) {
+        throw new Error('Firebase auth not initialized');
+      }
       const result = await signInAnonymously(firebaseAuth);
       firebaseUser = result.user;
       console.log('[Background Firebase] Authenticated:', firebaseUser.uid);
     } catch (err) {
+      console.error('[Background Firebase] Auth error:', err);
       throw new Error(`Firebase auth failed: ${err.message}`);
     }
   }
