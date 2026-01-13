@@ -32,6 +32,8 @@ async function initFirebase() {
     firebaseDb = getFirestore(firebaseApp);
     firebaseAuth = getAuth(firebaseApp);
     
+    console.log('[Background Firebase] App, Firestore, and Auth initialized');
+    
     onAuthStateChanged(firebaseAuth, (user) => {
       firebaseUser = user;
       if (user) {
@@ -41,18 +43,20 @@ async function initFirebase() {
     
     // Try to authenticate anonymously immediately
     try {
+      console.log('[Background Firebase] Attempting initial anonymous auth...');
       const result = await signInAnonymously(firebaseAuth);
       firebaseUser = result.user;
       console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
     } catch (authErr) {
       console.warn('[Background Firebase] Initial anonymous auth failed, will retry on demand:', authErr.message);
+      // Don't fail init, we'll retry in ensureAuth()
     }
     
-    console.log('[Background Firebase] Initialized successfully');
+    console.log('[Background Firebase] Initialization completed');
     return true;
   } catch (err) {
     console.error('[Background Firebase] Init failed:', err);
-    return false;
+    throw err;  // Throw the error so ensureAuth can catch it
   }
 }
 
@@ -63,25 +67,37 @@ firebaseInitPromise = initFirebase();
 async function ensureAuth() {
   // Wait for Firebase initialization to complete
   try {
+    console.log('[Background Firebase] ensureAuth: Waiting for init...');
     await firebaseInitPromise;
+    console.log('[Background Firebase] ensureAuth: Init completed');
   } catch (err) {
-    console.error('[Background Firebase] Init promise rejected:', err);
+    console.error('[Background Firebase] ensureAuth: Init promise rejected:', err);
     throw new Error(`Firebase initialization failed: ${err.message}`);
   }
   
-  if (!firebaseUser) {
-    try {
-      if (!firebaseAuth) {
-        throw new Error('Firebase auth not initialized');
-      }
-      const result = await signInAnonymously(firebaseAuth);
-      firebaseUser = result.user;
-      console.log('[Background Firebase] Authenticated:', firebaseUser.uid);
-    } catch (err) {
-      console.error('[Background Firebase] Auth error:', err);
-      throw new Error(`Firebase auth failed: ${err.message}`);
-    }
+  // Check if Firebase Auth is initialized
+  if (!firebaseAuth) {
+    console.error('[Background Firebase] ensureAuth: firebaseAuth is null after init');
+    throw new Error('Firebase Auth not initialized');
   }
+  
+  // If already authenticated, return
+  if (firebaseUser) {
+    console.log('[Background Firebase] ensureAuth: Already authenticated as:', firebaseUser.uid);
+    return firebaseUser;
+  }
+  
+  // Try to authenticate anonymously
+  try {
+    console.log('[Background Firebase] ensureAuth: Attempting anonymous auth...');
+    const result = await signInAnonymously(firebaseAuth);
+    firebaseUser = result.user;
+    console.log('[Background Firebase] ensureAuth: Authenticated successfully:', firebaseUser.uid);
+  } catch (err) {
+    console.error('[Background Firebase] ensureAuth: Auth error:', err);
+    throw new Error(`Firebase auth failed: ${err.message}`);
+  }
+  
   return firebaseUser;
 }
 
