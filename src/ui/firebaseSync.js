@@ -21,12 +21,14 @@ import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 // Firebase Configuration
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDq6vF8mZpNH6Q2hX5kL9pQ8rS1tU2vW3x", // UPDATE THIS
+  apiKey: "AIzaSyCj-87I_ixItNqk_GgjUeOKLWkcFVCMT64",
   authDomain: "myfcx51.firebaseapp.com",
+  databaseURL: "https://myfcx51-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "myfcx51",
-  storageBucket: "myfcx51.appspot.com",
-  messagingSenderId: "563584335869",
-  appId: "1:563584335869:web:a1b2c3d4e5f6g7h8i9j0k"
+  storageBucket: "myfcx51.firebasestorage.app",
+  messagingSenderId: "1061609434838",
+  appId: "1:1061609434838:web:530a11dfadac7fc162a377",
+  measurementId: "G-QMT32YLDK5"
 };
 
 // Storage keys to sync
