@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Require authentication
+    match /users/{uid} {
+      // Users can only access their own data
+      allow read, write: if request.auth.uid == uid;
+      
+      // Backups subcollection
+      match /backups/{backupId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      
+      // Config subcollection
+      match /config/{configId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
