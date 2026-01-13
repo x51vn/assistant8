@@ -4,8 +4,118 @@
 import { applyPromptTemplate } from './promptTemplate.js';
 import * as ChatGPTSession from './chatgptSession.js';
 import { loadAndRender } from './promptLoader.js';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as firebaseLimit, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
-// ========== SSI API PROXY (BYPASS CORS) ==========
+// ========== FIREBASE INITIALIZATION ==========
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCj-87I_ixItNqk_GgjUeOKLWkcFVCMT64",
+  authDomain: "myfcx51.firebaseapp.com",
+  databaseURL: "https://myfcx51-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "myfcx51",
+  storageBucket: "myfcx51.firebasestorage.app",
+  messagingSenderId: "1061609434838",
+  appId: "1:1061609434838:web:530a11dfadac7fc162a377",
+  measurementId: "G-QMT32YLDK5"
+};
+
+let firebaseApp = null;
+let firebaseDb = null;
+let firebaseAuth = null;
+let firebaseUser = null;
+
+async function initFirebase() {
+  try {
+    firebaseApp = initializeApp(FIREBASE_CONFIG);
+    firebaseDb = getFirestore(firebaseApp);
+    firebaseAuth = getAuth(firebaseApp);
+    
+    onAuthStateChanged(firebaseAuth, (user) => {
+      firebaseUser = user;
+      if (user) {
+        console.log('[Background Firebase] Authenticated:', user.uid);
+      }
+    });
+    
+    // Try to authenticate anonymously
+    if (!firebaseUser) {
+      try {
+        const result = await signInAnonymously(firebaseAuth);
+        firebaseUser = result.user;
+        console.log('[Background Firebase] Anonymous auth successful:', firebaseUser.uid);
+      } catch (err) {
+        console.warn('[Background Firebase] Anonymous auth not yet, will retry on demand:', err.message);
+      }
+    }
+    
+    console.log('[Background Firebase] Initialized successfully');
+    return true;
+  } catch (err) {
+    console.error('[Background Firebase] Init failed:', err);
+    return false;
+  }
+}
+
+// Ensure Firebase is initialized
+initFirebase().catch(err => console.error('[Background] Firebase init error:', err));
+
+// ========== FIREBASE SYNC HANDLERS ==========
+async function ensureAuth() {
+  if (!firebaseUser) {
+    try {
+      const result = await signInAnonymously(firebaseAuth);
+      firebaseUser = result.user;
+      console.log('[Background Firebase] Authenticated:', firebaseUser.uid);
+    } catch (err) {
+      throw new Error(`Firebase auth failed: ${err.message}`);
+    }
+  }
+  return firebaseUser;
+}
+
+async function syncToFirebaseHandler() {
+  try {
+    const user = await ensureAuth();
+    if (!user || !firebaseDb) throw new Error('Firebase not ready');
+    
+    const STORAGE_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'chatHistory', 'errorList', 'runs', 'settings', 'promptTemplates'];
+    const allData = {};
+    const stored = await chrome.storage.local.get(STORAGE_KEYS);
+    
+    STORAGE_KEYS.forEach(key => {
+      if (stored[key] !== undefined) {
+        allData[key] = stored[key];
+      }
+    });
+    
+    const backup = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      description: 'ChatGPT Assistant Firestore Backup',
+      data: allData,
+      syncedAt: serverTimestamp()
+    };
+    
+    const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', `backup-${Date.now()}`);
+    await setDoc(backupRef, backup);
+    
+    const latestRef = doc(firebaseDb, 'users', user.uid, 'config', 'latestBackup');
+    await setDoc(latestRef, {
+      backupId: backupRef.id,
+      timestamp: serverTimestamp(),
+      itemsCount: Object.keys(allData).length
+    }, { merge: true });
+    
+    console.log('[Background Firebase] Sync completed:', backupRef.id);
+    return { success: true, backupId: backupRef.id, message: 'Data synced to Firestore successfully!' };
+  } catch (err) {
+    console.error('[Background Firebase] Sync failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// ========== END SSI API PROXY ==========
 const SSI_API_BASE = 'https://iboard-query.ssi.com.vn';
 
 async function fetchSSIAPI(endpoint, method = 'GET', body = null) {
@@ -882,6 +992,141 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       return;
     }
+
+    // ========== FIREBASE HANDLERS ==========
+    if (request.action === 'init_firebase') {
+      try {
+        const ready = firebaseDb && firebaseAuth;
+        safeSendResponse({ success: ready, message: 'Firebase initialized' });
+      } catch (err) {
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'ensure_firebase_auth') {
+      try {
+        const user = await ensureAuth();
+        safeSendResponse({ success: true, uid: user.uid });
+      } catch (err) {
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'sync_to_firestore') {
+      try {
+        const result = await syncToFirebaseHandler();
+        safeSendResponse(result);
+      } catch (err) {
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'get_sync_config') {
+      try {
+        const user = await ensureAuth();
+        if (!firebaseDb) throw new Error('Firebase not initialized');
+        
+        const configRef = doc(firebaseDb, 'users', user.uid, 'config', 'sync');
+        const configSnap = await getDoc(configRef);
+        
+        if (configSnap.exists()) {
+          safeSendResponse(configSnap.data());
+        } else {
+          safeSendResponse({ syncEnabled: false, lastSyncTime: null });
+        }
+      } catch (err) {
+        console.error('[Background] Get config error:', err);
+        safeSendResponse({ syncEnabled: false });
+      }
+      return;
+    }
+
+    if (request.action === 'save_sync_config') {
+      try {
+        const user = await ensureAuth();
+        if (!firebaseDb) throw new Error('Firebase not initialized');
+        
+        const configRef = doc(firebaseDb, 'users', user.uid, 'config', 'sync');
+        await setDoc(configRef, { ...request.config, updatedAt: serverTimestamp() }, { merge: true });
+        safeSendResponse({ success: true });
+      } catch (err) {
+        console.error('[Background] Save config error:', err);
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'list_backups') {
+      try {
+        const user = await ensureAuth();
+        if (!firebaseDb) throw new Error('Firebase not initialized');
+        
+        const backupsRef = collection(firebaseDb, 'users', user.uid, 'backups');
+        const q = query(backupsRef, orderBy('syncedAt', 'desc'), firebaseLimit(request.limit || 10));
+        const backupSnap = await getDocs(q);
+        
+        const backups = [];
+        backupSnap.forEach(doc => {
+          backups.push({ id: doc.id, ...doc.data() });
+        });
+        
+        safeSendResponse(backups);
+      } catch (err) {
+        console.error('[Background] List backups error:', err);
+        safeSendResponse([]);
+      }
+      return;
+    }
+
+    if (request.action === 'restore_from_firestore') {
+      try {
+        const user = await ensureAuth();
+        if (!firebaseDb) throw new Error('Firebase not initialized');
+        
+        let backup;
+        if (request.backupId) {
+          const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', request.backupId);
+          const backupSnap = await getDoc(backupRef);
+          if (!backupSnap.exists()) throw new Error('Backup not found');
+          backup = backupSnap.data();
+        } else {
+          const latestRef = doc(firebaseDb, 'users', user.uid, 'config', 'latestBackup');
+          const latestSnap = await getDoc(latestRef);
+          if (!latestSnap.exists()) throw new Error('No backups found');
+          
+          const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', latestSnap.data().backupId);
+          backup = (await getDoc(backupRef)).data();
+        }
+        
+        if (!backup.version || !backup.data) throw new Error('Invalid backup format');
+        
+        await chrome.storage.local.set(backup.data);
+        safeSendResponse({ success: true, keysRestored: Object.keys(backup.data).length, message: 'Data restored successfully!' });
+      } catch (err) {
+        console.error('[Background] Restore error:', err);
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
+    if (request.action === 'delete_backup') {
+      try {
+        const user = await ensureAuth();
+        if (!firebaseDb) throw new Error('Firebase not initialized');
+        
+        const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', request.backupId);
+        await deleteDoc(backupRef);
+        safeSendResponse({ success: true });
+      } catch (err) {
+        console.error('[Background] Delete backup error:', err);
+        safeSendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+    // ========== END FIREBASE HANDLERS ==========
     // ========== END SSI API PROXY HANDLER ==========
 
     safeSendResponse({ status: 'error', error: 'unknown_action', action: request.action });

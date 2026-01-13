@@ -1,18 +1,68 @@
-import { 
-  initializeFirebase,
-  authenticateFirebase,
-  getSyncConfig, 
-  saveSyncConfig,
-  syncToFirestore,
-  restoreFromFirestore,
-  listBackups,
-  deleteBackup,
-  schedulePeriodicSync,
-  handleSyncAlarm
-} from './firebaseSync.js';
-
-// State
+// Firebase sync via background script messaging
 let firebaseReady = false;
+
+async function getSyncConfig() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'get_sync_config' }, (response) => {
+      resolve(response || {});
+    });
+  });
+}
+
+async function saveSyncConfig(config) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'save_sync_config', config }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function syncToFirestore() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'sync_to_firestore' }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function restoreFromFirestore(backupId = null) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'restore_from_firestore', backupId }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+async function listBackups(limit_count = 10) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'list_backups', limit: limit_count }, (response) => {
+      resolve(response || []);
+    });
+  });
+}
+
+async function deleteBackup(backupId) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'delete_backup', backupId }, (response) => {
+      resolve(response);
+    });
+  });
+}
+
+function schedulePeriodicSync(intervalMinutes = 60) {
+  chrome.alarms.create('firebaseSync', { periodInMinutes: intervalMinutes });
+  console.log(`[Sync] Scheduled periodic sync every ${intervalMinutes} minutes`);
+}
+
+function handleSyncAlarm() {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'firebaseSync') {
+      syncToFirestore().then(result => {
+        console.log('[Sync] Alarm sync result:', result);
+      });
+    }
+  });
+}
 
 export async function setupSync(dom) {
   const {
@@ -27,12 +77,20 @@ export async function setupSync(dom) {
 
   if (!authGoogleBtn) return;
 
-  // Initialize Firebase
+  // Initialize Firebase via background
   try {
-    await initializeFirebase();
-    await authenticateFirebase();
-    firebaseReady = true;
-    console.log('[Sync] Firebase ready');
+    const result = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'init_firebase' }, (response) => {
+        resolve(response);
+      });
+    });
+    
+    if (result && result.success) {
+      firebaseReady = true;
+      console.log('[Sync] Firebase ready');
+    } else {
+      throw new Error(result?.error || 'Firebase init failed');
+    }
   } catch (err) {
     console.error('[Sync] Firebase init failed:', err);
     showStatus(syncStatus, '⚠️ Firebase not available', 'error');
@@ -46,9 +104,19 @@ export async function setupSync(dom) {
   authGoogleBtn?.addEventListener('click', async () => {
     try {
       showStatus(syncStatus, '⏳ Connecting to Firestore...', 'info');
-      await authenticateFirebase();
-      showStatus(syncStatus, '✅ Successfully connected to Firestore!', 'success');
-      await initializeSyncUI();
+      const result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'ensure_firebase_auth' }, (response) => {
+          resolve(response);
+        });
+      });
+      
+      if (result && result.success) {
+        firebaseReady = true;
+        showStatus(syncStatus, '✅ Successfully connected to Firestore!', 'success');
+        await initializeSyncUI();
+      } else {
+        throw new Error(result?.error || 'Auth failed');
+      }
     } catch (err) {
       showStatus(syncStatus, `❌ Connection failed: ${err.message}`, 'error');
       console.error('[Sync] Auth error:', err);
