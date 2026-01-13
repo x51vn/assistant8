@@ -56,16 +56,18 @@ async function initFirebase() {
   }
 }
 
-// Initialize Firebase and store the promise
-firebaseInitPromise = initFirebase().catch(err => {
-  console.error('[Background] Firebase init error:', err);
-  return false;
-});
+// Initialize Firebase and store the promise (don't catch errors here, let ensureAuth handle them)
+firebaseInitPromise = initFirebase();
 
 // ========== FIREBASE SYNC HANDLERS ==========
 async function ensureAuth() {
   // Wait for Firebase initialization to complete
-  await firebaseInitPromise;
+  try {
+    await firebaseInitPromise;
+  } catch (err) {
+    console.error('[Background Firebase] Init promise rejected:', err);
+    throw new Error(`Firebase initialization failed: ${err.message}`);
+  }
   
   if (!firebaseUser) {
     try {
