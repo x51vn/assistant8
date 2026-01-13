@@ -9,11 +9,12 @@ export function setActivePage({ pages, btns, page }) {
 
   // Add active to selected page and button
   const pageMap = {
-    'results': 0,
+    'notes': 0,
     'portfolio': 1,
-    'errors': 2,
-    'templates': 3,
-    'settings': 4
+    'results': 2,
+    'errors': 3,
+    'templates': 4,
+    'settings': 5
   };
 
   const index = pageMap[page];

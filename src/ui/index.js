@@ -8,14 +8,19 @@ import { setupBackup } from './backup.js';
 import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
 import { setupTemplates, initializeTemplates } from './templates.js';
-import { setupSync } from './sync.js';
+import { setupSync, setupNotes } from './sync.js';
 
 (function init() {
   const dom = {
+    // Nav buttons
+    notesBtn: byId('notesBtn'),
     resultsBtn: byId('resultsBtn'),
     portfolioBtn: byId('portfolioBtn'),
     errorsBtn: byId('errorsBtn'),
     settingsBtn: byId('settingsBtn'),
+    
+    // Pages
+    notesPage: byId('notesPage'),
     resultsPage: byId('resultsPage'),
     portfolioPage: byId('portfolioPage'),
     errorsPage: byId('errorsPage'),
@@ -98,6 +103,7 @@ import { setupSync } from './sync.js';
   setupSettings(dom);
   setupBackup(dom);
   setupSync(dom);
+  setupNotes();
   setupHistory(dom);
   setupErrors(dom);
   setupTemplates(dom);

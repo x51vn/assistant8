@@ -11,15 +11,42 @@
   <div class="container">
     <header>
       <div class="nav-buttons">
-        <button id="portfolioBtn" class="nav-btn active">Danh mục</button>
-        <button id="resultsBtn" class="nav-btn">Kết quả</button>
-        <button id="errorsBtn" class="nav-btn">Retrospective</button>
-        <button id="templatesBtn" class="nav-btn">Templates</button>
-        <button id="settingsBtn" class="nav-btn">Cấu hình</button>
+        <button id="notesBtn" class="nav-btn active">Notes</button>
+        <button id="portfolioBtn" class="nav-btn">Portfolio</button>
+        <button id="resultsBtn" class="nav-btn">Results</button>
+        <button id="errorsBtn" class="nav-btn">Retro</button>
+        <button id="templatesBtn" class="nav-btn">Templ</button>
+        <button id="settingsBtn" class="nav-btn" title="Settings"><i class="fas fa-cog"></i></button>
       </div>
     </header>
 
-    <div id="portfolioPage" class="page active">
+    <div id="notesPage" class="page active">
+      <div class="content">
+        <div class="page-header">
+          <h2>Notes</h2>
+          <button id="addNoteBtn" class="icon-btn" title="Add/Edit today's note"><i class="fas fa-plus"></i></button>
+        </div>
+
+        <!-- Add/Edit Note Form -->
+        <div id="noteForm" style="display: none; margin-bottom: 16px; background: #f9f9f9; border: 1px solid #e0e0e0; border-left: 4px solid #667eea; padding: 12px;">
+          <div class="form-group">
+            <label>Today's Notes</label>
+            <textarea id="noteInput" class="textarea-input" placeholder="Add your tasks and notes for today..." rows="4"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="saveNoteBtn" class="primary-btn">Save</button>
+            <button id="cancelNoteBtn" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Notes List (Read-only) -->
+        <div id="notesList" class="notes-list">
+          <p class="empty-state">No notes yet. Click + to add today's notes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="portfolioPage" class="page">
       <div class="content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h2 style="margin: 0;">Danh Mục</h2>
@@ -43,12 +70,12 @@
         <table id="portfolioTable" class="portfolio-table">
           <thead>
             <tr>
-              <th>Mã</th>
+              <th>Symbol</th>
               <th>Entry</th>
               <th>Current</th>
-              <th>Khối lượng</th>
+              <th>Qty</th>
               <th>P&L</th>
-              <th>Hành động</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -220,22 +247,62 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
           <div id="backupStatus" class="status-message"></div>
         </div>
 
-        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
-          <h3 style="margin-top: 0;">☁️ Cloud Sync (Google Drive)</h3>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="syncEnabledCheckbox" />
-              Enable Google Drive Sync (Auto-sync every hour)
-            </label>
-            <p class="help-text">Automatically backup your data to Google Drive every hour.</p>
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;" class="sync-section">
+          <h3 style="margin-top: 0;">☁️ Firebase Cloud Sync</h3>
+          
+          <!-- Firebase Login Form -->
+          <div id="firebase-auth-section" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
+            <div id="auth-status-display" style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px; display: none;">
+              <p style="margin: 0;">
+                <strong>✅ Đã đăng nhập:</strong> <span id="current-user-email"></span>
+              </p>
+              <button id="logout-btn" class="secondary-btn" style="margin-top: 10px; width: 100%;">Đăng xuất</button>
+            </div>
+
+            <div id="auth-forms">
+              <p style="margin-top: 0; font-weight: bold; color: #333;">Đăng nhập Firebase</p>
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555;">Email:</label>
+                <input 
+                  type="email" 
+                  id="auth-email" 
+                  class="text-input" 
+                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
+                  placeholder="your@email.com" 
+                />
+              </div>
+
+              <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555;">Mật khẩu:</label>
+                <input 
+                  type="password" 
+                  id="auth-password" 
+                  class="text-input" 
+                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
+                  placeholder="••••••••" 
+                />
+              </div>
+
+              <button id="login-btn" class="primary-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: bold;">
+                🔐 Đăng nhập
+              </button>
+
+              <p style="font-size: 12px; color: #666; margin: 12px 0 0 0; text-align: center;">
+                ℹ️ Liên hệ admin để tạo tài khoản
+              </p>
+            </div>
+
+            <div id="auth-message" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
           </div>
+
+          <!-- Sync Controls -->
           <div id="syncStatus" class="status-message"></div>
           <div class="button-group" style="margin-top: 12px;">
-            <button id="authGoogleBtn" class="primary-btn">🔐 Connect Google Drive</button>
-            <button id="syncNowBtn" class="secondary-btn" style="display: none;">⬆️ Sync Now</button>
-            <button id="revokeGoogleBtn" class="secondary-btn" style="display: none;">🔓 Disconnect</button>
+            <button id="syncNowBtn" class="primary-btn" disabled>⬆️ Đồng bộ ngay</button>
           </div>
-          <div id="backupsList" style="margin-top: 12px; max-height: 200px; overflow-y: auto;"></div>
+          
+          <!-- Backups List -->
+          <div id="backupsList" style="margin-top: 16px; max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; background: white;"></div>
         </div>
       </div>
     </div>
@@ -370,6 +437,6 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
     </div>
   </div>
 
-  <script src="ui.js"></script>
+  <script type="module" src="ui.js"></script>
 </body>
 </html>

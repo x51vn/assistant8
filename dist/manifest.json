@@ -28,7 +28,8 @@
     "default_path": "sidepanel.html"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "icons": {
     "16": "images/icon-16.svg",
@@ -39,7 +40,8 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
-      "all_frames": false
+      "all_frames": false,
+      "type": "module"
     }
   ],
   "web_accessible_resources": [
