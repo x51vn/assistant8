@@ -1,6 +1,6 @@
 // Cloud Sync Module with Google Drive Integration
 
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '1061609434838-glhk7tcpa604kbvl28e7qsqt3tg1ge86.apps.googleusercontent.com';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 const STORAGE_KEYS = [
   'portfolio',
@@ -29,14 +29,17 @@ export async function saveSyncConfig(config) {
 }
 
 // Get Google Drive auth token
+// Returns null if not authenticated (instead of rejecting)
 export async function getGoogleToken() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     chrome.identity.getAuthToken({ interactive: false }, (token) => {
       if (chrome.runtime.lastError) {
-        console.error('[Sync] Auth error:', chrome.runtime.lastError);
-        reject(chrome.runtime.lastError);
-      } else {
+        console.debug('[Sync] Not authenticated yet:', chrome.runtime.lastError.message);
+        resolve(null);  // Return null instead of rejecting
+      } else if (token) {
         resolve(token);
+      } else {
+        resolve(null);
       }
     });
   });
@@ -209,6 +212,11 @@ export async function listBackupsFromDrive(token, folderId, limit = 10) {
 export async function syncToGoogleDrive() {
   try {
     const token = await getGoogleToken();
+    
+    if (!token) {
+      throw new Error('Not authenticated. Please connect Google Drive first.');
+    }
+    
     const folderId = await getOrCreateFolder(token);
 
     // Gather all data
@@ -247,6 +255,11 @@ export async function syncToGoogleDrive() {
 export async function restoreFromGoogleDrive(fileId) {
   try {
     const token = await getGoogleToken();
+    
+    if (!token) {
+      throw new Error('Not authenticated. Please connect Google Drive first.');
+    }
+    
     const backup = await downloadBackupFromDrive(token, fileId);
 
     if (!backup.version || !backup.data) {

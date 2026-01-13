@@ -6,12 +6,13 @@ export async function loadCachedResultFast(resultText) {
   }
 }
 
-export function loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, intervalInput }) {
-  chrome.storage.local.get(['prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval'], (result) => {
+export function loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput }) {
+  chrome.storage.local.get(['prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'realtimeEnabled', 'interval'], (result) => {
     if (promptInput) promptInput.value = result.prompt || '';
     if (autoRunCheckbox) autoRunCheckbox.checked = result.autoRun || false;
     if (evaluatePreviousCheckbox) evaluatePreviousCheckbox.checked = result.evaluatePrevious || false;
     if (reviewPromptCheckbox) reviewPromptCheckbox.checked = result.reviewPrompt || false;
+    if (realtimeEnabledCheckbox) realtimeEnabledCheckbox.checked = result.realtimeEnabled || false;
     if (intervalInput) intervalInput.value = result.interval || 5;
   });
 }

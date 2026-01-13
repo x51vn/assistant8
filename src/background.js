@@ -5,6 +5,46 @@ import { applyPromptTemplate } from './promptTemplate.js';
 import * as ChatGPTSession from './chatgptSession.js';
 import { loadAndRender } from './promptLoader.js';
 
+// ========== SSI API PROXY (BYPASS CORS) ==========
+const SSI_API_BASE = 'https://iboard-query.ssi.com.vn';
+
+async function fetchSSIAPI(endpoint, method = 'GET', body = null) {
+  try {
+    const url = `${SSI_API_BASE}${endpoint}`;
+    console.log(`[Background] SSI API proxy request: ${method} ${url}`);
+    
+    const options = {
+      method: method,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    if (body) {
+      options.body = body;
+    }
+    
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[Background] SSI API success:', endpoint, { 
+      status: response.status,
+      dataSize: JSON.stringify(data).length 
+    });
+    return { success: true, data };
+  } catch (error) {
+    console.error('[Background] SSI API error:', endpoint, error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========== END SSI API PROXY ==========
+
 const DEFAULTS = {
   prompt: '',
   autoRun: false,
@@ -820,6 +860,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       safeSendResponse({ status: 'ok' });
       return;
     }
+
+    // ========== SSI API PROXY HANDLER ==========
+    if (request.action === 'fetch_ssi_api') {
+      const endpoint = typeof request.endpoint === 'string' ? request.endpoint : '';
+      if (!endpoint) {
+        safeSendResponse({ success: false, error: 'missing_endpoint' });
+        return;
+      }
+      
+      const method = request.method || 'GET';
+      const body = request.body || null;
+      
+      try {
+        console.log('[Background] SSI API proxy request:', { endpoint, method, hasBody: !!body });
+        const result = await fetchSSIAPI(endpoint, method, body);
+        safeSendResponse(result);
+      } catch (err) {
+        console.error('[Background] SSI API proxy error:', err);
+        safeSendResponse({ success: false, error: String(err?.message || err) });
+      }
+      return;
+    }
+    // ========== END SSI API PROXY HANDLER ==========
 
     safeSendResponse({ status: 'error', error: 'unknown_action', action: request.action });
   })().catch((e) => {
