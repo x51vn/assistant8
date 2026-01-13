@@ -53,6 +53,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       input: {
         background: path.resolve(__dirname, 'src/background.js'),
@@ -61,6 +62,10 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
+        chunkFileNames: '[name]-[hash].js',
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+        },
       },
     },
   },
