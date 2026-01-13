@@ -119,54 +119,37 @@
       <div class="content">
         <h2>Cấu hình</h2>
 
-        <div class="form-group">
-          <label for="promptInput">Prompt:</label>
-          <textarea
-            id="promptInput"
-            class="textarea-input"
-            placeholder="Nhập prompt để gửi tới ChatGPT..."
-          ></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>
-            <input type="checkbox" id="evaluatePreviousCheckbox" />
-            Đánh giá kết quả lần chạy trước (append vào prompt)
-          </label>
-          <p class="help-text">Tự động thêm kết quả lần trước và yêu cầu ChatGPT đánh giá, cải thiện code, đổi hướng nếu cần.</p>
-        </div>
-
-        <div class="form-group">
-          <label>
-            <input type="checkbox" id="reviewPromptCheckbox" />
-            Review Prompt (chỉ điền prompt, không gửi ngay)
-          </label>
-          <p class="help-text">Chỉ điền prompt vào ChatGPT để bạn review, không tự động bấm gửi. Bạn sẽ tự bấm nút gửi sau khi kiểm tra.</p>
-        </div>
-
-        <div class="form-group">
-          <label>
-            <input type="checkbox" id="realtimeEnabledCheckbox" />
-            Bật cập nhật giá realtime (mỗi 60 giây)
-          </label>
-          <p class="help-text">Tự động cập nhật giá từ SSI API mỗi phút một lần.</p>
-        </div>
-
-        <div class="form-group">
-          <label for="intervalInput">Khoảng thời gian (phút):</label>
-          <input
-            type="number"
-            id="intervalInput"
-            min="1"
-            max="1440"
-            value="5"
-            class="number-input"
-          />
-        </div>
-
-        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
-          <h3 style="margin-top: 0;">Prompt đánh giá mã cổ phiếu</h3>
+        <!-- Prompts Section -->
+        <div style="border-bottom: 1px solid #eee; margin-bottom: 24px; padding-bottom: 24px;">
+          <h3 style="margin-top: 0;">Prompt Đánh giá</h3>
+          
+          <!-- Market Evaluation Prompt -->
           <div class="form-group">
+            <label for="promptInput">1. Prompt đánh giá thị trường:</label>
+            <textarea
+              id="promptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để gửi tới ChatGPT..."
+              rows="3"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi trong tab Kết quả.</p>
+          </div>
+
+          <!-- Portfolio Evaluation Prompt -->
+          <div class="form-group">
+            <label for="portfolioPromptInput">2. Prompt đánh giá danh mục:</label>
+            <textarea
+              id="portfolioPromptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để ChatGPT đánh giá danh mục (gồm tất cả các mã và CASH)..."
+              rows="3"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi kèm danh mục khi bạn bấm 'Đánh giá' trong tab Danh mục.</p>
+          </div>
+
+          <!-- Stock Evaluation Prompt -->
+          <div class="form-group">
+            <label for="stockEvalPromptInput">3. Prompt đánh giá cổ phiếu:</label>
             <textarea
               id="stockEvalPromptInput"
               class="textarea-input"
@@ -178,16 +161,44 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
           </div>
         </div>
 
-        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
-          <h3 style="margin-top: 0;">Prompt đánh giá danh mục</h3>
+        <!-- General Settings Section -->
+        <div style="border-bottom: 1px solid #eee; margin-bottom: 24px; padding-bottom: 24px;">
+          <h3 style="margin-top: 0;">Cài đặt chung</h3>
+
           <div class="form-group">
-            <textarea
-              id="portfolioPromptInput"
-              class="textarea-input"
-              placeholder="Nhập prompt để ChatGPT đánh giá danh mục (gồm tất cả các mã và CASH)..."
-              rows="4"
-            ></textarea>
-            <p class="help-text">Prompt này sẽ được gửi kèm danh mục khi bạn nút 'Đánh giá' trong tab Danh mục.</p>
+            <label>
+              <input type="checkbox" id="evaluatePreviousCheckbox" />
+              Đánh giá kết quả lần chạy trước (append vào prompt)
+            </label>
+            <p class="help-text">Tự động thêm kết quả lần trước và yêu cầu ChatGPT đánh giá, cải thiện code, đổi hướng nếu cần.</p>
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="reviewPromptCheckbox" />
+              Review Prompt (chỉ điền prompt, không gửi ngay)
+            </label>
+            <p class="help-text">Chỉ điền prompt vào ChatGPT để bạn review, không tự động bấm gửi. Bạn sẽ tự bấm nút gửi sau khi kiểm tra.</p>
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="realtimeEnabledCheckbox" />
+              Bật cập nhật giá realtime (mỗi 60 giây)
+            </label>
+            <p class="help-text">Tự động cập nhật giá từ SSI API mỗi phút một lần.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="intervalInput">Khoảng thời gian (phút):</label>
+            <input
+              type="number"
+              id="intervalInput"
+              min="1"
+              max="1440"
+              value="5"
+              class="number-input"
+            />
           </div>
         </div>
 
