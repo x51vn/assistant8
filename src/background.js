@@ -105,8 +105,13 @@ async function ensureAuth() {
 
 async function syncToFirebaseHandler() {
   try {
+    console.log('[Background Firebase] Starting sync...');
     const user = await ensureAuth();
+    console.log('[Background Firebase] User authenticated:', user.email || user.uid);
+    
     if (!user || !firebaseDb) throw new Error('Firebase not ready');
+    
+    console.log('[Background Firebase] Firestore ready, reading local data...');
     
     const STORAGE_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'chatHistory', 'errorList', 'runs', 'settings', 'promptTemplates'];
     const allData = {};
@@ -126,10 +131,15 @@ async function syncToFirebaseHandler() {
       syncedAt: serverTimestamp()
     };
     
-    const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', `backup-${Date.now()}`);
-    await setDoc(backupRef, backup);
+    // Use single 'latest' backup ID - will overwrite previous backup
+    const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', 'latest');
+    console.log('[Background Firebase] Writing backup to path:', backupRef.path);
+    console.log('[Background Firebase] Backup data size:', JSON.stringify(backup).length, 'bytes');
+    await setDoc(backupRef, backup, { merge: true });
+    console.log('[Background Firebase] Backup written successfully');
     
     const latestRef = doc(firebaseDb, 'users', user.uid, 'config', 'latestBackup');
+    console.log('[Background Firebase] Updating latest backup reference...');
     await setDoc(latestRef, {
       backupId: backupRef.id,
       timestamp: serverTimestamp(),
@@ -140,7 +150,21 @@ async function syncToFirebaseHandler() {
     return { success: true, backupId: backupRef.id, message: 'Data synced to Firestore successfully!' };
   } catch (err) {
     console.error('[Background Firebase] Sync failed:', err);
-    return { success: false, error: err.message };
+    console.error('[Background Firebase] Error details:', {
+      code: err.code,
+      message: err.message,
+      stack: err.stack,
+      userAuthenticated: !!firebaseUser,
+      userEmail: firebaseUser?.email,
+      firestoreInitialized: !!firebaseDb
+    });
+    
+    let errorMessage = err.message;
+    if (err.code === 'permission-denied') {
+      errorMessage = 'Lỗi quyền truy cập Firestore.\n\nCác bước khắc phục:\n1. Kiểm tra đã đăng nhập chưa (email phải hiển thị)\n2. Deploy Firestore Rules trong Firebase Console:\n   - Vào https://console.firebase.google.com/project/myfcx51/firestore/rules\n   - Nhấn "Publish" để deploy rules\n3. Kiểm tra Email/Password auth đã được bật:\n   - Vào https://console.firebase.google.com/project/myfcx51/authentication/providers\n   - Email/Password phải được enable';
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -1110,6 +1134,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'sync_to_firestore') {
+      if (!firebaseUser) {
+        safeSendResponse({ 
+          success: false, 
+          error: 'Chưa đăng nhập. Vui lòng đăng nhập trước khi đồng bộ.' 
+        });
+        return;
+      }
+      
       try {
         const result = await syncToFirebaseHandler();
         safeSendResponse(result);

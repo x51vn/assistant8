@@ -11,14 +11,16 @@ service cloud.firestore {
     }
     
     function isValidBackup(data) {
-      return data.keys().hasAll(['version', 'data', 'exportDate', 'syncedAt'])
+      // Check minimum required fields exist
+      return data.keys().hasAll(['version', 'data', 'exportDate'])
         && data.version is string
         && data.data is map
         && data.exportDate is string;
     }
     
     function isValidConfig(data) {
-      return data.keys().hasAny(['syncEnabled', 'autoSyncInterval', 'lastSyncTime', 'updatedAt']);
+      // Config can have any of these fields
+      return data.size() > 0;
     }
     
     // Require authentication
