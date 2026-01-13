@@ -1,19 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions for security
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+    
+    function isValidBackup(data) {
+      return data.keys().hasAll(['version', 'data', 'exportDate', 'syncedAt'])
+        && data.version is string
+        && data.data is map
+        && data.exportDate is string;
+    }
+    
+    function isValidConfig(data) {
+      return data.keys().hasAny(['syncEnabled', 'autoSyncInterval', 'lastSyncTime', 'updatedAt']);
+    }
+    
     // Require authentication
     match /users/{uid} {
       // Users can only access their own data
-      allow read, write: if request.auth.uid == uid;
+      allow read: if isOwner(uid);
+      allow write: if false; // Prevent direct user doc writes
       
       // Backups subcollection
       match /backups/{backupId} {
-        allow read, write: if request.auth.uid == uid;
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidBackup(request.resource.data);
+        allow update: if false; // Backups are immutable once created
+        allow delete: if isOwner(uid);
       }
       
-      // Config subcollection
+      // Config subcollection  
       match /config/{configId} {
-        allow read, write: if request.auth.uid == uid;
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidConfig(request.resource.data);
+        allow update: if isOwner(uid) && isValidConfig(request.resource.data);
+        allow delete: if isOwner(uid);
       }
     }
     
