@@ -43,7 +43,7 @@ export function setupErrors(dom) {
       <div class="error-item-header">
         <div class="error-title">${error.title || 'Lỗi không xác định'}</div>
         <div class="error-actions">
-          <button class="error-action-btn edit-error" title="Sửa">✏️</button>
+          <button class="error-action-btn edit-error" title="Sửa"><i class="fas fa-edit"></i></button>
           <button class="error-action-btn delete-error" title="Xóa"><i class="fas fa-trash"></i></button>
         </div>
       </div>

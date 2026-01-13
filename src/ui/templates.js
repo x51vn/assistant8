@@ -119,8 +119,8 @@ export function setupTemplates(dom) {
         </div>
         <p class="template-desc">${t.description}</p>
         <div class="template-actions">
-          <button class="template-use-btn" data-id="${t.id}" title="Use this template">📌 Use</button>
-          <button class="template-edit-btn" data-id="${t.id}" title="Edit">✏️ Edit</button>
+          <button class="template-use-btn" data-id="${t.id}" title="Use this template"><i class="fas fa-thumbtack"></i> Use</button>
+          <button class="template-edit-btn" data-id="${t.id}" title="Edit"><i class="fas fa-edit"></i> Edit</button>
           <button class="template-delete-btn" data-id="${t.id}" title="Delete"><i class="fas fa-trash"></i> Delete</button>
         </div>
       </div>

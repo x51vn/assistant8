@@ -28,12 +28,13 @@ import { setupSync, setupNotes } from './sync.js';
 
     runBtn: byId('runBtn'),
     stopBtn: byId('stopBtn'),
-    refreshBtn: byId('refreshBtn'),
 
     portfolioTable: byId('portfolioTable')?.querySelector('tbody'),
     addStockBtn: byId('addStockBtn'),
     portfolioPromptInput: byId('portfolioPromptInput'),
     evaluateBtn: byId('evaluateBtn'),
+    teaStockBtn: byId('teaStockBtn'),
+    teaStockPromptInput: byId('teaStockPromptInput'),
     portfolioModal: byId('portfolioModal'),
     closePortfolioModal: byId('closePortfolioModal'),
     cancelPortfolioBtn: byId('cancelPortfolioBtn'),
@@ -117,6 +118,8 @@ import { setupSync, setupNotes } from './sync.js';
     quantityInput: byId('stockQuantityInput'),
     promptInput: dom.portfolioPromptInput,
     evaluateBtn: dom.evaluateBtn,
+    teaStockBtn: dom.teaStockBtn,
+    teaStockPromptInput: dom.teaStockPromptInput,
   });
 
   try {

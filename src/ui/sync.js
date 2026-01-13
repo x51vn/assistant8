@@ -429,8 +429,8 @@ async function loadNotesList() {
             ${isToday ? '📅' : '📋'} ${date}${isToday ? ' (Today)' : ''}
           </div>
           <div class="notes-item-buttons">
-            <button class="ask-chatgpt-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #764ba2; cursor: pointer; padding: 0; font-size: 14px; transition: opacity 0.2s;" title="Ask ChatGPT about this note">💬</button>
-            ${canEdit ? `<button class="edit-note-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #667eea; cursor: pointer; padding: 0; font-size: 12px; transition: opacity 0.2s;" title="Edit this note">✏️</button>` : ''}
+            <button class="ask-chatgpt-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #764ba2; cursor: pointer; padding: 0; font-size: 14px; transition: opacity 0.2s;" title="Ask ChatGPT about this note"><i class="fas fa-comments"></i></button>
+            ${canEdit ? `<button class="edit-note-btn" data-date="${note.dateKey}" style="background: transparent; border: none; color: #667eea; cursor: pointer; padding: 0; font-size: 12px; transition: opacity 0.2s;" title="Edit this note"><i class="fas fa-edit"></i></button>` : ''}
           </div>
         </div>
         <div class="notes-item-text">
@@ -490,7 +490,7 @@ async function askChatGPT(noteText) {
       // Optional: show a brief success message
       const syncStatus = document.getElementById('syncStatus');
       if (syncStatus) {
-        syncStatus.textContent = '✅ Sent to ChatGPT';
+        syncStatus.textContent = '✓ Sent to ChatGPT';
         syncStatus.className = 'status-message success';
         setTimeout(() => {
           syncStatus.textContent = '';
