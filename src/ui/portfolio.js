@@ -143,8 +143,13 @@ export async function loadPortfolioUI(table) {
         <td>${stock.quantity.toFixed(2)}</td>
         <td>-</td>
         <td style="text-align: center;">
-          <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
-          <button class="delete-btn" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i></button>
+          <div class="portfolio-actions-dropdown">
+            <button class="portfolio-actions-btn" title="Hành động"><i class="fas fa-ellipsis-vertical"></i></button>
+            <div class="portfolio-actions-menu">
+              <button class="action-edit" data-id="${originalIdx}" title="Sửa"><i class="fas fa-edit"></i> Sửa</button>
+              <button class="action-delete" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i> Xóa</button>
+            </div>
+          </div>
         </td>
       `;
     } else {
@@ -160,29 +165,73 @@ export async function loadPortfolioUI(table) {
         <td>${stock.quantity}</td>
         <td>${plDisplay}</td>
         <td style="text-align: center;">
-          <button class="edit-btn" data-id="${originalIdx}" title="Sửa">✏️</button>
-          <button class="delete-btn" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i></button>
+          <div class="portfolio-actions-dropdown">
+            <button class="portfolio-actions-btn" title="Hành động"><i class="fas fa-ellipsis-vertical"></i></button>
+            <div class="portfolio-actions-menu">
+              <button class="action-edit" data-id="${originalIdx}" title="Sửa"><i class="fas fa-edit"></i> Sửa</button>
+              <button class="action-delete" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i> Xóa</button>
+              <button class="action-evaluate" data-code="${stock.code}" title="Đánh giá"><i class="fas fa-magnifying-glass"></i> Đánh giá</button>
+            </div>
+          </div>
         </td>
       `;
     }
     table.appendChild(row);
   });
 
-  // Add event listeners
-  table.querySelectorAll('.edit-btn').forEach(btn => {
+  // Add event listeners for dropdown toggle
+  table.querySelectorAll('.portfolio-actions-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const id = parseInt(e.target.dataset.id);
+      e.stopPropagation();
+      const menu = btn.nextElementSibling;
+      // Close all other menus
+      document.querySelectorAll('.portfolio-actions-menu.open').forEach(m => {
+        if (m !== menu) m.classList.remove('open');
+      });
+      menu.classList.toggle('open');
+    });
+  });
+
+  // Add event listeners for edit action
+  table.querySelectorAll('.action-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(e.target.closest('button').dataset.id);
+      // Close menu
+      e.target.closest('.portfolio-actions-menu').classList.remove('open');
       openEditStockModal(id, table);
     });
   });
 
-  table.querySelectorAll('.delete-btn').forEach(btn => {
+  // Add event listeners for delete action
+  table.querySelectorAll('.action-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const id = parseInt(e.target.dataset.id);
+      e.stopPropagation();
+      const id = parseInt(e.target.closest('button').dataset.id);
+      // Close menu
+      e.target.closest('.portfolio-actions-menu').classList.remove('open');
       if (confirm('Xác nhận xóa mã này?')) {
         await deleteStock(id);
         await loadPortfolioUI(table);
       }
+    });
+  });
+
+  // Add event listeners for evaluate action
+  table.querySelectorAll('.action-evaluate').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const code = e.target.closest('button').dataset.code;
+      // Close menu
+      e.target.closest('.portfolio-actions-menu').classList.remove('open');
+      await evaluateStock(code);
+    });
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.portfolio-actions-menu.open').forEach(menu => {
+      menu.classList.remove('open');
     });
   });
 }
@@ -571,6 +620,45 @@ function stopRealtimeUpdates() {
     
     // Update status
     checkRealtimeStatus();
+  }
+}
+
+/**
+ * Evaluate a stock by sending evaluation request to ChatGPT
+ */
+async function evaluateStock(stockCode) {
+  try {
+    const settings = await chrome.storage.local.get('stockEvalPrompt');
+    let evalPrompt = settings.stockEvalPrompt || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+    
+    const prompt = evalPrompt.replace('{SYMBOL}', stockCode);
+    
+    // Get current portfolio for context
+    const portfolio = await getPortfolio();
+    const stock = portfolio.find(s => s.code === stockCode);
+    
+    let fullPrompt = prompt;
+    if (stock) {
+      const context = `Mã: ${stock.code}, Entry: ${stock.entry}, Giá hiện tại: ${stock.currentPrice || 'N/A'}, Khối lượng: ${stock.quantity}`;
+      fullPrompt = `${prompt}\n\nThông tin hiện tại: ${context}`;
+    }
+    
+    console.log('[Portfolio] Sending stock evaluation:', { stockCode, prompt: fullPrompt });
+    
+    chrome.runtime.sendMessage({ action: 'send_prompt', prompt: fullPrompt }, (response) => {
+      if (chrome.runtime.lastError) {
+        alert('Lỗi: ' + chrome.runtime.lastError.message);
+        return;
+      }
+      if (response && response.status === 'ok') {
+        console.log('[Portfolio] Stock evaluation sent successfully');
+      } else {
+        alert('Không thể gửi đánh giá!');
+      }
+    });
+  } catch (err) {
+    console.error('[Portfolio] Error evaluating stock:', err);
+    alert('Lỗi khi đánh giá mã: ' + err.message);
   }
 }
 

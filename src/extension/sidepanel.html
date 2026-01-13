@@ -165,6 +165,20 @@
         </div>
 
         <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
+          <h3 style="margin-top: 0;">Prompt đánh giá mã cổ phiếu</h3>
+          <div class="form-group">
+            <textarea
+              id="stockEvalPromptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để ChatGPT đánh giá từng mã cổ phiếu...
+Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
+              rows="3"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi khi bạn bấm 'Đánh giá' cho một mã cụ thể trong tab Danh mục. Dùng {SYMBOL} để tham chiếu tới mã.</p>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;">
           <h3 style="margin-top: 0;">Prompt đánh giá danh mục</h3>
           <div class="form-group">
             <textarea

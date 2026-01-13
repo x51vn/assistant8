@@ -59,6 +59,8 @@ import { setupSync } from './sync.js';
     sendBtn: byId('sendBtn'),
     resetBtn: byId('resetBtn'),
     saveStatus: byId('saveStatus'),
+    portfolioPromptInput: byId('portfolioPromptInput'),
+    stockEvalPromptInput: byId('stockEvalPromptInput'),
     exportBtn: byId('exportBtn'),
     importBtn: byId('importBtn'),
     importFileInput: byId('importFileInput'),

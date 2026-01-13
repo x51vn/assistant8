@@ -3,6 +3,7 @@ import { showStatus } from './status.js';
 import { loadSettings } from './storage.js';
 
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
+const STOCK_EVAL_PROMPT_KEY = 'stockEvalPrompt';
 
 export function setupSettings(dom) {
   const {
@@ -21,10 +22,12 @@ export function setupSettings(dom) {
     resultsBtn,
     settingsBtn,
     portfolioPromptInput,
+    stockEvalPromptInput,
   } = dom;
 
-  // Load portfolio prompt on init
+  // Load prompts on init
   loadPortfolioPrompt(portfolioPromptInput);
+  loadStockEvalPrompt(stockEvalPromptInput);
 
   saveBtn?.addEventListener('click', async () => {
     const prompt = (promptInput?.value || '').trim();
@@ -45,9 +48,13 @@ export function setupSettings(dom) {
     };
 
     // Save both regular settings and portfolio prompt in one go
+    const stockEvalPrompt = (stockEvalPromptInput?.value || '').trim();
     await chrome.storage.local.set(settings);
-    await chrome.storage.local.set({ [PORTFOLIO_PROMPT_KEY]: portfolioPrompt });
-    console.log('[Settings] All settings saved including portfolio prompt');
+    await chrome.storage.local.set({ 
+      [PORTFOLIO_PROMPT_KEY]: portfolioPrompt,
+      [STOCK_EVAL_PROMPT_KEY]: stockEvalPrompt
+    });
+    console.log('[Settings] All settings saved including portfolio and stock evaluation prompts');
     showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
   });
 
@@ -91,4 +98,10 @@ async function loadPortfolioPrompt(portfolioPromptInput) {
   if (!portfolioPromptInput) return;
   const stored = await chrome.storage.local.get([PORTFOLIO_PROMPT_KEY]);
   portfolioPromptInput.value = stored[PORTFOLIO_PROMPT_KEY] || '';
+}
+
+async function loadStockEvalPrompt(stockEvalPromptInput) {
+  if (!stockEvalPromptInput) return;
+  const stored = await chrome.storage.local.get([STOCK_EVAL_PROMPT_KEY]);
+  stockEvalPromptInput.value = stored[STOCK_EVAL_PROMPT_KEY] || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
 }
