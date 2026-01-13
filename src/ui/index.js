@@ -53,6 +53,7 @@ import { setupSync } from './sync.js';
     autoRunCheckbox: byId('autoRunCheckbox'),
     evaluatePreviousCheckbox: byId('evaluatePreviousCheckbox'),
     reviewPromptCheckbox: byId('reviewPromptCheckbox'),
+    realtimeEnabledCheckbox: byId('realtimeEnabledCheckbox'),
     intervalInput: byId('intervalInput'),
     saveBtn: byId('saveBtn'),
     sendBtn: byId('sendBtn'),

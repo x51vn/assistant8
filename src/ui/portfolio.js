@@ -60,25 +60,6 @@ export async function initPortfolio({
     }
   });
 
-  // Update prices button - toggle realtime on/off
-  const updatePricesBtn = document.getElementById('updatePricesBtn');
-  updatePricesBtn?.addEventListener('click', async () => {
-    try {
-      if (currentSubscriptions.size > 0) {
-        // Stop realtime
-        stopRealtimeUpdates();
-        console.log('[Portfolio] Realtime stopped by user');
-      } else {
-        // Start realtime
-        await startRealtimeUpdates(portfolioTable);
-        console.log('[Portfolio] Realtime started by user');
-      }
-    } catch (err) {
-      console.error('[Portfolio] Failed to toggle realtime:', err);
-      alert('Không thể bật/tắt cập nhật realtime. Xem console để biết thêm chi tiết.');
-    }
-  });
-
   // Modal close buttons
   const portfolioModal = document.getElementById('portfolioModal');
   const closePortfolioModal = document.getElementById('closePortfolioModal');

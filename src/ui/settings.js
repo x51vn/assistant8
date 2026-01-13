@@ -10,6 +10,7 @@ export function setupSettings(dom) {
     autoRunCheckbox,
     evaluatePreviousCheckbox,
     reviewPromptCheckbox,
+    realtimeEnabledCheckbox,
     intervalInput,
     saveBtn,
     sendBtn,
@@ -39,6 +40,7 @@ export function setupSettings(dom) {
       autoRun: !!autoRunCheckbox?.checked,
       evaluatePrevious: !!evaluatePreviousCheckbox?.checked,
       reviewPrompt: !!reviewPromptCheckbox?.checked,
+      realtimeEnabled: !!realtimeEnabledCheckbox?.checked,
       interval: parseInt(intervalInput?.value, 10) || 5,
     };
 
@@ -54,6 +56,7 @@ export function setupSettings(dom) {
     if (autoRunCheckbox) autoRunCheckbox.checked = false;
     if (evaluatePreviousCheckbox) evaluatePreviousCheckbox.checked = false;
     if (reviewPromptCheckbox) reviewPromptCheckbox.checked = false;
+    if (realtimeEnabledCheckbox) realtimeEnabledCheckbox.checked = false;
     if (intervalInput) intervalInput.value = 5;
     chrome.storage.local.clear();
     showStatus(saveStatus, 'Reset cấu hình!', 'info');
@@ -81,7 +84,7 @@ export function setupSettings(dom) {
     });
   });
 
-  loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, intervalInput });
+  loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
 }
 
 async function loadPortfolioPrompt(portfolioPromptInput) {

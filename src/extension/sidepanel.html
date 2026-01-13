@@ -57,11 +57,10 @@
         </table>
 
         <div class="button-group" style="margin-top: 16px;">
-          <button id="addStockBtn" class="primary-btn">+ Thêm/Sửa mã</button>
-          <button id="updatePricesBtn" class="primary-btn"><i class="fas fa-money-bill"></i> Update Prices</button>
-          <button id="evaluateBtn" class="primary-btn"><i class="fas fa-magnifying-glass"></i> Đánh giá</button>
-          <button id="runBtn" class="primary-btn">Chạy ngay</button>
-          <button id="refreshBtn" class="secondary-btn">Làm mới</button>
+          <button id="addStockBtn" class="primary-btn" title="Thêm hoặc sửa mã"><i class="fas fa-plus"></i></button>
+          <button id="evaluateBtn" class="primary-btn" title="Đánh giá danh mục"><i class="fas fa-magnifying-glass"></i></button>
+          <button id="runBtn" class="primary-btn" title="Chạy prompt ngay"><i class="fas fa-play"></i></button>
+          <button id="refreshBtn" class="secondary-btn" title="Làm mới kết quả"><i class="fas fa-rotate-right"></i></button>
         </div>
       </div>
     </div>
@@ -73,8 +72,8 @@
           <div class="page-header">
             <h3 style="margin: 0;">Lịch sử Chat</h3>
             <div>
-              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mới"><i class="fas fa-rotate-right"></i></button>
-              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả"><i class="fas fa-trash"></i></button>
+              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mởi lịch sử"><i class="fas fa-rotate-right"></i></button>
+              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả lịch sử"><i class="fas fa-trash"></i></button>
             </div>
           </div>
           <div id="historyList" class="history-list">
@@ -91,8 +90,8 @@
         <div class="page-header">
           <h2>Retrospective</h2>
           <div>
-            <button id="retrospectiveBtn" class="secondary-btn"><i class="fas fa-magnifying-glass"></i> Phân tích</button>
-            <button id="clearErrorsBtn" class="icon-btn" title="Xóa tất cả"><i class="fas fa-trash"></i></button>
+            <button id="retrospectiveBtn" class="secondary-btn" title="Phân tích retrospective"><i class="fas fa-magnifying-glass"></i></button>
+            <button id="clearErrorsBtn" class="icon-btn" title="Xóa tất cả lỗi"><i class="fas fa-trash"></i></button>
           </div>
         </div>
         <div id="errorList" class="error-list">
