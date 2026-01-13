@@ -1,6 +1,6 @@
 // Cloud Sync Module with Google Drive Integration
 
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '1061609434838-glhk7tcpa604kbvl28e7qsqt3tg1ge86.apps.googleusercontent.com';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 const STORAGE_KEYS = [
   'portfolio',
