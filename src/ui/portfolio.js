@@ -18,6 +18,8 @@ export async function initPortfolio({
   quantityInput,
   promptInput,
   evaluateBtn,
+  teaStockBtn,
+  teaStockPromptInput,
   editingStockId = null
 }) {
   // Load initial portfolio and prompt first
@@ -57,6 +59,34 @@ export async function initPortfolio({
       }
     } catch (err) {
       console.error('[Portfolio] Evaluate error:', err);
+    }
+  });
+
+  // Tea stock button - sends tea stock prompt to ChatGPT
+  teaStockBtn?.addEventListener('click', async () => {
+    const prompt = teaStockPromptInput?.value.trim();
+    if (!prompt) {
+      alert('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
+      return;
+    }
+
+    try {
+      // Send prompt to ChatGPT via background
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'send_prompt', prompt }, (response) => {
+          resolve(response);
+        });
+      });
+
+      if (response?.status === 'ok') {
+        console.log('[Portfolio] Tea stock prompt sent to ChatGPT');
+      } else {
+        console.error('[Portfolio] Failed to send tea stock prompt:', response);
+        alert('Lỗi gửi prompt. Vui lòng mở tab ChatGPT.');
+      }
+    } catch (err) {
+      console.error('[Portfolio] Tea stock error:', err);
+      alert('Lỗi: ' + err.message);
     }
   });
 

@@ -87,7 +87,7 @@
           <button id="addStockBtn" class="primary-btn" title="Thêm hoặc sửa mã"><i class="fas fa-plus"></i></button>
           <button id="evaluateBtn" class="primary-btn" title="Đánh giá danh mục"><i class="fas fa-magnifying-glass"></i></button>
           <button id="runBtn" class="primary-btn" title="Chạy prompt ngay"><i class="fas fa-play"></i></button>
-          <button id="refreshBtn" class="secondary-btn" title="Làm mới kết quả"><i class="fas fa-rotate-right"></i></button>
+          <button id="teaStockBtn" class="primary-btn" title="Tìm cổ phiếu trà đá"><i class="fas fa-leaf"></i></button>
         </div>
       </div>
     </div>
@@ -185,6 +185,18 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
               rows="3"
             ></textarea>
             <p class="help-text">Prompt này sẽ được gửi khi bạn bấm 'Đánh giá' cho một mã cụ thể trong tab Danh mục. Dùng {SYMBOL} để tham chiếu tới mã.</p>
+          </div>
+
+          <!-- Tea Stock Prompt -->
+          <div class="form-group">
+            <label for="teaStockPromptInput">4. Prompt tìm cổ phiếu trà đá:</label>
+            <textarea
+              id="teaStockPromptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để ChatGPT tìm kiếm cổ phiếu trà đá có tiềm năng tăng mạnh..."
+              rows="3"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi khi bạn bấm nút '🍵 Cổ phiếu trà đá' trong tab Danh mục.</p>
           </div>
         </div>
 
@@ -284,11 +296,11 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
               </div>
 
               <button id="login-btn" class="primary-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: bold;">
-                🔐 Đăng nhập
+                <i class="fas fa-lock"></i> Đăng nhập
               </button>
 
               <p style="font-size: 12px; color: #666; margin: 12px 0 0 0; text-align: center;">
-                ℹ️ Liên hệ admin để tạo tài khoản
+                <i class="fas fa-info-circle"></i> Liên hệ admin để tạo tài khoản
               </p>
             </div>
 
@@ -298,7 +310,7 @@ Sử dụng {SYMBOL} để thay thế mã cổ phiếu"
           <!-- Sync Controls -->
           <div id="syncStatus" class="status-message"></div>
           <div class="button-group" style="margin-top: 12px;">
-            <button id="syncNowBtn" class="primary-btn" disabled>⬆️ Đồng bộ ngay</button>
+            <button id="syncNowBtn" class="primary-btn" disabled><i class="fas fa-cloud-upload-alt"></i> Đồng bộ ngay</button>
           </div>
           
           <!-- Backups List -->
