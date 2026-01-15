@@ -64,6 +64,11 @@ async function initFirebase() {
         firebaseUser = user;
         if (user) {
           console.log('[Background Firebase] Auth state changed - Authenticated:', user.email || user.uid);
+          // Auto-sync on startup if user is logged in
+          console.log('[Background Firebase] Auto-syncing on startup...');
+          syncToFirebaseHandler().catch(err => {
+            console.error('[Background Firebase] Startup sync error:', err.message);
+          });
         } else {
           console.log('[Background Firebase] Auth state changed - Not authenticated');
         }
@@ -889,7 +894,44 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARMS.POLL) {
     chrome.storage.local.get(['lastRunId']).then((s) => fetchLatestResult(s.lastRunId).catch(() => {}));
   }
+
+  // ===== AUTO-SYNC WITH FIRESTORE =====
+  if (alarm.name === 'autoSync') {
+    console.log('[Background] Periodic auto-sync triggered (60 minutes)');
+    if (firebaseUser) {
+      syncToFirebaseHandler()
+        .then(result => console.log('[Background] Auto-sync success:', result.message))
+        .catch(err => console.error('[Background] Auto-sync error:', err.message));
+    } else {
+      console.log('[Background] Auto-sync skipped - user not authenticated');
+    }
+  }
 });
+
+// ===== SETUP PERIODIC AUTO-SYNC =====
+function setupAutoSync() {
+  console.log('[Background] Setting up periodic auto-sync (every 60 minutes)...');
+  chrome.alarms.create('autoSync', { periodInMinutes: 60 });
+}
+
+// ===== SYNC BEFORE SERVICE WORKER SHUTDOWN =====
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  // For MV3, sync before the service worker is about to be unloaded
+  chrome.runtime.onSuspend?.addListener?.(() => {
+    console.log('[Background] Service worker suspending - triggering final sync...');
+    if (firebaseUser && firebaseDb) {
+      // Use a quick sync without waiting for full response
+      syncToFirebaseHandler()
+        .then(() => console.log('[Background] Final sync before shutdown completed'))
+        .catch(err => console.error('[Background] Final sync before shutdown error:', err.message));
+    }
+  });
+}
+
+// Setup auto-sync on initialization
+setTimeout(() => {
+  setupAutoSync();
+}, 5000); // Setup after 5 seconds to ensure Firebase is initialized
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let responded = false;
