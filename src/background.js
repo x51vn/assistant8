@@ -6,7 +6,7 @@ import * as ChatGPTSession from './chatgptSession.js';
 import { loadAndRender } from './promptLoader.js';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as firebaseLimit, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, indexedDBLocalPersistence } from 'firebase/auth';
 
 // ========== FIREBASE INITIALIZATION ==========
 const FIREBASE_CONFIG = {
@@ -42,10 +42,10 @@ async function initFirebase() {
     firebaseAuth = getAuth(firebaseApp);
     console.log('[Background Firebase] Auth initialized:', firebaseAuth);
     
-    // Enable persistence for better auth state management
+    // Enable persistence for better auth state management (use indexedDB for service worker compatibility)
     try {
-      await setPersistence(firebaseAuth, browserLocalPersistence);
-      console.log('[Background Firebase] Persistence enabled');
+      await setPersistence(firebaseAuth, indexedDBLocalPersistence);
+      console.log('[Background Firebase] Persistence enabled (indexedDB)');
     } catch (persistErr) {
       console.warn('[Background Firebase] Persistence setup error:', persistErr.message);
       // Continue even if persistence fails
