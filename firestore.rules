@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions for security
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -10,40 +10,29 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
     
-    function isValidBackup(data) {
-      // Allow any backup structure with basic fields
-      return data.size() > 0 
-        && (data.keys().hasAny(['version', 'exportDate', 'data', 'syncedAt']));
-    }
-    
-    function isValidConfig(data) {
-      // Config can have any of these fields
-      return data.size() > 0;
-    }
-    
-    // Require authentication
+    // ===== PRODUCTION RULES - MINIMAL & PERMISSIVE =====
     match /users/{uid} {
-      // Users can only access their own data
+      // Users can read their own user doc
       allow read: if isOwner(uid);
-      allow write: if false; // Prevent direct user doc writes
+      allow write: if false;
       
-      // Backups subcollection
+      // Backups subcollection - allow owner to create/read/delete
       match /backups/{backupId} {
         allow read: if isOwner(uid);
-        allow create: if isOwner(uid) && isValidBackup(request.resource.data);
-        allow update: if false; // Backups are immutable once created
+        allow create: if isOwner(uid);
+        allow update: if isOwner(uid);
         allow delete: if isOwner(uid);
       }
       
-      // Config subcollection  
+      // Config subcollection - allow owner to do anything
       match /config/{configId} {
         allow read: if isOwner(uid);
-        allow create: if isOwner(uid) && isValidConfig(request.resource.data);
-        allow update: if isOwner(uid) && isValidConfig(request.resource.data);
+        allow create: if isOwner(uid);
+        allow update: if isOwner(uid);
         allow delete: if isOwner(uid);
       }
       
-      // Data subcollection (chatHistory, errorList, runs, etc.)
+      // Data subcollection - allow owner to do anything
       match /data/{dataType} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid);

@@ -6,7 +6,7 @@ import * as ChatGPTSession from './chatgptSession.js';
 import { loadAndRender } from './promptLoader.js';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as firebaseLimit, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 // ========== FIREBASE INITIALIZATION ==========
 const FIREBASE_CONFIG = {
@@ -42,6 +42,15 @@ async function initFirebase() {
     firebaseAuth = getAuth(firebaseApp);
     console.log('[Background Firebase] Auth initialized:', firebaseAuth);
     
+    // Enable persistence for better auth state management
+    try {
+      await setPersistence(firebaseAuth, browserLocalPersistence);
+      console.log('[Background Firebase] Persistence enabled');
+    } catch (persistErr) {
+      console.warn('[Background Firebase] Persistence setup error:', persistErr.message);
+      // Continue even if persistence fails
+    }
+    
     // Verify Auth is actually initialized
     if (!firebaseAuth || !firebaseAuth.app) {
       throw new Error('Auth object not properly initialized - missing app reference');
@@ -49,13 +58,18 @@ async function initFirebase() {
     
     console.log('[Background Firebase] App, Firestore, and Auth initialized successfully');
     
-    onAuthStateChanged(firebaseAuth, (user) => {
-      firebaseUser = user;
-      if (user) {
-        console.log('[Background Firebase] Auth state changed - Authenticated:', user.email || user.uid);
-      } else {
-        console.log('[Background Firebase] Auth state changed - Not authenticated');
-      }
+    // Wait for auth state to be determined
+    await new Promise((resolve) => {
+      const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        firebaseUser = user;
+        if (user) {
+          console.log('[Background Firebase] Auth state changed - Authenticated:', user.email || user.uid);
+        } else {
+          console.log('[Background Firebase] Auth state changed - Not authenticated');
+        }
+        unsubscribe();
+        resolve();
+      });
     });
     
     // Don't auto-login - require explicit user login
@@ -157,8 +171,27 @@ async function syncToFirebaseHandler() {
     // Use single 'latest' backup ID - will overwrite previous backup
     const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', 'latest');
     console.log('[Background Firebase] Writing metadata backup to:', backupRef.path);
-    await setDoc(backupRef, backup, { merge: true });
-    console.log('[Background Firebase] Metadata backup written successfully');
+    console.log('[Background Firebase] Backup reference details:', {
+      collection: backupRef.parent.path,
+      docId: backupRef.id,
+      userId: user.uid,
+      userAuth: !!firebaseAuth.currentUser
+    });
+    
+    try {
+      await setDoc(backupRef, backup, { merge: true });
+      console.log('[Background Firebase] Metadata backup written successfully');
+    } catch (writeErr) {
+      console.error('[Background Firebase] Write error details:', {
+        code: writeErr.code,
+        message: writeErr.message,
+        path: backupRef.path,
+        userId: user.uid,
+        currentUser: firebaseAuth.currentUser?.uid,
+        userEmail: firebaseAuth.currentUser?.email
+      });
+      throw writeErr;
+    }
     
     // Store large data in separate subcollections
     console.log('[Background Firebase] Syncing large data to subcollections...');
