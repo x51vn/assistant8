@@ -105,39 +105,66 @@ async function ensureAuth() {
 
 async function syncToFirebaseHandler() {
   try {
-    console.log('[Background Firebase] Starting sync...');
+    console.log('[Background Firebase] Starting optimized sync...');
     const user = await ensureAuth();
     console.log('[Background Firebase] User authenticated:', user.email || user.uid);
     
     if (!user || !firebaseDb) throw new Error('Firebase not ready');
     
-    console.log('[Background Firebase] Firestore ready, reading local data...');
+    console.log('[Background Firebase] Reading local data...');
     
-    const STORAGE_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'chatHistory', 'errorList', 'runs', 'settings', 'promptTemplates', 'notes'];
+    // Data to include in metadata backup (small, frequently accessed)
+    const METADATA_KEYS = ['portfolio', 'portfolioPrompt', 'prompt', 'autoRun', 'evaluatePrevious', 'reviewPrompt', 'interval', 'settings', 'promptTemplates', 'notes', 'stockEvalPrompt', 'teaStockPrompt'];
+    
+    // Data to store separately (can grow large)
+    const SEPARATE_KEYS = {
+      chatHistory: { limit: 50 },      // Keep only last 50
+      errorList: { limit: 30 },        // Keep only last 30
+      runs: { limit: 30 }              // Keep only last 30
+    };
+    
+    const metadataKeys = await chrome.storage.local.get(METADATA_KEYS);
     const allData = {};
-    const stored = await chrome.storage.local.get(STORAGE_KEYS);
     
-    STORAGE_KEYS.forEach(key => {
-      if (stored[key] !== undefined) {
-        allData[key] = stored[key];
+    METADATA_KEYS.forEach(key => {
+      if (metadataKeys[key] !== undefined) {
+        allData[key] = metadataKeys[key];
       }
     });
     
+    // Create main backup with metadata only
     const backup = {
       version: '1.0',
       exportDate: new Date().toISOString(),
-      description: 'ChatGPT Assistant Firestore Backup',
+      description: 'ChatGPT Assistant Firestore Backup (Metadata)',
       data: allData,
       syncedAt: serverTimestamp()
     };
     
+    const backupSize = JSON.stringify(backup).length;
+    console.log('[Background Firebase] Metadata backup size:', backupSize, 'bytes (limit: 1,048,576)');
+    
+    // Validate metadata doesn't exceed limit
+    if (backupSize > 1000000) {
+      console.warn('[Background Firebase] WARNING: Metadata backup approaching size limit!');
+      // Clean up old data
+      console.log('[Background Firebase] Cleaning up old data...');
+      await cleanupOldData();
+      // Retry after cleanup
+      return await syncToFirebaseHandler();
+    }
+    
     // Use single 'latest' backup ID - will overwrite previous backup
     const backupRef = doc(firebaseDb, 'users', user.uid, 'backups', 'latest');
-    console.log('[Background Firebase] Writing backup to path:', backupRef.path);
-    console.log('[Background Firebase] Backup data size:', JSON.stringify(backup).length, 'bytes');
+    console.log('[Background Firebase] Writing metadata backup to:', backupRef.path);
     await setDoc(backupRef, backup, { merge: true });
-    console.log('[Background Firebase] Backup written successfully');
+    console.log('[Background Firebase] Metadata backup written successfully');
     
+    // Store large data in separate subcollections
+    console.log('[Background Firebase] Syncing large data to subcollections...');
+    await syncLargeDataToFirebase(user.uid, SEPARATE_KEYS);
+    
+    // Update latest backup reference
     const latestRef = doc(firebaseDb, 'users', user.uid, 'config', 'latestBackup');
     console.log('[Background Firebase] Updating latest backup reference...');
     await setDoc(latestRef, {
@@ -146,7 +173,7 @@ async function syncToFirebaseHandler() {
       itemsCount: Object.keys(allData).length
     }, { merge: true });
     
-    console.log('[Background Firebase] Sync completed:', backupRef.id);
+    console.log('[Background Firebase] Sync completed successfully');
     return { success: true, backupId: backupRef.id, message: 'Data synced to Firestore successfully!' };
   } catch (err) {
     console.error('[Background Firebase] Sync failed:', err);
@@ -158,15 +185,77 @@ async function syncToFirebaseHandler() {
       userEmail: firebaseUser?.email,
       firestoreInitialized: !!firebaseDb
     });
-    
-    let errorMessage = err.message;
-    if (err.code === 'permission-denied') {
-      errorMessage = 'Lỗi quyền truy cập Firestore.\n\nCác bước khắc phục:\n1. Kiểm tra đã đăng nhập chưa (email phải hiển thị)\n2. Deploy Firestore Rules trong Firebase Console:\n   - Vào https://console.firebase.google.com/project/myfcx51/firestore/rules\n   - Nhấn "Publish" để deploy rules\n3. Kiểm tra Email/Password auth đã được bật:\n   - Vào https://console.firebase.google.com/project/myfcx51/authentication/providers\n   - Email/Password phải được enable';
-    }
-    
-    return { success: false, error: errorMessage };
+    throw err;
   }
 }
+
+// Helper: Clean up old data from local storage (removes old chat history, errors, runs)
+async function cleanupOldData() {
+  try {
+    console.log('[Background Firebase] Starting data cleanup...');
+    
+    // Keep only last 30 items of each
+    const limits = {
+      chatHistory: 30,
+      errorList: 25,
+      runs: 20
+    };
+    
+    const data = await chrome.storage.local.get(Object.keys(limits));
+    
+    for (const [key, limit] of Object.entries(limits)) {
+      if (data[key] && Array.isArray(data[key]) && data[key].length > limit) {
+        const trimmed = data[key].slice(-limit);
+        await chrome.storage.local.set({ [key]: trimmed });
+        console.log(`[Background Firebase] Trimmed ${key} from ${data[key].length} to ${limit} items`);
+      }
+    }
+    
+    console.log('[Background Firebase] Data cleanup completed');
+  } catch (err) {
+    console.error('[Background Firebase] Cleanup error:', err);
+    // Don't throw - cleanup is optional
+  }
+}
+
+// Helper: Sync large data to separate Firestore subcollections
+async function syncLargeDataToFirebase(userId, separateKeys) {
+  try {
+    const stored = await chrome.storage.local.get(Object.keys(separateKeys));
+    
+    for (const [key, config] of Object.entries(separateKeys)) {
+      if (!stored[key]) continue;
+      
+      let data = stored[key];
+      
+      // Apply limit if data is array
+      if (Array.isArray(data) && config.limit) {
+        data = data.slice(-config.limit);
+      }
+      
+      // Store in separate collection: users/{uid}/data/{type}
+      const dataRef = doc(firebaseDb, 'users', userId, 'data', key);
+      const payload = {
+        items: data,
+        count: Array.isArray(data) ? data.length : 1,
+        syncedAt: serverTimestamp(),
+        size: JSON.stringify(data).length
+      };
+      
+      console.log(`[Background Firebase] Syncing ${key}:`, {
+        count: payload.count,
+        size: payload.size + ' bytes'
+      });
+      
+      await setDoc(dataRef, payload, { merge: true });
+    }
+  } catch (err) {
+    console.error('[Background Firebase] Error syncing large data:', err);
+    throw err;
+  }
+}
+
+// ========== END FIREBASE SYNC ==========
 
 // ========== END SSI API PROXY ==========
 const SSI_API_BASE = 'https://iboard-query.ssi.com.vn';

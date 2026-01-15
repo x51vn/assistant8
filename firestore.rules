@@ -44,6 +44,14 @@ service cloud.firestore {
         allow update: if isOwner(uid) && isValidConfig(request.resource.data);
         allow delete: if isOwner(uid);
       }
+      
+      // Data subcollection (chatHistory, errorList, runs, etc.)
+      match /data/{dataType} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && request.resource.data.size() > 0;
+        allow update: if isOwner(uid) && request.resource.data.size() > 0;
+        allow delete: if isOwner(uid);
+      }
     }
     
     // Deny all other access
