@@ -11,11 +11,9 @@ service cloud.firestore {
     }
     
     function isValidBackup(data) {
-      // Check minimum required fields exist
-      return data.keys().hasAll(['version', 'data', 'exportDate'])
-        && data.version is string
-        && data.data is map
-        && data.exportDate is string;
+      // Allow any backup structure with basic fields
+      return data.size() > 0 
+        && (data.keys().hasAny(['version', 'exportDate', 'data', 'syncedAt']));
     }
     
     function isValidConfig(data) {
@@ -48,8 +46,8 @@ service cloud.firestore {
       // Data subcollection (chatHistory, errorList, runs, etc.)
       match /data/{dataType} {
         allow read: if isOwner(uid);
-        allow create: if isOwner(uid) && request.resource.data.size() > 0;
-        allow update: if isOwner(uid) && request.resource.data.size() > 0;
+        allow create: if isOwner(uid);
+        allow update: if isOwner(uid);
         allow delete: if isOwner(uid);
       }
     }
