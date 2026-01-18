@@ -1,6 +1,8 @@
 import { byId } from './dom.js';
 import { setupNavigation } from './navigation.js';
 import { setupResults } from './results.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
 import { setupHistory } from './history.js';
 import { setupErrors } from './errors.js';
@@ -67,6 +69,7 @@ import { setupSync, setupNotes } from './sync.js';
     saveStatus: byId('saveStatus'),
     portfolioPromptInput: byId('portfolioPromptInput'),
     stockEvalPromptInput: byId('stockEvalPromptInput'),
+    contextMenuPromptInput: byId('contextMenuPromptInput'),
     exportBtn: byId('exportBtn'),
     importBtn: byId('importBtn'),
     importFileInput: byId('importFileInput'),
@@ -123,7 +126,13 @@ import { setupSync, setupNotes } from './sync.js';
   });
 
   try {
-    chrome.runtime.sendMessage({ action: 'ensure_chatgpt_open' });
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.ENSURE_CHATGPT_OPEN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    };
+    chrome.runtime.sendMessage(message);
   } catch {
     // ignore
   }

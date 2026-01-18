@@ -164,6 +164,14 @@ export function setupErrors(dom) {
   }
 
   function loadErrors() {
+    // TODO: Implement ERROR_GET handler or use storage directly
+    console.log('[Errors] loadErrors not implemented - no handler for get_errors');
+    if (errorList) {
+      errorList.innerHTML = '<p class="empty-state">Chức năng error tracking chưa được implement.</p>';
+    }
+    return;
+    
+    /* OLD CODE - needs handler
     chrome.runtime.sendMessage({ action: 'get_errors' }, (response) => {
       if (chrome.runtime.lastError || !response || response.status !== 'ok') {
         if (errorList) {
@@ -187,6 +195,7 @@ export function setupErrors(dom) {
         errorList.appendChild(itemEl);
       });
     });
+    */
   }
 
   // Event listeners
@@ -200,6 +209,12 @@ export function setupErrors(dom) {
       if (!confirm('Bạn có chắc muốn xóa toàn bộ danh sách lỗi?')) return;
       
       console.log('[Errors] Clearing all errors...');
+      // TODO: Implement ERROR_CLEAR handler
+      console.log('[Errors] Clear errors not implemented');
+      alert('Chức năng clear errors chưa được implement');
+      return;
+      
+      /* OLD CODE
       chrome.runtime.sendMessage({ action: 'clear_errors' }, (response) => {
         console.log('[Errors] Clear response:', response);
         if (chrome.runtime.lastError || !response || response.status !== 'ok') {
@@ -208,6 +223,7 @@ export function setupErrors(dom) {
         }
         loadErrors();
       });
+      */
     });
   }
 
@@ -233,6 +249,12 @@ export function setupErrors(dom) {
       retrospectiveBtn.innerHTML = '⏳ Đang phân tích...';
       
       console.log('[Errors] Sending run_retrospective message...');
+      // TODO: Implement RETROSPECTIVE handler
+      console.log('[Errors] Retrospective not implemented');
+      alert('Chức năng retrospective chưa được implement');
+      return;
+      
+      /* OLD CODE
       chrome.runtime.sendMessage({ action: 'run_retrospective' }, (response) => {
         console.log('[Errors] run_retrospective response:', response);
         if (chrome.runtime.lastError || !response || response.status !== 'ok') {
@@ -291,6 +313,7 @@ export function setupErrors(dom) {
           });
         }, 3000);
       });
+      */
     });
   }
 

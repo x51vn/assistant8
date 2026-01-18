@@ -457,6 +457,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Handle ping to check if content script is ready
+  if (request.action === 'ping') {
+    safeSendResponse({ status: 'ok', ready: true });
+    return;
+  }
+
   if (request.action === 'input_prompt') {
     const prompt = typeof request.prompt === 'string' ? request.prompt : '';
     const runId = typeof request.runId === 'string' ? request.runId : null;

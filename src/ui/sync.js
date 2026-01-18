@@ -1,4 +1,7 @@
 // Firebase sync via background script messaging
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
+
 let firebaseReady = false;
 let currentUser = null;
 
@@ -478,14 +481,27 @@ function escapeHtml(text) {
 // Send note to ChatGPT - reuses existing send_prompt action
 async function askChatGPT(noteText) {
   try {
-    // Use existing send_prompt action from results.js
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: noteText,
+        options: {
+          createNewChat: false,
+          focusTab: true
+        }
+      }
+    };
+    
     const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: 'send_prompt', prompt: noteText }, (response) => {
+      chrome.runtime.sendMessage(message, (response) => {
         resolve(response);
       });
     });
     
-    if (response?.status === 'ok') {
+    if (response && response.type !== MESSAGE_TYPES.ERROR) {
       console.log('[Notes] Sent to ChatGPT successfully');
       // Optional: show a brief success message
       const syncStatus = document.getElementById('syncStatus');

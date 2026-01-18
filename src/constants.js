@@ -1,6 +1,7 @@
 /**
  * Global Constants for ChatGPT Assistant
  * Centralized definition of all magic strings and configuration values
+ * Follows: Single Source of Truth principle
  */
 
 // ========== STORAGE KEYS ==========
@@ -14,6 +15,7 @@ export const STORAGE_KEYS = {
   RUNS: 'runs',
   CHAT_HISTORY: 'chatHistory',
   LAST_RESULT: 'lastResult',
+  LAST_RUN_ID: 'lastRunId',
 
   // Errors & Retrospective
   ERROR_LIST: 'errorList',
@@ -25,6 +27,7 @@ export const STORAGE_KEYS = {
   PROMPT_INPUT: 'promptInput',
   STOCK_EVAL_PROMPT: 'stockEvalPrompt',
   TEA_STOCK_PROMPT: 'teaStockPrompt',
+  CONTEXT_MENU_PROMPT: 'contextMenuPrompt',
 
   // Templates
   PROMPT_TEMPLATES: 'promptTemplates',

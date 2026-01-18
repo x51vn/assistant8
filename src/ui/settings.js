@@ -1,9 +1,12 @@
 import { setActivePage } from './pages.js';
 import { showStatus } from './status.js';
 import { loadSettings } from './storage.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 const STOCK_EVAL_PROMPT_KEY = 'stockEvalPrompt';
+const CONTEXT_MENU_PROMPT_KEY = 'contextMenuPrompt';
 
 export function setupSettings(dom) {
   const {
@@ -23,11 +26,13 @@ export function setupSettings(dom) {
     settingsBtn,
     portfolioPromptInput,
     stockEvalPromptInput,
+    contextMenuPromptInput,
   } = dom;
 
   // Load prompts on init
   loadPortfolioPrompt(portfolioPromptInput);
   loadStockEvalPrompt(stockEvalPromptInput);
+  loadContextMenuPrompt(contextMenuPromptInput);
 
   saveBtn?.addEventListener('click', async () => {
     const prompt = (promptInput?.value || '').trim();
@@ -47,14 +52,16 @@ export function setupSettings(dom) {
       interval: parseInt(intervalInput?.value, 10) || 5,
     };
 
-    // Save both regular settings and portfolio prompt in one go
+    // Save both regular settings and all prompts in one go
     const stockEvalPrompt = (stockEvalPromptInput?.value || '').trim();
+    const contextMenuPrompt = (contextMenuPromptInput?.value || '').trim();
     await chrome.storage.local.set(settings);
     await chrome.storage.local.set({ 
       [PORTFOLIO_PROMPT_KEY]: portfolioPrompt,
-      [STOCK_EVAL_PROMPT_KEY]: stockEvalPrompt
+      [STOCK_EVAL_PROMPT_KEY]: stockEvalPrompt,
+      [CONTEXT_MENU_PROMPT_KEY]: contextMenuPrompt
     });
-    console.log('[Settings] All settings saved including portfolio and stock evaluation prompts');
+    console.log('[Settings] All settings saved including portfolio, stock evaluation, and context menu prompts');
     showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
   });
 
@@ -78,12 +85,26 @@ export function setupSettings(dom) {
 
     showStatus(saveStatus, 'Đang gửi prompt...', 'info');
 
-    chrome.runtime.sendMessage({ action: 'send_prompt', prompt }, (response) => {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: prompt,
+        options: {
+          createNewChat: false,
+          focusTab: true
+        }
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
         showStatus(saveStatus, `Lỗi: ${chrome.runtime.lastError.message}`, 'error');
         return;
       }
-      if (response && response.status === 'ok') {
+      if (response && response.type !== MESSAGE_TYPES.ERROR) {
         showStatus(saveStatus, 'Prompt đã gửi!', 'success');
       } else {
         showStatus(saveStatus, 'Không gửi được prompt!', 'error');
@@ -104,4 +125,10 @@ async function loadStockEvalPrompt(stockEvalPromptInput) {
   if (!stockEvalPromptInput) return;
   const stored = await chrome.storage.local.get([STOCK_EVAL_PROMPT_KEY]);
   stockEvalPromptInput.value = stored[STOCK_EVAL_PROMPT_KEY] || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+}
+
+async function loadContextMenuPrompt(contextMenuPromptInput) {
+  if (!contextMenuPromptInput) return;
+  const stored = await chrome.storage.local.get([CONTEXT_MENU_PROMPT_KEY]);
+  contextMenuPromptInput.value = stored[CONTEXT_MENU_PROMPT_KEY] || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
 }

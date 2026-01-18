@@ -72,6 +72,14 @@ export function setupHistory(dom) {
 
   function loadHistory() {
     console.log('[History] Loading history...');
+    // TODO: Implement HISTORY_GET handler or use storage directly
+    console.log('[History] Chat history not implemented - no handler');
+    if (historyList) {
+      historyList.innerHTML = '<p class="empty-state">Chức năng lịch sử chat chưa được implement.</p>';
+    }
+    return;
+    
+    /* OLD CODE - needs handler
     chrome.runtime.sendMessage({ action: 'get_chat_history' }, (response) => {
       console.log('[History] get_chat_history response:', { count: response?.history?.length || 0 });
       if (chrome.runtime.lastError || !response || response.status !== 'ok') {
@@ -98,6 +106,7 @@ export function setupHistory(dom) {
       
       console.log('[History] Rendered', history.length, 'history items');
     });
+    */
   }
 
   // Load history when switching to history page
@@ -119,6 +128,12 @@ export function setupHistory(dom) {
       if (!confirm('Bạn có chắc muốn xóa toàn bộ lịch sử chat?')) return;
       
       console.log('[History] Clearing all history...');
+      // TODO: Implement HISTORY_CLEAR handler
+      console.log('[History] Clear history not implemented');
+      alert('Chức năng clear history chưa được implement');
+      return;
+      
+      /* OLD CODE
       chrome.runtime.sendMessage({ action: 'clear_chat_history' }, (response) => {
         console.log('[History] Clear response:', response);
         if (chrome.runtime.lastError || !response || response.status !== 'ok') {
@@ -127,6 +142,7 @@ export function setupHistory(dom) {
         }
         loadHistory();
       });
+      */
     });
   }
 

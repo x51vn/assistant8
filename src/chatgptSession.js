@@ -1,28 +1,56 @@
 // ChatGPT Session Management Module
 // Provides specialized functions for managing ChatGPT interactions
+// Pure business logic - no direct I/O except Chrome APIs
+
+import { 
+  ERROR_CODES, 
+  createSuccessResponse, 
+  createErrorResponse, 
+  exceptionToErrorResponse 
+} from './types.js';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('ChatGPTSession');
 
 /**
  * Create a new chat session
  * @param {number} tabId - The tab ID where ChatGPT is open
- * @returns {Promise<{success: boolean, chatId?: string, chatUrl?: string, error?: string}>}
+ * @returns {Promise<ApiResponse>}
  */
 export async function createNewSession(tabId) {
+  const correlationId = logger.startOperation('createNewSession', { tabId });
+  
   try {
+    if (!tabId || tabId < 0) {
+      return createErrorResponse(
+        ERROR_CODES.INVALID_TAB_ID,
+        'Invalid tab ID provided',
+        'createNewSession'
+      );
+    }
+
     const response = await chrome.tabs.sendMessage(tabId, {
       action: 'create_new_session'
     });
     
     if (response && response.success) {
-      return {
-        success: true,
+      const data = {
         chatId: response.chatId || null,
         chatUrl: response.chatUrl || null
       };
+      logger.endOperation('createNewSession', correlationId, true);
+      return createSuccessResponse(data);
     }
     
-    return { success: false, error: 'Failed to create new session' };
+    logger.endOperation('createNewSession', correlationId, false, 'No success response');
+    return createErrorResponse(
+      ERROR_CODES.SESSION_CREATE_FAILED,
+      'Failed to create new session',
+      'createNewSession'
+    );
   } catch (error) {
-    return { success: false, error: String(error?.message || error) };
+    logger.endOperation('createNewSession', correlationId, false, error);
+    return exceptionToErrorResponse(error, 'createNewSession');
   }
 }
 
@@ -30,12 +58,29 @@ export async function createNewSession(tabId) {
  * Send input to ChatGPT
  * @param {number} tabId - The tab ID where ChatGPT is open
  * @param {string} prompt - The prompt to send
- * @param {Object} options - Additional options
- * @param {boolean} options.reviewOnly - If true, only fill prompt without sending
- * @returns {Promise<{success: boolean, chatId?: string, chatUrl?: string, error?: string}>}
+ * @param {SendInputOptions} [options={}] - Additional options
+ * @returns {Promise<ApiResponse>}
  */
 export async function sendInput(tabId, prompt, options = {}) {
+  const correlationId = logger.startOperation('sendInput', { tabId, promptLength: prompt?.length, options });
+  
   try {
+    if (!tabId || tabId < 0) {
+      return createErrorResponse(
+        ERROR_CODES.INVALID_TAB_ID,
+        'Invalid tab ID provided',
+        'sendInput'
+      );
+    }
+
+    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+      return createErrorResponse(
+        ERROR_CODES.EMPTY_PROMPT,
+        'Prompt cannot be empty',
+        'sendInput'
+      );
+    }
+
     const response = await chrome.tabs.sendMessage(tabId, {
       action: 'send_input',
       prompt: prompt,
@@ -45,27 +90,46 @@ export async function sendInput(tabId, prompt, options = {}) {
     });
     
     if (response && (response.status === 'sent' || response.status === 'accepted' || response.status === 'filled')) {
-      return {
-        success: true,
+      const data = {
         chatId: response.chatId || null,
-        chatUrl: response.chatUrl || null
+        chatUrl: response.chatUrl || null,
+        status: response.status
       };
+      logger.endOperation('sendInput', correlationId, true);
+      return createSuccessResponse(data);
     }
     
-    return { success: false, error: 'Failed to send input' };
+    logger.endOperation('sendInput', correlationId, false, 'Invalid response status');
+    return createErrorResponse(
+      ERROR_CODES.INPUT_SEND_FAILED,
+      'Failed to send input to ChatGPT',
+      'sendInput',
+      { responseStatus: response?.status }
+    );
   } catch (error) {
-    return { success: false, error: String(error?.message || error) };
+    logger.endOperation('sendInput', correlationId, false, error);
+    return exceptionToErrorResponse(error, 'sendInput');
   }
 }
 
 /**
  * Get the latest output/response from ChatGPT
  * @param {number} tabId - The tab ID where ChatGPT is open
- * @param {Object} options - Options for getting output
- * @returns {Promise<{success: boolean, result?: string, chatId?: string, chatUrl?: string, status?: string, error?: string}>}
+ * @param {GetOutputOptions} [options={}] - Options for getting output
+ * @returns {Promise<ApiResponse>}
  */
 export async function getOutput(tabId, options = {}) {
+  const correlationId = logger.startOperation('getOutput', { tabId, options });
+  
   try {
+    if (!tabId || tabId < 0) {
+      return createErrorResponse(
+        ERROR_CODES.INVALID_TAB_ID,
+        'Invalid tab ID provided',
+        'getOutput'
+      );
+    }
+
     const response = await chrome.tabs.sendMessage(tabId, {
       action: 'get_output',
       wait: options.wait !== false,
@@ -74,23 +138,27 @@ export async function getOutput(tabId, options = {}) {
     });
     
     if (response && response.result) {
-      return {
-        success: true,
+      const data = {
         result: response.result,
         chatId: response.chatId || null,
         chatUrl: response.chatUrl || null,
         assistantMessageId: response.assistantMessageId || null,
         status: response.status || 'completed'
       };
+      logger.endOperation('getOutput', correlationId, true);
+      return createSuccessResponse(data);
     }
     
-    return {
-      success: false,
-      status: response?.status || 'no_result',
-      error: 'No result available'
-    };
+    logger.endOperation('getOutput', correlationId, false, 'No result in response');
+    return createErrorResponse(
+      ERROR_CODES.OUTPUT_FETCH_FAILED,
+      'No result available from ChatGPT',
+      'getOutput',
+      { responseStatus: response?.status }
+    );
   } catch (error) {
-    return { success: false, error: String(error?.message || error) };
+    logger.endOperation('getOutput', correlationId, false, error);
+    return exceptionToErrorResponse(error, 'getOutput');
   }
 }
 
@@ -229,4 +297,133 @@ export async function clearConversation(tabId) {
   } catch (error) {
     return { success: false, error: String(error?.message || error) };
   }
+}
+
+/**
+ * Find or create ChatGPT tab and ensure it's ready
+ * @param {Object} [options={}] - Options for tab management
+ * @param {boolean} [options.createIfNeeded=true] - Create new tab if not found
+ * @param {boolean} [options.focusTab=true] - Focus the tab
+ * @returns {Promise<TabResult>}
+ */
+export async function ensureChatGPTTab(options = {}) {
+  const correlationId = logger.startOperation('ensureChatGPTTab', options);
+  const createIfNeeded = options.createIfNeeded !== false;
+  const focusTab = options.focusTab !== false;
+  
+  try {
+    // Try to find existing ChatGPT tab
+    const tabs = await chrome.tabs.query({});
+    let chatTab = tabs.find(t => t.url && t.url.includes('chatgpt.com'));
+    
+    if (chatTab) {
+      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id });
+      
+      // Focus existing tab if requested
+      if (focusTab) {
+        await chrome.tabs.update(chatTab.id, { active: true });
+      }
+      
+      // Wait for content script to be ready
+      const ready = await waitForContentScript(chatTab.id);
+      if (ready) {
+        logger.endOperation('ensureChatGPTTab', correlationId, true);
+        return { tabId: chatTab.id, isNew: false };
+      }
+    }
+    
+    // Create new tab if needed
+    if (!chatTab && createIfNeeded) {
+      logger.info('Creating new ChatGPT tab');
+      chatTab = await chrome.tabs.create({ 
+        url: 'https://chatgpt.com/', 
+        active: focusTab 
+      });
+      
+      // Wait for page to load
+      await new Promise((resolve) => {
+        const listener = (tabId, changeInfo) => {
+          if (tabId === chatTab.id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        
+        // Timeout after 30 seconds
+        setTimeout(resolve, 30000);
+      });
+      
+      // Additional wait for React to load
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Wait for content script to be ready
+      const ready = await waitForContentScript(chatTab.id);
+      if (ready) {
+        logger.endOperation('ensureChatGPTTab', correlationId, true);
+        return { tabId: chatTab.id, isNew: true };
+      } else {
+        logger.endOperation('ensureChatGPTTab', correlationId, false, 'Content script not ready');
+        return { 
+          tabId: chatTab.id, 
+          isNew: true, 
+          error: createErrorResponse(
+            ERROR_CODES.CONTENT_SCRIPT_NOT_READY,
+            'Content script not ready after waiting',
+            'ensureChatGPTTab'
+          ).error
+        };
+      }
+    }
+    
+    logger.endOperation('ensureChatGPTTab', correlationId, false, 'No tab and createIfNeeded=false');
+    return { 
+      tabId: -1, 
+      isNew: false, 
+      error: createErrorResponse(
+        ERROR_CODES.TAB_NOT_FOUND,
+        'No ChatGPT tab found',
+        'ensureChatGPTTab'
+      ).error
+    };
+  } catch (error) {
+    logger.endOperation('ensureChatGPTTab', correlationId, false, error);
+    return {
+      tabId: -1,
+      isNew: false,
+      error: exceptionToErrorResponse(error, 'ensureChatGPTTab').error
+    };
+  }
+}
+
+/**
+ * Wait for content script to be ready with retry logic
+ * @param {number} tabId - The tab ID to check
+ * @param {WaitForContentScriptOptions} [options={}] - Options
+ * @returns {Promise<boolean>}
+ */
+export async function waitForContentScript(tabId, options = {}) {
+  const maxRetries = options.maxRetries || 10;
+  const retryDelay = options.retryDelay || 500;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Ping content script to check if it's ready
+      await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+      logger.debug('Content script ready', { tabId, attempt: i + 1 });
+      return true;
+    } catch (error) {
+      logger.debug('Content script not ready, retrying', { 
+        tabId, 
+        attempt: i + 1, 
+        maxRetries 
+      });
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+  }
+  
+  logger.error('Content script not ready after max retries', { tabId, maxRetries });
+  return false;
 }

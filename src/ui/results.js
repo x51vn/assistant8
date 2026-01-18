@@ -1,3 +1,6 @@
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
+
 export function setupResults(dom) {
   const { runBtn, stopBtn, refreshBtn } = dom;
   let currentPollInterval = null;
@@ -22,14 +25,28 @@ export function setupResults(dom) {
     if (runBtn) runBtn.style.display = 'none';
     if (stopBtn) stopBtn.style.display = '';
 
-    chrome.runtime.sendMessage({ action: 'send_prompt', prompt }, (response) => {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: prompt,
+        options: {
+          createNewChat: false,
+          focusTab: true
+        }
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
       console.log('[Results] Send prompt response:', response);
       if (chrome.runtime.lastError) {
         stopPolling();
         console.error('[Results] Error:', chrome.runtime.lastError.message);
         return;
       }
-      if (!response || response.status !== 'ok') {
+      if (!response || response.type === MESSAGE_TYPES.ERROR) {
         stopPolling();
         console.error('[Results] Failed to send prompt');
         return;
@@ -42,7 +59,12 @@ export function setupResults(dom) {
         return;
       }
       
-      // Keep polling for result every 3 seconds (no timeout - wait indefinitely)
+      // TODO: Implement proper result polling using CHATGPT_GET_OUTPUT
+      // For now, just stop polling after prompt is sent
+      console.log('[Results] Prompt sent, result polling not yet implemented');
+      stopPolling();
+      
+      /* OLD POLLING CODE - NEEDS MIGRATION
       const runId = response.runId;
       console.log('[Results] Starting poll for runId:', runId);
       let pollCount = 0;
@@ -51,6 +73,7 @@ export function setupResults(dom) {
         pollCount++;
         console.log('[Results] Poll attempt', pollCount);
         
+        // Need to implement proper message format
         chrome.runtime.sendMessage({ action: 'get_result' }, (pollResponse) => {
           console.log('[Results] Poll response:', { hasResult: !!pollResponse?.result, source: pollResponse?.source, pollCount });
           if (chrome.runtime.lastError) {
@@ -68,6 +91,7 @@ export function setupResults(dom) {
           }
         });
       }, 3000);
+      */
     });
   });
 
@@ -77,6 +101,9 @@ export function setupResults(dom) {
 
   refreshBtn?.addEventListener('click', () => {
     console.log('[Results] Refresh button clicked');
+    // TODO: Implement using CHATGPT_GET_OUTPUT or storage
+    console.log('[Results] Refresh not yet implemented with new message schema');
+    /*
     chrome.runtime.sendMessage({ action: 'get_result' }, (response) => {
       console.log('[Results] Get result response:', response);
       if (chrome.runtime.lastError) {
@@ -85,6 +112,7 @@ export function setupResults(dom) {
       }
       console.log('[Results] Result available');
     });
+    */
   });
 
   return { };

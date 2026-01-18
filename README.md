@@ -1,15 +1,47 @@
 # ChatGPT Assistant Extension
 
-## Version 2.0 - Cập nhật mới! 🎉
+## 🎉 Version 2.0 - MV3 Architecture
 
-**Tính năng mới**:
+**Major Update (Jan 2026)**:
+- 🏗️ **MV3 Architecture**: Complete refactoring to Chrome Extension Manifest V3 standards
+- 📦 **34% Smaller Bundle**: Optimized code splitting (34.58 kB → 22.78 kB)
+- 🔧 **Modular Handlers**: Separated concerns with message-based architecture
+- 📝 **Context Menu**: Right-click to analyze content from any webpage
+- 🔥 **Firebase Sync**: Cloud backup and restore your data
+- 📊 **Portfolio Management**: Track and evaluate stock portfolio
+- 🧪 **Better Testing**: Platform adapters for easy unit testing
+
+**Previous Features**:
 - 📝 **Lịch sử Chat**: Lưu và xem lại 100 chat gần nhất
 - 🐛 **Quản lý Lỗi**: Theo dõi lỗi với CRUD đầy đủ (Thêm/Sửa/Xóa/Đọc)
 - ⚡ **Giảm Lag**: Cache chat-id và response để truy cập nhanh
 - 🎨 **UI cải tiến**: 4 tabs hiện đại với modal và animations
 
-👉 Xem chi tiết: [docs/UPDATE_v2.0.md](docs/UPDATE_v2.0.md)  
-👉 Hướng dẫn: [docs/USER_GUIDE_vi.md](docs/USER_GUIDE_vi.md)
+## 📚 Documentation
+
+### Getting Started
+- 🚀 [Quick Start Guide](docs/MV3_QUICK_START.md) - Start here!
+- 📖 [User Guide (Vietnamese)](docs/USER_GUIDE_vi.md) - Hướng dẫn sử dụng
+- 💾 [Installation Guide](docs/INSTALL.md) - Setup instructions
+
+### Architecture & Development
+- 🏗️ [MV3 Architecture Guide](docs/MV3_ARCHITECTURE_GUIDE.md) - Complete architecture documentation
+- 📋 [Migration Status](docs/MV3_MIGRATION_STATUS.md) - Refactoring progress
+- ✅ [Migration Complete Summary](MIGRATION_COMPLETE.md) - What changed
+- 🔄 [Refactoring Summary](docs/REFACTORING_SUMMARY.md) - Code quality improvements
+- 📐 [Architecture Overview](docs/ARCHITECTURE.md) - System design
+
+### Features
+- 🎯 [Features Documentation](docs/FEATURES.md) - All features explained
+- 🆕 [New Features 2026](docs/FEATURES_NEW_2026.md) - Latest updates
+- 📝 [Context Menu Feature](docs/CONTEXT_MENU_FEATURE.md) - Right-click analysis
+- 🔥 [Firebase Integration](docs/FIRESTORE_USAGE.md) - Cloud sync guide
+
+### Reference
+- 📖 [API Documentation](docs/API.md) - Internal APIs
+- 📋 [Examples](docs/EXAMPLES.md) - Code examples
+- 🔍 [Changelog](docs/CHANGELOG.md) - Version history
+- ✅ [Testing Checklist](docs/TESTING_CHECKLIST.md) - QA guide
 
 ## Build (Vite)
 

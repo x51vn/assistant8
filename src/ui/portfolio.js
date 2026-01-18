@@ -3,6 +3,8 @@ const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 
 import { calculateStockPL, calculatePortfolioTotalPL, formatCurrency, formatPercent, getPLClass } from './portfolioPL.js';
 import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 
 // Global realtime client
 let realtimeClient = null;
@@ -71,14 +73,28 @@ export async function initPortfolio({
     }
 
     try {
-      // Send prompt to ChatGPT via background
+      // Send prompt to ChatGPT via background using proper message format
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.SEND_PROMPT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          prompt: prompt,
+          options: {
+            createNewChat: true,
+            focusTab: true
+          }
+        }
+      };
+      
       const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'send_prompt', prompt }, (response) => {
+        chrome.runtime.sendMessage(message, (response) => {
           resolve(response);
         });
       });
 
-      if (response?.status === 'ok') {
+      if (response && response.type !== MESSAGE_TYPES.ERROR) {
         console.log('[Portfolio] Tea stock prompt sent to ChatGPT');
       } else {
         console.error('[Portfolio] Failed to send tea stock prompt:', response);
@@ -470,23 +486,34 @@ export async function evaluatePortfolio(prompt) {
 
   console.log('[Portfolio] Evaluate request:', fullPrompt);
 
-  // Send to background to handle ChatGPT input (same as Run button)
+  // Send to background using proper message format
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({
-      action: 'send_prompt',
-      prompt: fullPrompt
-    }, (response) => {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: fullPrompt,
+        options: {
+          createNewChat: true,
+          focusTab: true
+        }
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
         console.error('[Portfolio] Error:', chrome.runtime.lastError.message);
         resolve(false);
         return;
       }
-      if (!response || response.status !== 'ok') {
+      if (!response || response.type === MESSAGE_TYPES.ERROR) {
         console.error('[Portfolio] Failed to send prompt:', response?.error);
         resolve(false);
         return;
       }
-      console.log('[Portfolio] Sent to ChatGPT successfully, runId:', response.runId);
+      console.log('[Portfolio] Sent to ChatGPT successfully');
       resolve(true);
     });
   });
@@ -675,12 +702,26 @@ async function evaluateStock(stockCode) {
     
     console.log('[Portfolio] Sending stock evaluation:', { stockCode, prompt: fullPrompt });
     
-    chrome.runtime.sendMessage({ action: 'send_prompt', prompt: fullPrompt }, (response) => {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: fullPrompt,
+        options: {
+          createNewChat: true,
+          focusTab: true
+        }
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
         alert('Lỗi: ' + chrome.runtime.lastError.message);
         return;
       }
-      if (response && response.status === 'ok') {
+      if (response && response.type !== MESSAGE_TYPES.ERROR) {
         console.log('[Portfolio] Stock evaluation sent successfully');
       } else {
         alert('Không thể gửi đánh giá!');

@@ -1,0 +1,256 @@
+/**
+ * @fileoverview Background Service Worker Entry Point
+ * 
+ * MV3 CRITICAL ARCHITECTURE:
+ * 1. All event listeners MUST be registered SYNCHRONOUSLY at top-level
+ * 2. NO async initialization before listener registration
+ * 3. Service Worker can be terminated at any time - design for short-lived execution
+ * 4. Persist ALL important state in chrome.storage, NOT in-memory
+ * 
+ * Event-Driven Philosophy:
+ * - Background SW is NOT always running
+ * - It wakes up on events, handles them, then may be terminated
+ * - Think "serverless function", not "long-running server"
+ */
+
+import { createLogger } from '../logger.js';
+import { onMessage } from '../platform/messaging.js';
+import { route } from './messageRouter.js';
+import './handlers/index.js'; // This will register all handlers
+
+// CRITICAL: Static imports to avoid Vite preload helper injection
+// Dynamic imports cause Vite to inject document.* code which fails in Service Worker
+import * as contextMenuModule from './handlers/contextMenu.js';
+import * as alarmsModule from './handlers/alarms.js';
+
+const logger = createLogger('Background');
+
+// ========== CRITICAL: TOP-LEVEL LISTENER REGISTRATION ==========
+// These MUST be at module top-level, not inside async functions!
+
+logger.info('Background service worker starting...');
+
+/**
+ * Message listener - handles ALL inter-component communication
+ * Registered synchronously at module load
+ */
+const unsubscribeMessage = onMessage(async (message, sender) => {
+  // Route to appropriate handler
+  return await route(message, sender);
+});
+
+/**
+ * Installation handler - runs once when extension is installed/updated
+ */
+chrome.runtime.onInstalled.addListener((details) => {
+  logger.info('Extension installed/updated', { 
+    reason: details.reason,
+    previousVersion: details.previousVersion 
+  });
+  
+  // Perform one-time setup
+  if (details.reason === 'install') {
+    onInstall();
+  } else if (details.reason === 'update') {
+    onUpdate(details.previousVersion);
+  }
+});
+
+/**
+ * Startup handler - runs when browser starts (if extension was enabled)
+ */
+chrome.runtime.onStartup.addListener(() => {
+  logger.info('Browser started, service worker initialized');
+  onStartup();
+});
+
+/**
+ * Action (toolbar icon) click handler
+ */
+chrome.action.onClicked.addListener(async (tab) => {
+  logger.info('Extension icon clicked', { tabId: tab?.id });
+  
+  try {
+    // Open side panel
+    if (chrome.sidePanel) {
+      await chrome.sidePanel.setOptions({ 
+        tabId: tab.id, 
+        path: 'sidepanel.html', 
+        enabled: true 
+      });
+      await chrome.sidePanel.open({ tabId: tab.id });
+    }
+  } catch (error) {
+    logger.error('Failed to open side panel', { error });
+  }
+});
+
+/**
+ * Context menu click handler
+ */
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  logger.info('Context menu clicked', { 
+    menuItemId: info.menuItemId, 
+    tabId: tab?.id 
+  });
+  
+  // Delegate to feature handler (using static import to avoid Vite preload helper)
+  try {
+    contextMenuModule.handleContextMenuClick(info, tab);
+  } catch (error) {
+    logger.error('Context menu handler failed', { error });
+  }
+});
+
+/**
+ * Alarm handler - for periodic tasks
+ */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  logger.info('Alarm triggered', { name: alarm.name });
+  
+  // Delegate to feature handler (using static import to avoid Vite preload helper)
+  try {
+    alarmsModule.handleAlarm(alarm);
+  } catch (error) {
+    logger.error('Alarm handler failed', { error });
+  }
+});
+
+// ========== INITIALIZATION HANDLERS (can be async) ==========
+
+/**
+ * Handle first-time installation
+ * This can be async since it runs AFTER listeners are registered
+ */
+async function onInstall() {
+  logger.info('Performing first-time setup...');
+  
+  try {
+    // Create context menu
+    await createContextMenus();
+    
+    // Setup periodic alarms
+    await setupAlarms();
+    
+    // Set default settings
+    await chrome.storage.local.set({
+      settings: {
+        autoRun: false,
+        evaluatePrevious: false,
+        reviewPrompt: false,
+        realtimeEnabled: false,
+        interval: 5
+      },
+      portfolio: [],
+      notes: []
+    });
+    
+    logger.info('First-time setup completed');
+  } catch (error) {
+    logger.error('First-time setup failed', { error });
+  }
+}
+
+/**
+ * Handle extension update
+ */
+async function onUpdate(previousVersion) {
+  logger.info('Performing update tasks...', { previousVersion });
+  
+  try {
+    // Recreate context menus (in case they changed)
+    await createContextMenus();
+    
+    // Perform any data migration if needed
+    // await migrateData(previousVersion);
+    
+    logger.info('Update tasks completed');
+  } catch (error) {
+    logger.error('Update tasks failed', { error });
+  }
+}
+
+/**
+ * Handle browser startup
+ */
+async function onStartup() {
+  try {
+    // Recreate context menus (they don't persist across browser restarts)
+    await createContextMenus();
+    
+    // Setup periodic alarms
+    await setupAlarms();
+    
+    // Check if user is authenticated for Firebase
+    // Auto-sync will be triggered by Firebase auth state listener
+    
+    logger.info('Startup tasks completed');
+  } catch (error) {
+    logger.error('Startup tasks failed', { error });
+  }
+}
+
+/**
+ * Setup periodic alarms
+ * - CHECK: Portfolio price check (5 minutes)
+ * - AUTORUN: Auto-run evaluation (configurable interval)
+ */
+async function setupAlarms() {
+  try {
+    // Clear existing alarms
+    await chrome.alarms.clearAll();
+    
+    // CHECK alarm - portfolio price updates
+    chrome.alarms.create('CHECK', { periodInMinutes: 5 });
+    
+    // AUTORUN alarm - conditional based on settings
+    const result = await chrome.storage.local.get(['settings']);
+    const settings = result.settings || {};
+    
+    if (settings.autoRun && settings.interval > 0) {
+      chrome.alarms.create('AUTORUN', { periodInMinutes: settings.interval });
+      logger.info('AUTORUN alarm created', { interval: settings.interval });
+    }
+    
+    logger.info('Alarms setup completed');
+  } catch (error) {
+    logger.error('Alarm setup failed', { error });
+  }
+}
+
+/**
+ * Create context menus
+ * Idempotent - safe to call multiple times
+ */
+async function createContextMenus() {
+  try {
+    // Remove all existing menus first
+    await chrome.contextMenus.removeAll();
+    
+    // Create new menu
+    chrome.contextMenus.create({
+      id: 'chatgpt-assistant-analyze',
+      title: 'ChatGPT Assistant - Phân tích',
+      contexts: ['selection', 'page']
+    });
+    
+    logger.info('Context menus created');
+  } catch (error) {
+    // Ignore errors (menu might already exist)
+    logger.debug('Context menu creation note', { error: error?.message });
+  }
+}
+
+// ========== SERVICE WORKER LIFECYCLE LOGGING ==========
+
+/**
+ * Log when SW is about to be suspended (for debugging)
+ * This is NOT reliable - SW can be terminated without warning
+ */
+self.addEventListener('beforeunload', () => {
+  logger.info('Service worker suspending...');
+});
+
+logger.info('Background service worker initialized successfully', {
+  timestamp: new Date().toISOString()
+});

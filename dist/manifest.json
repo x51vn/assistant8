@@ -13,7 +13,9 @@
     "scripting",
     "alarms",
     "sidePanel",
-    "identity"
+    "identity",
+    "contextMenus",
+    "activeTab"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
@@ -40,8 +42,7 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
-      "all_frames": false,
-      "type": "module"
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [

@@ -53,18 +53,25 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: {
-        background: path.resolve(__dirname, 'src/background.js'),
+        background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
         ui: path.resolve(__dirname, 'src/ui/index.js'),
       },
       output: {
         entryFileNames: '[name].js',
         chunkFileNames: '[name]-[hash].js',
-        manualChunks: {
-          firebase: ['firebase/app', 'firebase/firestore', 'firebase/auth'],
+        format: 'es',
+        // manualChunks to keep Firebase separate but bundle ALL background code
+        manualChunks: (id) => {
+          // Only split Firebase for ui/content (node_modules)
+          if (id.includes('node_modules') && id.includes('firebase')) {
+            return 'firebase';
+          }
+          // Everything else (including all background handlers) stays in their entry
+          return undefined;
         },
       },
     },
