@@ -21,6 +21,19 @@ export function setupResults(dom) {
     const promptStr = typeof prompt === 'string' ? prompt : String(prompt);
     console.log('[Results] Prompt to send:', promptStr.substring(0, 100) + '...');
     
+    // Save to history immediately with pending status
+    const historyKey = `conversation_${Date.now()}`;
+    await chrome.storage.local.set({
+      [historyKey]: {
+        prompt: promptStr,
+        result: '[Đang chờ ChatGPT trả lời...]',
+        timestamp: Date.now(),
+        chatUrl: '',
+        pending: true
+      }
+    });
+    console.log('[Results] Saved pending conversation:', historyKey);
+    
     // Show stop button, hide run button
     if (runBtn) runBtn.style.display = 'none';
     if (stopBtn) stopBtn.style.display = '';
@@ -62,7 +75,7 @@ export function setupResults(dom) {
       // Start polling for ChatGPT result
       console.log('[Results] Starting result polling...');
       let pollCount = 0;
-      const maxPolls = 60; // 3 minutes max
+      const maxPolls = 120; // 10 minutes max (120 x 5s)
       
       currentPollInterval = setInterval(async () => {
         pollCount++;
@@ -104,19 +117,41 @@ export function setupResults(dom) {
             if (output) {
               console.log('[Results] Got result! Length:', output.length);
               
-              // Save to history (async operation wrapped in IIFE)
+              // Update history with actual response (async operation wrapped in IIFE)
               (async () => {
-                const historyKey = `conversation_${Date.now()}`;
-                await chrome.storage.local.set({
-                  [historyKey]: {
-                    prompt: promptStr,
-                    result: output,
-                    timestamp: Date.now(),
-                    chatUrl: chatUrl
-                  }
-                });
+                // Find the pending conversation and update it
+                const allData = await chrome.storage.local.get(null);
+                const pendingKey = Object.keys(allData).find(k => 
+                  k.startsWith('conversation_') && 
+                  allData[k].pending === true &&
+                  allData[k].prompt === promptStr
+                );
                 
-                console.log('[Results] Saved to history:', historyKey);
+                if (pendingKey) {
+                  // Update existing pending conversation
+                  await chrome.storage.local.set({
+                    [pendingKey]: {
+                      prompt: promptStr,
+                      result: output,
+                      timestamp: allData[pendingKey].timestamp,
+                      chatUrl: chatUrl,
+                      pending: false
+                    }
+                  });
+                  console.log('[Results] Updated conversation in history:', pendingKey);
+                } else {
+                  // Fallback: create new entry if pending not found
+                  const historyKey = `conversation_${Date.now()}`;
+                  await chrome.storage.local.set({
+                    [historyKey]: {
+                      prompt: promptStr,
+                      result: output,
+                      timestamp: Date.now(),
+                      chatUrl: chatUrl
+                    }
+                  });
+                  console.log('[Results] Saved new conversation to history:', historyKey);
+                }
               })().catch(err => console.error('[Results] Failed to save history:', err));
               
               // Display the result
@@ -132,7 +167,7 @@ export function setupResults(dom) {
             stopPolling();
           }
         });
-      }, 3000); // Poll every 3 seconds
+      }, 5000); // Poll every 5 seconds
     });
   });
 
