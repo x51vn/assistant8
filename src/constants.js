@@ -59,12 +59,21 @@ export const ALARMS = {
 };
 
 // ========== TIMEOUTS ==========
+/**
+ * Timeout values in milliseconds
+ * @const {Object}
+ */
 export const TIMEOUTS = {
-  EDITOR_FIND: 25000, // ms
-  GET_RESULT: 15 * 60 * 1000, // 15 minutes
-  SEND_TIMEOUT: 30000, // ms
-  RESPONSE_STABLE: 1500, // ms
-  API_CALL: 10000, // ms
+  /** Maximum time to wait for editor element to appear */
+  EDITOR_FIND: 25000,
+  /** Maximum time to wait for ChatGPT response (15 minutes) */
+  GET_RESULT: 15 * 60 * 1000,
+  /** Timeout for sending prompt to ChatGPT */
+  SEND_TIMEOUT: 30000,
+  /** Time to wait for response to stabilize before considering complete */
+  RESPONSE_STABLE: 1500,
+  /** Generic API call timeout */
+  API_CALL: 10000,
 };
 
 // ========== DEFAULTS ==========

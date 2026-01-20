@@ -47,7 +47,10 @@ export function createLogger(module) {
      */
     debug(message, data = {}) {
       const logData = formatMessage(LOG_LEVELS.DEBUG, message, data);
-      console.debug(`[${module}]`, message, data);
+      const dataStr = Object.keys(data).length > 0 
+        ? ' ' + Object.entries(data).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+        : '';
+      console.debug(`[${module}]`, message + dataStr);
     },
 
     /**
@@ -57,7 +60,10 @@ export function createLogger(module) {
      */
     info(message, data = {}) {
       const logData = formatMessage(LOG_LEVELS.INFO, message, data);
-      console.log(`[${module}]`, message, data);
+      const dataStr = Object.keys(data).length > 0 
+        ? ' ' + Object.entries(data).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+        : '';
+      console.log(`[${module}]`, message + dataStr);
     },
 
     /**
@@ -67,46 +73,65 @@ export function createLogger(module) {
      */
     warn(message, data = {}) {
       const logData = formatMessage(LOG_LEVELS.WARN, message, data);
-      console.warn(`[${module}]`, message, data);
+      const dataStr = Object.keys(data).length > 0 
+        ? ' ' + Object.entries(data).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+        : '';
+      console.warn(`[${module}]`, message + dataStr);
     },
 
     /**
      * Log error message
      * @param {string} message - Log message
-     * @param {Error|Object} [error] - Error object or additional data
+     * @param {Error|Object} [data] - Error object or additional data
      */
-    error(message, error = null) {
-      const data = error instanceof Error 
-        ? { error: error.message, stack: error.stack }
-        : error || {};
+    error(message, data = {}) {
       const logData = formatMessage(LOG_LEVELS.ERROR, message, data);
-      console.error(`[${module}]`, message, data);
+      const dataStr = Object.keys(data).length > 0 
+        ? ' ' + Object.entries(data).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+        : '';
+      console.error(`[${module}]`, message + dataStr);
     },
 
     /**
      * Log operation start
      * @param {string} operation - Operation name
-     * @param {Object} [params] - Operation parameters
+     * @param {string} [existingCorrelationId] - Use existing correlation ID or generate new
      * @returns {string} Correlation ID
      */
-    startOperation(operation, params = {}) {
-      const correlationId = generateCorrelationId();
-      this.info(`Starting: ${operation}`, { correlationId, params });
+    startOperation(operation, existingCorrelationId = null) {
+      const correlationId = existingCorrelationId || generateCorrelationId();
+      this.info(`Starting: ${operation}`, { correlationId });
       return correlationId;
     },
 
     /**
      * Log operation end
-     * @param {string} operation - Operation name
      * @param {string} correlationId - Correlation ID from startOperation
-     * @param {boolean} success - Whether operation succeeded
-     * @param {*} [result] - Operation result or error
+     * @param {string} status - 'success' or 'error'
+     * @param {*} [result] - Operation result or error details
      */
-    endOperation(operation, correlationId, success, result = null) {
-      if (success) {
-        this.info(`Completed: ${operation}`, { correlationId, success: true });
+    endOperation(correlationId, status, result = null) {
+      if (status === 'success') {
+        this.info('Completed', { correlationId, success: true, result });
       } else {
-        this.error(`Failed: ${operation}`, { correlationId, success: false, result });
+        // Extract error message for better logging
+        let errorMsg = 'Unknown error';
+        if (result instanceof Error) {
+          errorMsg = result.message;
+        } else if (typeof result === 'string' && result) {
+          errorMsg = result;
+        } else if (result && typeof result === 'object') {
+          if (result.error instanceof Error) {
+            errorMsg = result.error.message;
+          } else if (typeof result.error === 'string') {
+            errorMsg = result.error;
+          } else if (result.message) {
+            errorMsg = result.message;
+          } else if (Object.keys(result).length > 0) {
+            errorMsg = JSON.stringify(result);
+          }
+        }
+        this.error('Failed', { correlationId, success: false, error: errorMsg });
       }
     }
   };

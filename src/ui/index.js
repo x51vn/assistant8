@@ -11,6 +11,7 @@ import { initPortfolio } from './portfolio.js';
 import { loadCachedResultFast } from './storage.js';
 import { setupTemplates, initializeTemplates } from './templates.js';
 import { setupSync, setupNotes } from './sync.js';
+import { initEnglish } from './english.js';
 
 (function init() {
   const dom = {
@@ -19,6 +20,7 @@ import { setupSync, setupNotes } from './sync.js';
     resultsBtn: byId('resultsBtn'),
     portfolioBtn: byId('portfolioBtn'),
     errorsBtn: byId('errorsBtn'),
+    englishBtn: byId('englishBtn'),
     settingsBtn: byId('settingsBtn'),
     
     // Pages
@@ -26,6 +28,7 @@ import { setupSync, setupNotes } from './sync.js';
     resultsPage: byId('resultsPage'),
     portfolioPage: byId('portfolioPage'),
     errorsPage: byId('errorsPage'),
+    englishPage: byId('englishPage'),
     settingsPage: byId('settingsPage'),
 
     runBtn: byId('runBtn'),
@@ -96,6 +99,13 @@ import { setupSync, setupNotes } from './sync.js';
     templateContentInput: byId('templateContentInput'),
     saveTemplateBtn: byId('saveTemplateBtn'),
     cancelTemplateBtn: byId('cancelTemplateBtn'),
+    
+    // English Learning
+    englishTopicInput: byId('englishTopicInput'),
+    generateSentenceBtn: byId('generateSentenceBtn'),
+    englishResultArea: byId('englishResultArea'),
+    savedSentencesList: byId('savedSentencesList'),
+    englishPromptInput: byId('englishPromptInput'),
   };
 
   // Initialize templates
@@ -123,6 +133,15 @@ import { setupSync, setupNotes } from './sync.js';
     evaluateBtn: dom.evaluateBtn,
     teaStockBtn: dom.teaStockBtn,
     teaStockPromptInput: dom.teaStockPromptInput,
+  });
+  
+  initEnglish({
+    englishPage: dom.englishPage,
+    englishBtn: dom.englishBtn,
+    englishTopicInput: dom.englishTopicInput,
+    generateSentenceBtn: dom.generateSentenceBtn,
+    englishResultArea: dom.englishResultArea,
+    savedSentencesList: dom.savedSentencesList,
   });
 
   try {

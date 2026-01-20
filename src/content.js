@@ -2,6 +2,17 @@
 
 console.log('[ChatGPT Assistant] content script loaded');
 
+// X51LABS-83: Detect and handle chatbot-ui.com redirect
+if (location.hostname.includes('chatbot-ui.com')) {
+  console.warn('[Content] Detected chatbot-ui.com redirect - redirecting to chatgpt.com');
+  try {
+    location.replace('https://chatgpt.com/');
+  } catch (error) {
+    console.error('[Content] Redirect failed:', error);
+  }
+}
+
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -14,21 +25,134 @@ function getChatMeta() {
   return { chatUrl, chatId };
 }
 
+// X51LABS-61: Robust selector fallback chains
+const SELECTOR_CHAINS = {
+  editor: [
+    // Priority 1: Test ID + attributes
+    { selector: '#prompt-textarea.ProseMirror[contenteditable="true"]', name: 'testid-prosemirror' },
+    { selector: '#prompt-textarea[contenteditable="true"]', name: 'testid-editable' },
+    // Priority 2: Semantic selectors
+    { selector: 'div[data-id="root"] textarea', name: 'semantic-textarea' },
+    { selector: 'main textarea', name: 'main-textarea' },
+    // Priority 3: General fallbacks
+    { selector: 'textarea', name: 'generic-textarea' },
+    { selector: '[contenteditable="true"]', name: 'generic-editable' }
+  ],
+  newChatButton: [
+    // Priority 1: Test ID
+    { selector: 'a[data-testid="create-new-chat-button"]', name: 'testid-create-new' },
+    // Priority 2: Semantic attributes
+    { selector: 'a[data-sidebar-item="true"][href="/"]', name: 'sidebar-home-link' },
+    { selector: 'nav a[href="/"]', name: 'nav-home-link' },
+    // Priority 3: Text-based fallback
+    { selector: 'a[href*="chatgpt.com/"]', name: 'domain-link' }
+  ]
+};
+
+// X51LABS-61: Selector success tracking
+let selectorStats = {
+  editor: { lastMatch: null, matchCount: {} },
+  newChatButton: { lastMatch: null, matchCount: {} }
+};
+
+// X51LABS-61: Detect ChatGPT version from page metadata
+function detectChatGPTVersion() {
+  try {
+    // Try to detect version from various sources
+    const metaGenerator = document.querySelector('meta[name="generator"]')?.content;
+    const nextData = document.getElementById('__NEXT_DATA__')?.textContent;
+    
+    let detectedVersion = 'unknown';
+    
+    if (metaGenerator) {
+      detectedVersion = `meta:${metaGenerator}`;
+    } else if (nextData) {
+      // Try to parse Next.js data for version info
+      try {
+        const data = JSON.parse(nextData);
+        if (data.buildId) {
+          detectedVersion = `nextjs:${data.buildId.substring(0, 8)}`;
+        }
+      } catch (e) {
+        // Silent fail
+      }
+    }
+    
+    // Fallback: check for specific UI elements
+    if (detectedVersion === 'unknown') {
+      const hasProseMirror = !!document.querySelector('.ProseMirror');
+      const hasTestIds = !!document.querySelector('[data-testid]');
+      detectedVersion = `ui:prosemirror=${hasProseMirror},testids=${hasTestIds}`;
+    }
+    
+    console.log(`[Content] ChatGPT version detected: ${detectedVersion}`);
+    return detectedVersion;
+  } catch (err) {
+    console.warn('[Content] Version detection failed:', err);
+    return 'detection-failed';
+  }
+}
+
+function trySelectorsChain(chainName) {
+  const chain = SELECTOR_CHAINS[chainName];
+  if (!chain) {
+    console.error(`[Content] Unknown selector chain: ${chainName}`);
+    return null;
+  }
+  
+  for (const { selector, name } of chain) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        // Track successful match
+        if (!selectorStats[chainName].matchCount[name]) {
+          selectorStats[chainName].matchCount[name] = 0;
+        }
+        selectorStats[chainName].matchCount[name]++;
+        selectorStats[chainName].lastMatch = name;
+        
+        console.log(`[Content] ✅ ${chainName} found via: ${name} (${selector})`);
+        return element;
+      }
+    } catch (err) {
+      console.warn(`[Content] Selector failed: ${selector}`, err);
+    }
+  }
+  
+  console.warn(`[Content] ⚠️ No ${chainName} selector matched. Tried ${chain.length} selectors.`);
+  return null;
+}
+
 function findEditor() {
-  // ChatGPT hiện tại dùng ProseMirror
-  return (
-    document.querySelector('#prompt-textarea.ProseMirror[contenteditable="true"]') ||
-    document.querySelector('#prompt-textarea[contenteditable="true"]') ||
-    document.querySelector('textarea') ||
-    document.querySelector('[contenteditable="true"]')
-  );
+  return trySelectorsChain('editor');
 }
 
 function findNewChatButton() {
-  return (
-    document.querySelector('a[data-testid="create-new-chat-button"]') ||
-    document.querySelector('a[data-sidebar-item="true"][href="/"]')
-  );
+  return trySelectorsChain('newChatButton');
+}
+
+// X51LABS-94: Expose selector stats and send telemetry to background
+function getSelectorStats() {
+  const stats = {
+    ...JSON.parse(JSON.stringify(selectorStats)),
+    version: detectChatGPTVersion(),
+    timestamp: Date.now()
+  };
+  
+  // X51LABS-94: Send telemetry to background (fire-and-forget)
+  chrome.runtime.sendMessage({
+    type: 'TELEMETRY_REPORT',
+    correlationId: `telemetry-${Date.now()}`,
+    payload: {
+      stats: selectorStats,
+      version: stats.version,
+      timestamp: stats.timestamp
+    }
+  }).catch(err => {
+    console.warn('[Content] Telemetry send failed:', err);
+  });
+  
+  return stats;
 }
 
 const PENDING_PROMPT_KEY = '__chatgpt_assistant_pending_prompt_v1';
@@ -75,9 +199,15 @@ function triggerNewChatNavigation() {
   }
 }
 
+// X51LABS-81: Added try-catch to prevent crashes on DOM errors
 function getConversationMessageCount() {
-  // In an empty/new chat, there should be no user/assistant messages.
-  return document.querySelectorAll('div[data-message-author-role="user"], div[data-message-author-role="assistant"]').length;
+  try {
+    // In an empty/new chat, there should be no user/assistant messages.
+    return document.querySelectorAll('div[data-message-author-role="user"], div[data-message-author-role="assistant"]').length;
+  } catch (error) {
+    console.warn('[Content] getConversationMessageCount failed:', error);
+    return 0;
+  }
 }
 
 async function waitForEmptyNewChat({ startUrl, timeoutMs = 20000 } = {}) {
@@ -98,8 +228,9 @@ async function waitForEmptyNewChat({ startUrl, timeoutMs = 20000 } = {}) {
 }
 
 async function ensureNewChatSession(timeoutMs = 20000) {
-  // Always try to start a fresh chat; if already on new-chat screen, this is a no-op.
+  // X51LABS-65: Enhanced race condition protection
   const startUrl = location.href;
+  const startMsgCount = getConversationMessageCount();
   const btn = findNewChatButton();
 
   if (btn instanceof HTMLElement) {
@@ -115,27 +246,46 @@ async function ensureNewChatSession(timeoutMs = 20000) {
     }
   }
 
-  // Wait longer for navigation and editor to re-appear
-  // Add extra wait time to account for page loading
-  await sleep(800);
+  // X51LABS-65: Increased wait time from 800ms to 2000ms
+  await sleep(2000);
   
+  // X51LABS-76: Polling with increased timeout (30s) and strict condition check
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  // X51LABS-76: Increased timeout from 10s to 30s
+  const effectiveTimeout = 30000;
+  
+  while (Date.now() - start < effectiveTimeout) {
+    attempts++;
     const editor = findEditor();
-    if (editor) {
-      // Ensure we are not still on the old chat URL.
-      if (location.href !== startUrl || !location.pathname.startsWith('/c/')) {
-        console.log('[Content] New chat session ready');
-        return true;
-      }
+    const currentMsgCount = getConversationMessageCount();
+    const urlChanged = location.href !== startUrl;
+    
+    // X51LABS-76: Wait for BOTH urlChanged AND currentMsgCount === 0 (strict check)
+    if (editor && urlChanged && currentMsgCount === 0) {
+      console.log(`[Content] ✅ New chat session ready after ${attempts} attempts (${Date.now() - start}ms)`);
+      return true;
     }
-    await sleep(300);
+    
+    // X51LABS-76: Log progress for debugging
+    if (attempts % 5 === 0) {
+      console.log(`[Content] ⏳ Waiting for new chat... attempt ${attempts}, msgCount=${currentMsgCount}, urlChanged=${urlChanged}`);
+    }
+    
+    // Exponential backoff for retries
+    if (attempts >= maxAttempts) {
+      const backoffDelay = Math.min(300 * Math.pow(2, attempts - maxAttempts), 2000);
+      await sleep(backoffDelay);
+    } else {
+      await sleep(300);
+    }
   }
 
-  // Even if URL didn't change (UI variations), proceed if editor exists.
-  const finalEditor = findEditor();
-  console.log('[Content] Timeout reached, editor found:', !!finalEditor);
-  return !!finalEditor;
+  // X51LABS-76: Removed fallback, strict enforcement
+  console.error('[Content] ❌ Timeout after 30s: urlChanged or msgCount != 0');
+  return false;
 }
 
 async function waitForEditor(timeoutMs = 20000) {
@@ -308,35 +458,43 @@ async function trySendPendingPromptOnce() {
   return true;
 }
 
+let drainPendingPromptInFlight = false;
+
 async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
+  if (drainPendingPromptInFlight) return;
+  drainPendingPromptInFlight = true;
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  try {
+    while (Date.now() - start < timeoutMs) {
+      const pending = readPendingPrompt();
+      if (!pending) return;
+
+      try {
+        const ok = await trySendPendingPromptOnce();
+        if (ok) return;
+      } catch {
+        // ignore and retry
+      }
+
+      await sleep(500);
+    }
+
+    // Timeout: notify background that prompt couldn't be sent
     const pending = readPendingPrompt();
-    if (!pending) return;
-
-    try {
-      const ok = await trySendPendingPromptOnce();
-      if (ok) return;
-    } catch {
-      // ignore and retry
+    if (pending && pending.runId) {
+      try {
+        chrome.runtime.sendMessage({
+          action: 'prompt_failed',
+          runId: pending.runId,
+          error: 'timeout_sending_prompt',
+        });
+      } catch {
+        // ignore
+      }
+      clearPendingPrompt();
     }
-
-    await sleep(500);
-  }
-
-  // Timeout: notify background that prompt couldn't be sent
-  const pending = readPendingPrompt();
-  if (pending && pending.runId) {
-    try {
-      chrome.runtime.sendMessage({
-        action: 'prompt_failed',
-        runId: pending.runId,
-        error: 'timeout_sending_prompt',
-      });
-    } catch {
-      // ignore
-    }
-    clearPendingPrompt();
+  } finally {
+    drainPendingPromptInFlight = false;
   }
 }
 
@@ -409,12 +567,13 @@ async function waitForStableAssistantResponse({ timeoutMs = 15 * 60 * 1000, stab
 
   // Watch conversation mutations to detect streaming updates.
   const root = document.querySelector('main') || document.body;
-  let observer;
+  let observer = null;
+  
   try {
     observer = new MutationObserver(() => snapshot());
     observer.observe(root, { childList: true, subtree: true, characterData: true });
-  } catch {
-    // ignore
+  } catch (error) {
+    console.warn('[Content] MutationObserver setup failed:', error);
   }
 
   try {
@@ -432,10 +591,12 @@ async function waitForStableAssistantResponse({ timeoutMs = 15 * 60 * 1000, stab
 
     return { status: 'timeout', text: lastText };
   } finally {
-    try {
-      observer?.disconnect();
-    } catch {
-      // ignore
+    if (observer) {
+      try {
+        observer.disconnect();
+      } catch (error) {
+        console.warn('[Content] Observer disconnect failed:', error);
+      }
     }
   }
 }
@@ -457,10 +618,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // Handle ping to check if content script is ready
+  // X51LABS-82: Handle ping to check if content script is ready
   if (request.action === 'ping') {
-    safeSendResponse({ status: 'ok', ready: true });
-    return;
+    safeSendResponse({ pong: true, status: 'ok', ready: true });
+    return true; // Must return true to indicate async response
   }
 
   if (request.action === 'input_prompt') {
@@ -590,6 +751,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       safeSendResponse({ count });
     } catch (e) {
       safeSendResponse({ count: 0, error: String(e?.message || e) });
+    }
+    return true;
+  }
+
+  // X51LABS-61: Get selector statistics for debugging
+  if (request.action === 'get_selector_stats') {
+    try {
+      safeSendResponse({ success: true, stats: getSelectorStats() });
+    } catch (e) {
+      safeSendResponse({ success: false, error: String(e?.message || e) });
     }
     return true;
   }

@@ -19,5 +19,8 @@ import './state.js';
 import './portfolio.js';
 import './firebase.js';
 import './prompt.js';
+import './content.js';
+import './history.js';
+import './errors.js';
 
 logger.info('All message handlers registered');

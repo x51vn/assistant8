@@ -30,7 +30,7 @@ export const StorageArea = {
  * @returns {Promise<ApiResponse>}
  */
 export async function storageGet(keys = null, area = StorageArea.LOCAL) {
-  const correlationId = logger.startOperation('storageGet', { keys, area });
+  const correlationId = logger.startOperation('storageGet');
   
   try {
     const storage = chrome.storage[area];
@@ -43,10 +43,10 @@ export async function storageGet(keys = null, area = StorageArea.LOCAL) {
     }
     
     const data = await storage.get(keys);
-    logger.endOperation('storageGet', correlationId, true);
+    logger.endOperation(correlationId, 'success');
     return createSuccessResponse(data);
   } catch (error) {
-    logger.endOperation('storageGet', correlationId, false, error);
+    logger.endOperation(correlationId, 'error', error);
     return createErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage get failed',
@@ -63,10 +63,7 @@ export async function storageGet(keys = null, area = StorageArea.LOCAL) {
  * @returns {Promise<ApiResponse>}
  */
 export async function storageSet(items, area = StorageArea.LOCAL) {
-  const correlationId = logger.startOperation('storageSet', { 
-    keys: Object.keys(items), 
-    area 
-  });
+  const correlationId = logger.startOperation('storageSet');
   
   try {
     const storage = chrome.storage[area];
@@ -79,10 +76,10 @@ export async function storageSet(items, area = StorageArea.LOCAL) {
     }
     
     await storage.set(items);
-    logger.endOperation('storageSet', correlationId, true);
+    logger.endOperation(correlationId, 'success');
     return createSuccessResponse({ keysSet: Object.keys(items).length });
   } catch (error) {
-    logger.endOperation('storageSet', correlationId, false, error);
+    logger.endOperation(correlationId, 'error', error);
     return createErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage set failed',
@@ -99,7 +96,7 @@ export async function storageSet(items, area = StorageArea.LOCAL) {
  * @returns {Promise<ApiResponse>}
  */
 export async function storageRemove(keys, area = StorageArea.LOCAL) {
-  const correlationId = logger.startOperation('storageRemove', { keys, area });
+  const correlationId = logger.startOperation('storageRemove');
   
   try {
     const storage = chrome.storage[area];
@@ -112,10 +109,10 @@ export async function storageRemove(keys, area = StorageArea.LOCAL) {
     }
     
     await storage.remove(keys);
-    logger.endOperation('storageRemove', correlationId, true);
+    logger.endOperation(correlationId, 'success');
     return createSuccessResponse({ keysRemoved: Array.isArray(keys) ? keys.length : 1 });
   } catch (error) {
-    logger.endOperation('storageRemove', correlationId, false, error);
+    logger.endOperation(correlationId, 'error', error);
     return createErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage remove failed',
@@ -131,7 +128,7 @@ export async function storageRemove(keys, area = StorageArea.LOCAL) {
  * @returns {Promise<ApiResponse>}
  */
 export async function storageClear(area = StorageArea.LOCAL) {
-  const correlationId = logger.startOperation('storageClear', { area });
+  const correlationId = logger.startOperation('storageClear');
   
   try {
     const storage = chrome.storage[area];
@@ -144,10 +141,10 @@ export async function storageClear(area = StorageArea.LOCAL) {
     }
     
     await storage.clear();
-    logger.endOperation('storageClear', correlationId, true);
+    logger.endOperation(correlationId, 'success');
     return createSuccessResponse({ message: 'Storage cleared' });
   } catch (error) {
-    logger.endOperation('storageClear', correlationId, false, error);
+    logger.endOperation(correlationId, 'error', error);
     return createErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage clear failed',

@@ -22,6 +22,12 @@ export async function handleContextMenuClick(info, tab) {
   const correlationId = logger.startOperation('contextMenuAnalyze');
   
   try {
+    // X51LABS-87: Early validation for content
+    if (!info.selectionText?.trim()) {
+      logger.warn('No selection text available', { correlationId });
+      // Continue to try page extraction
+    }
+    
     // Get the context menu prompt from storage
     const settings = await chrome.storage.local.get([STORAGE_KEYS.CONTEXT_MENU_PROMPT]);
     let prompt = settings[STORAGE_KEYS.CONTEXT_MENU_PROMPT] || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';

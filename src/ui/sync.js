@@ -6,26 +6,57 @@ let firebaseReady = false;
 let currentUser = null;
 
 // Generic message sender - helper function to avoid duplication
+// Uses v1 schema for new messages, falls back to old action format for backward compatibility
 function sendMessage(action, payload = {}) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action, ...payload }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[Sync] Message failed:', chrome.runtime.lastError.message);
+        resolve({ error: chrome.runtime.lastError.message });
+        return;
+      }
       resolve(response);
     });
   });
 }
 
-// Auth functions
-const loginWithEmail = (email, password) => sendMessage('firebase_login', { email, password });
-const logoutFirebase = () => sendMessage('firebase_logout');
-const getCurrentUser = () => sendMessage('get_current_user');
+// Send v1 schema message
+function sendV1Message(type, payload = {}) {
+  return new Promise((resolve) => {
+    const message = {
+      v: 1,
+      type,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload
+    };
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          type: MESSAGE_TYPES.ERROR,
+          payload: { error: chrome.runtime.lastError.message }
+        });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
 
-// Sync functions
+// Auth functions - using v1 schema
+const loginWithEmail = (email, password) => sendV1Message(MESSAGE_TYPES.FIREBASE_AUTH, { action: 'login', email, password });
+const logoutFirebase = () => sendV1Message(MESSAGE_TYPES.FIREBASE_AUTH, { action: 'logout' });
+const getCurrentUser = () => sendV1Message(MESSAGE_TYPES.FIREBASE_AUTH, { action: 'get_user' });
+
+// Sync functions - using v1 schema
+const syncToFirestore = () => sendV1Message(MESSAGE_TYPES.FIREBASE_SYNC, {});
+const restoreFromFirestore = (backupId = null) => sendV1Message(MESSAGE_TYPES.FIREBASE_RESTORE, { backupId });
+const listBackups = (limit = 1) => sendV1Message(MESSAGE_TYPES.FIREBASE_LIST_BACKUPS, { limit }).then(r => r?.payload?.backups || []);
+const deleteBackup = (backupId) => sendMessage('delete_backup', { backupId });
+
+// Config functions - keep old format (not critical)
 const getSyncConfig = () => sendMessage('get_sync_config').then(r => r || {});
 const saveSyncConfig = (config) => sendMessage('save_sync_config', { config });
-const syncToFirestore = () => sendMessage('sync_to_firestore');
-const restoreFromFirestore = (backupId = null) => sendMessage('restore_from_firestore', { backupId });
-const listBackups = (limit = 1) => sendMessage('list_backups', { limit }).then(r => r || []);
-const deleteBackup = (backupId) => sendMessage('delete_backup', { backupId });
 
 // Notes functions - One note per day model
 async function getNotes() {
@@ -75,16 +106,6 @@ function schedulePeriodicSync(intervalMinutes = 60) {
   console.log(`[Sync] Scheduled periodic sync every ${intervalMinutes} minutes`);
 }
 
-function handleSyncAlarm() {
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'firebaseSync') {
-      syncToFirestore().then(result => {
-        console.log('[Sync] Alarm sync result:', result);
-      });
-    }
-  });
-}
-
 export async function setupSync(dom) {
   const {
     syncNowBtn,
@@ -104,14 +125,28 @@ export async function setupSync(dom) {
     try {
       showStatus(syncStatus, '⏳ Syncing to Firestore...', 'info');
       const result = await syncToFirestore();
-      if (result.success) {
-        showStatus(syncStatus, `✅ ${result.message}`, 'success');
+      
+      // Handle v1 schema response
+      if (result?.type === MESSAGE_TYPES.FIREBASE_SYNCED) {
+        const message = result.payload?.message || 'Đồng bộ thành công';
+        showStatus(syncStatus, `✅ ${message}`, 'success');
         await loadBackupsList();
+      } else if (result?.type === MESSAGE_TYPES.ERROR) {
+        const errorMsg = typeof result.payload?.error === 'object'
+          ? (result.payload.error?.message || JSON.stringify(result.payload.error))
+          : String(result.payload?.error || 'Unknown error');
+        
+        // X51LABS-60: Show user-friendly message for auth failures
+        if (errorMsg.includes('Not authenticated') || errorMsg.includes('Firebase Auth not initialized') || errorMsg.includes('Firebase initialization failed')) {
+          showStatus(syncStatus, `⚠️ Sync unavailable: ${errorMsg}. Please check Firebase configuration.`, 'warning');
+        } else {
+          showStatus(syncStatus, `❌ Sync failed: ${errorMsg}`, 'error');
+        }
       } else {
-        showStatus(syncStatus, `❌ Sync failed: ${result.error}`, 'error');
+        showStatus(syncStatus, '❌ Sync failed: Invalid response', 'error');
       }
     } catch (err) {
-      showStatus(syncStatus, `❌ Sync error: ${err.message}`, 'error');
+      showStatus(syncStatus, `❌ Sync error: ${err.message || String(err)}`, 'error');
       console.error('[Sync] Error:', err);
     }
   });
@@ -146,8 +181,7 @@ export async function setupSync(dom) {
     }
   });
 
-  // Handle alarm
-  handleSyncAlarm();
+  // Alarm handling is managed by background service worker.
 }
 
 async function initializeSyncUI() {
@@ -234,14 +268,29 @@ async function loadBackupsList() {
         try {
           showStatus(syncStatus, '⏳ Đang khôi phục...', 'info');
           const result = await restoreFromFirestore(backupId);
-          if (result.success) {
-            showStatus(syncStatus, `✅ ${result.message}`, 'success');
+          
+          // Handle v1 schema response
+          if (result?.type === MESSAGE_TYPES.FIREBASE_RESTORED) {
+            const message = result.payload?.message || 'Khôi phục thành công';
+            showStatus(syncStatus, `✅ ${message}`, 'success');
             setTimeout(() => window.location.reload(), 2000);
+          } else if (result?.type === MESSAGE_TYPES.ERROR) {
+            const errorMsg = typeof result.payload?.error === 'object'
+              ? (result.payload.error?.message || JSON.stringify(result.payload.error))
+              : String(result.payload?.error || 'Unknown error');
+            
+            // X51LABS-60: Show user-friendly message for auth failures
+            if (errorMsg.includes('Not authenticated') || errorMsg.includes('Firebase Auth not initialized') || errorMsg.includes('Firebase initialization failed')) {
+              showStatus(syncStatus, `⚠️ Khôi phục không khả dụng: ${errorMsg}. Vui lòng kiểm tra cấu hình Firebase.`, 'warning');
+            } else {
+              showStatus(syncStatus, `❌ Khôi phục thất bại: ${errorMsg}`, 'error');
+            }
           } else {
-            showStatus(syncStatus, `❌ Khôi phục thất bại: ${result.error}`, 'error');
+            showStatus(syncStatus, '❌ Khôi phục thất bại: Invalid response', 'error');
           }
         } catch (err) {
-          showStatus(syncStatus, `❌ Lỗi khôi phục: ${err.message}`, 'error');
+          showStatus(syncStatus, `❌ Lỗi khôi phục: ${err.message || String(err)}`, 'error');
+          console.error('[Sync] Restore error:', err);
         }
       }
     });
@@ -290,10 +339,13 @@ function attachAuthListeners(syncStatus) {
         authEmail.value = '';
         authPassword.value = '';
       } else {
-        showAuthMessage(`❌ Đăng nhập thất bại: ${result.error}`, 'error');
+        const errorMsg = typeof result.error === 'object' 
+          ? (result.error?.message || JSON.stringify(result.error))
+          : String(result.error);
+        showAuthMessage(`❌ Đăng nhập thất bại: ${errorMsg}`, 'error');
       }
     } catch (err) {
-      showAuthMessage(`❌ Lỗi: ${err.message}`, 'error');
+      showAuthMessage(`❌ Lỗi: ${err.message || String(err)}`, 'error');
     }
   });
 

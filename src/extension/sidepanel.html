@@ -15,6 +15,7 @@
         <button id="portfolioBtn" class="nav-btn">Portfolio</button>
         <button id="resultsBtn" class="nav-btn">Results</button>
         <button id="errorsBtn" class="nav-btn">Retro</button>
+        <button id="englishBtn" class="nav-btn">English</button>
         <button id="templatesBtn" class="nav-btn">Templ</button>
         <button id="settingsBtn" class="nav-btn" title="Settings"><i class="fas fa-cog"></i></button>
       </div>
@@ -142,6 +143,37 @@
       </div>
     </div>
 
+    <div id="englishPage" class="page">
+      <div class="content">
+        <h2>📚 English Learning</h2>
+
+        <!-- Configuration Section -->
+        <div class="english-config">
+          <div class="form-group">
+            <label for="englishTopicInput">Topic/Keyword:</label>
+            <input type="text" id="englishTopicInput" class="text-input" placeholder="e.g., business meeting, daily conversation..." />
+          </div>
+
+          <button id="generateSentenceBtn" class="primary-btn">
+            <i class="fas fa-paper-plane"></i> Generate & Learn
+          </button>
+        </div>
+
+        <!-- Result Area -->
+        <div id="englishResultArea" class="result-area" style="margin-top: 16px;">
+          <div class="empty-state">Click "Generate Sentence" to get a new English sentence</div>
+        </div>
+
+        <!-- Saved Sentences Section -->
+        <div class="saved-sentences-section" style="margin-top: 24px;">
+          <h3>📚 Saved Sentences (<span id="savedSentencesCount">0</span>)</h3>
+          <div id="savedSentencesList" class="saved-sentences-list">
+            <div class="empty-state">Chưa có câu nào được lưu</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="settingsPage" class="page">
       <div class="content">
         <h2>Cấu hình</h2>
@@ -210,6 +242,19 @@ Sử dụng {CONTENT} để thay thế nội dung được chọn"
               rows="3"
             ></textarea>
             <p class="help-text">Prompt này sẽ được gửi khi bạn bấm chuột phải và chọn "ChatGPT Assistant - Phân tích". Dùng {CONTENT} để tham chiếu tới nội dung bài viết.</p>
+          </div>
+          
+          <!-- English Learning Prompt -->
+          <div class="form-group">
+            <label for="englishPromptInput">6. Prompt học Tiếng Anh:</label>
+            <textarea
+              id="englishPromptInput"
+              class="textarea-input"
+              placeholder="Nhập prompt để học Tiếng Anh...
+Sử dụng {TOPIC} để thay thế chủ đề"
+              rows="4"
+            ></textarea>
+            <p class="help-text">Prompt này sẽ được gửi từ tab English Learning. Dùng {TOPIC} cho chủ đề/keyword user nhập.</p>
           </div>
         </div>
 

@@ -86,7 +86,8 @@ export async function sendToMatchingTabs(urlPattern, message) {
     );
     
     const responses = await Promise.all(promises);
-    return responses.filter(r => r !== null);
+    // X51LABS-85: Filter both null and undefined
+    return responses.filter(r => r != null);
   } catch (error) {
     logger.error('Failed to send to matching tabs', { error, urlPattern });
     throw error;
@@ -94,19 +95,68 @@ export async function sendToMatchingTabs(urlPattern, message) {
 }
 
 /**
- * Create a long-lived connection (Port)
+ * X51LABS-78: Create a long-lived connection (Port) with keepalive
+ * For operations >5min that exceed 5min message timeout
  * @param {string} name - Connection name
- * @returns {Port} Chrome Port object
+ * @param {object} [options] - Options
+ * @param {number} [options.keepaliveIntervalMs=240000] - Keepalive ping interval (default 4min)
+ * @param {function} [options.onMessage] - Message handler
+ * @param {function} [options.onDisconnect] - Disconnect handler
+ * @returns {{port: Port, cleanup: function}} Port and cleanup function
  */
-export function createConnection(name) {
-  logger.debug('Creating connection', { name });
+export function createConnection(name, options = {}) {
+  const {
+    keepaliveIntervalMs = 240000, // 4 minutes (before 5min timeout)
+    onMessage = null,
+    onDisconnect = null
+  } = options;
+  
+  logger.debug('Creating long-lived connection', { name, keepaliveIntervalMs });
   const port = chrome.runtime.connect({ name });
   
+  // X51LABS-78: Setup keepalive pings to prevent timeout
+  let keepaliveTimer = null;
+  if (keepaliveIntervalMs > 0) {
+    keepaliveTimer = setInterval(() => {
+      try {
+        port.postMessage({ type: 'KEEPALIVE', timestamp: Date.now() });
+        logger.debug('Keepalive ping sent', { name });
+      } catch (error) {
+        logger.warn('Keepalive failed, connection may be closed', { name, error: error.message });
+        clearInterval(keepaliveTimer);
+      }
+    }, keepaliveIntervalMs);
+  }
+  
+  // Setup message listener
+  if (onMessage) {
+    port.onMessage.addListener(onMessage);
+  }
+  
+  // Setup disconnect handler
   port.onDisconnect.addListener(() => {
     logger.debug('Connection disconnected', { name });
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+    }
+    if (onDisconnect) {
+      onDisconnect();
+    }
   });
   
-  return port;
+  // Cleanup function
+  const cleanup = () => {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+    }
+    try {
+      port.disconnect();
+    } catch (error) {
+      logger.warn('Error during port cleanup', { name, error: error.message });
+    }
+  };
+  
+  return { port, cleanup };
 }
 
 /**

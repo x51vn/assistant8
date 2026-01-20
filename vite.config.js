@@ -49,10 +49,11 @@ function copyExtensionStatic() {
 
 export default defineConfig({
   plugins: [copyExtensionStatic()],
+  // X51LABS-79: TODO - Add build size validation plugin (requires CJS or external script)
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: false,
+    sourcemap: process.env.NODE_ENV !== 'production', // X51LABS-98: Only in development
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: {
@@ -64,15 +65,8 @@ export default defineConfig({
         entryFileNames: '[name].js',
         chunkFileNames: '[name]-[hash].js',
         format: 'es',
-        // manualChunks to keep Firebase separate but bundle ALL background code
-        manualChunks: (id) => {
-          // Only split Firebase for ui/content (node_modules)
-          if (id.includes('node_modules') && id.includes('firebase')) {
-            return 'firebase';
-          }
-          // Everything else (including all background handlers) stays in their entry
-          return undefined;
-        },
+        // X51LABS-79: Removed manualChunks - Vite auto-splits optimally
+        // Firebase shared chunk created automatically for ui+content
       },
     },
   },
