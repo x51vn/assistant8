@@ -59,39 +59,80 @@ export function setupResults(dom) {
         return;
       }
       
-      // TODO: Implement proper result polling using CHATGPT_GET_OUTPUT
-      // For now, just stop polling after prompt is sent
-      console.log('[Results] Prompt sent, result polling not yet implemented');
-      stopPolling();
-      
-      /* OLD POLLING CODE - NEEDS MIGRATION
-      const runId = response.runId;
-      console.log('[Results] Starting poll for runId:', runId);
+      // Start polling for ChatGPT result
+      console.log('[Results] Starting result polling...');
       let pollCount = 0;
+      const maxPolls = 60; // 3 minutes max
       
-      currentPollInterval = setInterval(() => {
+      currentPollInterval = setInterval(async () => {
         pollCount++;
         console.log('[Results] Poll attempt', pollCount);
         
-        // Need to implement proper message format
-        chrome.runtime.sendMessage({ action: 'get_result' }, (pollResponse) => {
-          console.log('[Results] Poll response:', { hasResult: !!pollResponse?.result, source: pollResponse?.source, pollCount });
+        if (pollCount > maxPolls) {
+          console.log('[Results] Max poll attempts reached, stopping');
+          stopPolling();
+          return;
+        }
+        
+        // Poll for output using CHATGPT_GET_OUTPUT
+        const pollMessage = {
+          v: 1,
+          type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          payload: {
+            wait: false // Don't wait, just check current state
+          }
+        };
+        
+        chrome.runtime.sendMessage(pollMessage, (pollResponse) => {
           if (chrome.runtime.lastError) {
             console.error('[Results] Poll error:', chrome.runtime.lastError);
-            stopPolling();
             return;
           }
           
-          // Check if we have a fresh result for this runId
-          if (pollResponse && pollResponse.result && pollResponse.source === 'live') {
-            console.log('[Results] Got live result, stopping poll');
+          console.log('[Results] Poll response:', {
+            type: pollResponse?.type,
+            hasOutput: !!pollResponse?.payload?.output,
+            pollCount
+          });
+          
+          // Check if we got the result
+          if (pollResponse?.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY) {
+            const { output, chatUrl } = pollResponse.payload;
+            
+            if (output) {
+              console.log('[Results] Got result! Length:', output.length);
+              
+              // Save to history (async operation wrapped in IIFE)
+              (async () => {
+                const historyKey = `conversation_${Date.now()}`;
+                await chrome.storage.local.set({
+                  [historyKey]: {
+                    prompt: promptStr,
+                    result: output,
+                    timestamp: Date.now(),
+                    chatUrl: chatUrl
+                  }
+                });
+                
+                console.log('[Results] Saved to history:', historyKey);
+              })().catch(err => console.error('[Results] Failed to save history:', err));
+              
+              // Display the result
+              const resultDisplay = document.querySelector('#result-display');
+              if (resultDisplay) {
+                resultDisplay.textContent = output;
+              }
+              
+              stopPolling();
+            }
+          } else if (pollResponse?.type === MESSAGE_TYPES.ERROR) {
+            console.error('[Results] Error getting output:', pollResponse.error);
             stopPolling();
-          } else {
-            console.log('[Results] Still waiting for result...');
           }
         });
-      }, 3000);
-      */
+      }, 3000); // Poll every 3 seconds
     });
   });
 
@@ -99,20 +140,48 @@ export function setupResults(dom) {
     stopPolling();
   });
 
-  refreshBtn?.addEventListener('click', () => {
+  refreshBtn?.addEventListener('click', async () => {
     console.log('[Results] Refresh button clicked');
-    // TODO: Implement using CHATGPT_GET_OUTPUT or storage
-    console.log('[Results] Refresh not yet implemented with new message schema');
-    /*
-    chrome.runtime.sendMessage({ action: 'get_result' }, (response) => {
-      console.log('[Results] Get result response:', response);
+    
+    // Get latest output from ChatGPT
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        wait: false
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
+      console.log('[Results] Get output response:', response);
+      
       if (chrome.runtime.lastError) {
         console.error('[Results] Get result error:', chrome.runtime.lastError);
         return;
       }
-      console.log('[Results] Result available');
+      
+      if (response?.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY) {
+        const { output } = response.payload;
+        
+        if (output) {
+          console.log('[Results] Got refreshed result, length:', output.length);
+          
+          // Display the result
+          const resultDisplay = document.querySelector('#result-display');
+          if (resultDisplay) {
+            resultDisplay.textContent = output;
+          }
+          
+          console.log('[Results] Result refreshed successfully');
+        } else {
+          console.log('[Results] No output available yet');
+        }
+      } else if (response?.type === MESSAGE_TYPES.ERROR) {
+        console.error('[Results] Error:', response.error);
+      }
     });
-    */
   });
 
   return { };

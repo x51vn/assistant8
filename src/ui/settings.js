@@ -7,6 +7,7 @@ import { generateCorrelationId } from '../logger.js';
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 const STOCK_EVAL_PROMPT_KEY = 'stockEvalPrompt';
 const CONTEXT_MENU_PROMPT_KEY = 'contextMenuPrompt';
+const ENGLISH_PROMPT_KEY = 'englishPrompt';
 
 export function setupSettings(dom) {
   const {
@@ -27,12 +28,14 @@ export function setupSettings(dom) {
     portfolioPromptInput,
     stockEvalPromptInput,
     contextMenuPromptInput,
+    englishPromptInput,
   } = dom;
 
   // Load prompts on init
   loadPortfolioPrompt(portfolioPromptInput);
   loadStockEvalPrompt(stockEvalPromptInput);
   loadContextMenuPrompt(contextMenuPromptInput);
+  loadEnglishPrompt(englishPromptInput);
 
   saveBtn?.addEventListener('click', async () => {
     const prompt = (promptInput?.value || '').trim();
@@ -55,13 +58,15 @@ export function setupSettings(dom) {
     // Save both regular settings and all prompts in one go
     const stockEvalPrompt = (stockEvalPromptInput?.value || '').trim();
     const contextMenuPrompt = (contextMenuPromptInput?.value || '').trim();
+    const englishPrompt = (englishPromptInput?.value || '').trim();
     await chrome.storage.local.set(settings);
     await chrome.storage.local.set({ 
       [PORTFOLIO_PROMPT_KEY]: portfolioPrompt,
       [STOCK_EVAL_PROMPT_KEY]: stockEvalPrompt,
-      [CONTEXT_MENU_PROMPT_KEY]: contextMenuPrompt
+      [CONTEXT_MENU_PROMPT_KEY]: contextMenuPrompt,
+      [ENGLISH_PROMPT_KEY]: englishPrompt
     });
-    console.log('[Settings] All settings saved including portfolio, stock evaluation, and context menu prompts');
+    console.log('[Settings] All settings saved including all prompts');
     showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
   });
 
@@ -132,3 +137,18 @@ async function loadContextMenuPrompt(contextMenuPromptInput) {
   const stored = await chrome.storage.local.get([CONTEXT_MENU_PROMPT_KEY]);
   contextMenuPromptInput.value = stored[CONTEXT_MENU_PROMPT_KEY] || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
 }
+
+async function loadEnglishPrompt(englishPromptInput) {
+  if (!englishPromptInput) return;
+  const stored = await chrome.storage.local.get([ENGLISH_PROMPT_KEY]);
+  const defaultPrompt = `Teach me English about: {TOPIC}
+
+Provide:
+1. An English sentence/phrase
+2. Vietnamese translation
+3. Usage example
+4. Common situations to use it`;
+  englishPromptInput.value = stored[ENGLISH_PROMPT_KEY] || defaultPrompt;
+}
+
+export { ENGLISH_PROMPT_KEY };

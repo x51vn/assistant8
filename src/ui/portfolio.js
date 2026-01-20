@@ -6,6 +6,18 @@ import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 
+/**
+ * Escape HTML to prevent XSS attacks
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // Global realtime client
 let realtimeClient = null;
 let currentSubscriptions = new Map(); // symbol -> unsubscribe function
@@ -148,7 +160,12 @@ export async function loadPortfolioUI(table) {
 
   table.innerHTML = '';
   if (portfolio.length === 0) {
-    table.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Chưa có mã nào. Nhấn "+ Thêm mã" để thêm.</td></tr>';
+    const row = table.insertRow();
+    const cell = row.insertCell();
+    cell.colSpan = 6;
+    cell.style.textAlign = 'center';
+    cell.style.padding = '20px';
+    cell.textContent = 'Chưa có mã nào. Nhấn "+ Thêm mã" để thêm.';
     return;
   }
 
@@ -183,7 +200,7 @@ export async function loadPortfolioUI(table) {
       row.style.backgroundColor = '#f0f9ff';
       row.style.fontWeight = 'bold';
       row.innerHTML = `
-        <td>${stock.code}</td>
+        <td>${escapeHtml(stock.code)}</td>
         <td>-</td>
         <td>-</td>
         <td>${stock.quantity.toFixed(2)}</td>
@@ -205,7 +222,7 @@ export async function loadPortfolioUI(table) {
         : '-';
       
       row.innerHTML = `
-        <td>${stock.code}</td>
+        <td>${escapeHtml(stock.code)}</td>
         <td>${stock.entry}</td>
         <td>${stock.currentPrice || '-'}</td>
         <td>${stock.quantity}</td>
@@ -216,7 +233,7 @@ export async function loadPortfolioUI(table) {
             <div class="portfolio-actions-menu">
               <button class="action-edit" data-id="${originalIdx}" title="Sửa"><i class="fas fa-edit"></i> Sửa</button>
               <button class="action-delete" data-id="${originalIdx}" title="Xóa"><i class="fas fa-trash"></i> Xóa</button>
-              <button class="action-evaluate" data-code="${stock.code}" title="Đánh giá"><i class="fas fa-magnifying-glass"></i> Đánh giá</button>
+              <button class="action-evaluate" data-code="${escapeHtml(stock.code)}" title="Đánh giá"><i class="fas fa-magnifying-glass"></i> Đánh giá</button>
             </div>
           </div>
         </td>
@@ -282,44 +299,83 @@ export async function loadPortfolioUI(table) {
   });
 }
 
-function openAddStockModal(portfolioTable) {
+// X51LABS-95: Extract common modal logic
+function getModalElements() {
   const modal = document.getElementById('portfolioModal');
-  if (!modal) return;
+  if (!modal) return null;
 
-  const titleEl = modal.querySelector('#portfolioModalTitle');
-  const codeInput = modal.querySelector('#stockCodeInput');
-  const entryInput = modal.querySelector('#stockEntryInput');
-  const quantityInput = modal.querySelector('#stockQuantityInput');
-  const saveBtn = modal.querySelector('#saveStockBtn');
-  const entryLabel = modal.querySelector('label[for="stockEntryInput"]');
-  const quantityLabel = modal.querySelector('label[for="stockQuantityInput"]');
+  const elements = {
+    modal,
+    titleEl: modal.querySelector('#portfolioModalTitle'),
+    codeInput: modal.querySelector('#stockCodeInput'),
+    entryInput: modal.querySelector('#stockEntryInput'),
+    quantityInput: modal.querySelector('#stockQuantityInput'),
+    saveBtn: modal.querySelector('#saveStockBtn'),
+    entryLabel: modal.querySelector('label[for="stockEntryInput"]'),
+    quantityLabel: modal.querySelector('label[for="stockQuantityInput"]')
+  };
 
-  if (!titleEl || !codeInput || !entryInput || !quantityInput || !saveBtn) {
+  if (!elements.titleEl || !elements.codeInput || !elements.entryInput || !elements.quantityInput || !elements.saveBtn) {
     console.error('[Portfolio] Modal elements not found');
-    return;
+    return null;
   }
 
-  titleEl.textContent = 'Thêm/Sửa mã (hoặc CASH)';
-  codeInput.value = '';
-  entryInput.value = '';
-  quantityInput.value = '';
+  return elements;
+}
+
+// X51LABS-95: Extract modal field configuration
+function configureModalFields(elements, config) {
+  const { titleEl, codeInput, entryInput, quantityInput, entryLabel, quantityLabel } = elements;
+  const { title, code = '', entry = '', quantity = '', isCash = false } = config;
+
+  titleEl.textContent = title;
+  codeInput.value = code;
+  entryInput.value = entry;
+  quantityInput.value = quantity;
+
+  if (isCash) {
+    if (entryLabel) entryLabel.style.display = 'none';
+    if (quantityLabel) quantityLabel.textContent = 'Số tiền sẵn sàng:';
+    entryInput.style.display = 'none';
+    codeInput.disabled = true;
+  } else {
+    if (entryLabel) entryLabel.style.display = '';
+    if (quantityLabel) quantityLabel.textContent = 'Khối lượng:';
+    entryInput.style.display = '';
+    codeInput.disabled = false;
+    codeInput.placeholder = 'VNM, BID, CASH, ...';
+    codeInput.style.backgroundColor = '';
+  }
+}
+
+// X51LABS-95: Extract save button setup
+function setupModalSaveButton(elements, onSave) {
+  const { modal, saveBtn } = elements;
   
-  // Reset to stock mode
-  if (entryLabel) entryLabel.style.display = '';
-  if (quantityLabel) quantityLabel.textContent = 'Khối lượng:';
-  entryInput.style.display = '';
-  codeInput.placeholder = 'VNM, BID, CASH, ...';
-  codeInput.disabled = false;
-  codeInput.style.backgroundColor = '';
-
-  modal.classList.remove('hidden');
-
-  // Remove old listeners - properly clean up before replacing
-  const saveBtn_current = modal.querySelector('#saveStockBtn');
-  const newSaveBtn = saveBtn_current.cloneNode(true);
-  saveBtn_current.parentNode.replaceChild(newSaveBtn, saveBtn_current);
-
+  // Replace button to remove old listeners
+  const newSaveBtn = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+  
   newSaveBtn.addEventListener('click', async () => {
+    await onSave();
+    modal.classList.add('hidden');
+  });
+}
+
+function openAddStockModal(portfolioTable) {
+  const elements = getModalElements();
+  if (!elements) return;
+
+  // X51LABS-95: Use extracted helpers
+  configureModalFields(elements, {
+    title: 'Thêm/Sửa mã (hoặc CASH)'
+  });
+
+  elements.modal.classList.remove('hidden');
+
+  // X51LABS-95: Use extracted save handler
+  setupModalSaveButton(elements, async () => {
+    const { codeInput, entryInput, quantityInput } = elements;
     const code = codeInput.value.trim().toUpperCase();
     const entry = parseFloat(entryInput.value);
     const quantity = parseFloat(quantityInput.value);
@@ -329,7 +385,6 @@ function openAddStockModal(portfolioTable) {
       return;
     }
     
-    // For CASH, entry is not needed
     if (code !== 'CASH' && isNaN(entry)) {
       alert('Vui lòng nhập Entry');
       return;
@@ -339,72 +394,42 @@ function openAddStockModal(portfolioTable) {
     const existingIdx = portfolio.findIndex(s => s.code === code);
     
     if (existingIdx >= 0) {
-      // Stock already exists - add to quantity
       const existing = portfolio[existingIdx];
       const newQuantity = existing.quantity + quantity;
       await updateStock(existingIdx, code, existing.entry, newQuantity);
       console.log(`[Portfolio] Updated ${code}: +${quantity} (Total: ${newQuantity})`);
     } else {
-      // New stock
       const finalEntry = code === 'CASH' ? 1 : entry;
       await addStock(code, finalEntry, quantity);
       console.log(`[Portfolio] Added ${code}: ${quantity}`);
     }
     
-    modal.classList.add('hidden');
     await loadPortfolioUI(portfolioTable);
   });
 }
 
 function openEditStockModal(id, portfolioTable) {
-  const modal = document.getElementById('portfolioModal');
-  if (!modal) return;
-
   getPortfolio().then(portfolio => {
     const stock = portfolio[id];
     if (!stock) return;
 
-    const titleEl = modal.querySelector('#portfolioModalTitle');
-    const codeInput = modal.querySelector('#stockCodeInput');
-    const entryInput = modal.querySelector('#stockEntryInput');
-    const quantityInput = modal.querySelector('#stockQuantityInput');
-    const saveBtn = modal.querySelector('#saveStockBtn');
-    const entryLabel = modal.querySelector('label[for="stockEntryInput"]');
-    const quantityLabel = modal.querySelector('label[for="stockQuantityInput"]');
-
-    if (!titleEl || !codeInput || !entryInput || !quantityInput || !saveBtn) {
-      console.error('[Portfolio] Modal elements not found');
-      return;
-    }
+    // X51LABS-95: Use extracted helpers
+    const elements = getModalElements();
+    if (!elements) return;
 
     const isCash = stock.code === 'CASH';
-    titleEl.textContent = isCash ? 'Sửa CASH' : 'Sửa mã chứng khoán';
-    codeInput.value = stock.code;
-    entryInput.value = stock.entry;
-    quantityInput.value = stock.quantity;
-    
-    // Hide entry field for cash
-    if (isCash) {
-      if (entryLabel) entryLabel.style.display = 'none';
-      if (quantityLabel) quantityLabel.textContent = 'Số tiền sẵn sàng:';
-      entryInput.style.display = 'none';
-      codeInput.disabled = true;
-    } else {
-      if (entryLabel) entryLabel.style.display = '';
-      if (quantityLabel) quantityLabel.textContent = 'Khối lượng:';
-      entryInput.style.display = '';
-      codeInput.disabled = false;
-    }
+    configureModalFields(elements, {
+      title: isCash ? 'Sửa CASH' : 'Sửa mã chứng khoán',
+      code: stock.code,
+      entry: stock.entry,
+      quantity: stock.quantity,
+      isCash
+    });
 
-    modal.classList.remove('hidden');
+    elements.modal.classList.remove('hidden');
 
-    // Remove old listeners - properly clean up before replacing
-    const saveBtn_old = modal.querySelector('#saveStockBtn');
-    const newSaveBtn = saveBtn_old.cloneNode(true);
-    saveBtn_old.parentNode.replaceChild(newSaveBtn, saveBtn_old);
-
-    newSaveBtn.addEventListener('click', async () => {
-      const isCash = stock.code === 'CASH';
+    setupModalSaveButton(elements, async () => {
+      const { codeInput, entryInput, quantityInput } = elements;
       const code = codeInput.value.trim();
       const quantity = parseFloat(quantityInput.value);
 
@@ -414,7 +439,6 @@ function openEditStockModal(id, portfolioTable) {
       }
       
       if (isCash) {
-        // For cash, always use entry=1
         await updateStock(id, code, 1, quantity);
       } else {
         const entry = parseFloat(entryInput.value);
@@ -424,7 +448,7 @@ function openEditStockModal(id, portfolioTable) {
         }
         await updateStock(id, code, entry, quantity);
       }
-      modal.classList.add('hidden');
+      
       await loadPortfolioUI(portfolioTable);
     });
   });
@@ -531,8 +555,8 @@ async function openPriceUpdateModal(portfolioTable) {
   
   priceUpdateList.innerHTML = stocks.map(stock => `
     <div class="price-update-item">
-      <label>${stock.code}</label>
-      <input type="number" class="price-input" data-code="${stock.code}" 
+      <label>${escapeHtml(stock.code)}</label>
+      <input type="number" class="price-input" data-code="${escapeHtml(stock.code)}" 
              value="${stock.currentPrice || stock.entry}" 
              step="0.1" min="0" placeholder="Current price" />
       <span style="font-size: 11px; color: #666;">(Entry: ${stock.entry})</span>
@@ -579,14 +603,26 @@ async function savePriceUpdates(portfolioTable) {
 
 function initRealtimeClient() {
   if (!realtimeClient) {
+    // X51LABS-68: Detect debug mode from manifest version_name
+    const isDebugMode = (() => {
+      try {
+        const manifest = chrome.runtime.getManifest();
+        return manifest.version_name?.includes('dev') || 
+               manifest.version_name?.includes('debug') ||
+               false;
+      } catch (e) {
+        return false; // Production default
+      }
+    })();
+    
     realtimeClient = new AdvancedMarketDataClient({
       realtimeEnabled: true,
       pollInterval: 60000, // Poll every 60 seconds
       minUpdateInterval: 60000, // Update callback every 60 seconds
-      debug: true // Enable debug to see logs
+      debug: isDebugMode // X51LABS-68: Auto-detect debug mode
     });
     
-    console.log('[Portfolio] Realtime client initialized (60s updates)');
+    console.log('[Portfolio] Realtime client initialized (60s updates), debug:', isDebugMode);
   }
   return realtimeClient;
 }

@@ -1,3 +1,6 @@
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
+
 export function setupHistory(dom) {
   const { historyBtn, historyPage, historyList, refreshHistoryBtn } = dom;
 
@@ -49,64 +52,95 @@ export function setupHistory(dom) {
     
     console.log('[History] Opening chat:', item.chatId);
     
-    // Open ChatGPT tab with the specific chat ID
-    chrome.runtime.sendMessage({ 
-      action: 'open_chat_url', 
-      chatId: item.chatId,
-      chatUrl: item.chatUrl 
-    }, (response) => {
+    // Open ChatGPT tab with the specific chat ID using v1 schema
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.CHAT_OPEN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        chatId: item.chatId,
+        chatUrl: item.chatUrl
+      }
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
         console.error('[History] Error opening chat:', chrome.runtime.lastError);
         alert('Không thể mở chat. Vui lòng thử lại.');
         return;
       }
       
-      if (response && response.status === 'ok') {
-        console.log('[History] Chat opened in tab:', response.tabId);
-      } else {
-        console.error('[History] Failed to open chat:', response);
+      if (response && response.type === MESSAGE_TYPES.CHAT_OPENED) {
+        console.log('[History] Chat opened in tab:', response.payload?.tabId);
+      } else if (response && response.type === MESSAGE_TYPES.ERROR) {
+        console.error('[History] Failed to open chat:', response.payload?.error);
         alert('Không thể mở chat.');
       }
     });
   }
 
-  function loadHistory() {
+  async function loadHistory() {
     console.log('[History] Loading history...');
-    // TODO: Implement HISTORY_GET handler or use storage directly
-    console.log('[History] Chat history not implemented - no handler');
-    if (historyList) {
-      historyList.innerHTML = '<p class="empty-state">Chức năng lịch sử chat chưa được implement.</p>';
-    }
-    return;
     
-    /* OLD CODE - needs handler
-    chrome.runtime.sendMessage({ action: 'get_chat_history' }, (response) => {
-      console.log('[History] get_chat_history response:', { count: response?.history?.length || 0 });
-      if (chrome.runtime.lastError || !response || response.status !== 'ok') {
-        if (historyList) {
-          historyList.innerHTML = '<p class="empty-state">Lỗi tải lịch sử.</p>';
-        }
-        return;
-      }
-
-      const history = response.history || [];
+    if (!historyList) {
+      console.warn('[History] historyList element not found');
+      return;
+    }
+    
+    try {
+      // Get all storage keys starting with 'conversation_'
+      const allData = await chrome.storage.local.get(null);
+      const conversations = [];
       
-      if (!historyList) return;
-
-      if (history.length === 0) {
+      for (const [key, value] of Object.entries(allData)) {
+        if (key.startsWith('conversation_')) {
+          conversations.push({
+            key,
+            timestamp: value.timestamp || parseInt(key.split('_')[1]) || 0,
+            prompt: value.prompt || '',
+            result: value.result || value.response || '',
+            chatUrl: value.chatUrl || '',
+            chatId: extractChatId(value.chatUrl) || key
+          });
+        }
+      }
+      
+      // Sort by timestamp descending (newest first)
+      conversations.sort((a, b) => b.timestamp - a.timestamp);
+      
+      console.log('[History] Found', conversations.length, 'conversations');
+      
+      if (conversations.length === 0) {
         historyList.innerHTML = '<p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>';
         return;
       }
-
+      
+      // Render history items
       historyList.innerHTML = '';
-      history.forEach(item => {
-        const itemEl = renderHistoryItem(item);
+      conversations.slice(0, 100).forEach(item => { // Limit to 100 most recent
+        const itemEl = renderHistoryItem({
+          chatId: item.chatId,
+          chatUrl: item.chatUrl,
+          timestamp: item.timestamp,
+          prompt: item.prompt,
+          response: item.result
+        });
         historyList.appendChild(itemEl);
       });
       
-      console.log('[History] Rendered', history.length, 'history items');
-    });
-    */
+      console.log('[History] Rendered', Math.min(conversations.length, 100), 'history items');
+      
+    } catch (error) {
+      console.error('[History] Error loading history:', error);
+      historyList.innerHTML = '<p class="empty-state">Lỗi tải lịch sử.</p>';
+    }
+  }
+  
+  function extractChatId(chatUrl) {
+    if (!chatUrl) return null;
+    const match = chatUrl.match(/\/c\/([^/?#]+)/);
+    return match ? match[1] : null;
   }
 
   // Load history when switching to history page
@@ -124,25 +158,29 @@ export function setupHistory(dom) {
 
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
   if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener('click', () => {
+    clearHistoryBtn.addEventListener('click', async () => {
       if (!confirm('Bạn có chắc muốn xóa toàn bộ lịch sử chat?')) return;
       
       console.log('[History] Clearing all history...');
-      // TODO: Implement HISTORY_CLEAR handler
-      console.log('[History] Clear history not implemented');
-      alert('Chức năng clear history chưa được implement');
-      return;
       
-      /* OLD CODE
-      chrome.runtime.sendMessage({ action: 'clear_chat_history' }, (response) => {
-        console.log('[History] Clear response:', response);
-        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
-          alert('Lỗi khi xóa lịch sử!');
-          return;
+      try {
+        // Get all conversation keys
+        const allData = await chrome.storage.local.get(null);
+        const keysToRemove = Object.keys(allData).filter(key => key.startsWith('conversation_'));
+        
+        console.log('[History] Removing', keysToRemove.length, 'conversations');
+        
+        if (keysToRemove.length > 0) {
+          await chrome.storage.local.remove(keysToRemove);
+          console.log('[History] All history cleared');
+          loadHistory(); // Reload to show empty state
+        } else {
+          console.log('[History] No history to clear');
         }
-        loadHistory();
-      });
-      */
+      } catch (error) {
+        console.error('[History] Error clearing history:', error);
+        alert('Lỗi khi xóa lịch sử!');
+      }
     });
   }
 

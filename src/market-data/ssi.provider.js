@@ -6,6 +6,8 @@
  */
 
 import { MarketDataProvider } from './provider.interface.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 
 export class SSIProvider extends MarketDataProvider {
   constructor(options = {}) {
@@ -290,21 +292,27 @@ export class SSIProvider extends MarketDataProvider {
     console.log(`[SSIProvider] Fetching via background proxy: ${endpoint}`);
     
     try {
-      // Use background service worker as proxy to bypass CORS
+      // Use background service worker as proxy to bypass CORS with v1 schema
       const response = await chrome.runtime.sendMessage({
-        action: 'fetch_ssi_api',
-        endpoint: endpoint
+        v: 1,
+        type: MESSAGE_TYPES.CONTENT_EXTRACT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          action: 'fetch_ssi_api',
+          endpoint: endpoint
+        }
       });
       
-      if (!response) {
-        throw new Error('No response from background service worker');
+      if (!response || response.type === MESSAGE_TYPES.ERROR) {
+        throw new Error(response?.error?.message || 'No response from background service worker');
       }
       
-      if (!response.success) {
-        throw new Error(response.error || 'API request failed');
-      }
+      const data = response.payload?.data;
       
-      const data = response.data;
+      if (!data) {
+        throw new Error('No data in response');
+      }
       
       // Check for API error response
       if (data.errorCode || data.httpCode >= 400) {

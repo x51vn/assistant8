@@ -22,6 +22,7 @@ import './handlers/index.js'; // This will register all handlers
 // Dynamic imports cause Vite to inject document.* code which fails in Service Worker
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
+import './handlers/telemetry.js'; // X51LABS-94: Telemetry handlers
 
 const logger = createLogger('Background');
 
@@ -194,11 +195,17 @@ async function onStartup() {
  * Setup periodic alarms
  * - CHECK: Portfolio price check (5 minutes)
  * - AUTORUN: Auto-run evaluation (configurable interval)
+ * 
+ * NOTE: This function clears ALL alarms and recreates only CHECK and AUTORUN.
+ * Sync alarms (autoSync, firebaseSync) are managed by Firebase auth listener and UI,
+ * but will be cleared here. We need selective alarm management instead of clearAll().
  */
 async function setupAlarms() {
   try {
-    // Clear existing alarms
-    await chrome.alarms.clearAll();
+    // IMPORTANT: Only clear specific alarms, not all
+    // Other alarms (autoSync, firebaseSync) are managed elsewhere
+    await chrome.alarms.clear('CHECK');
+    await chrome.alarms.clear('AUTORUN');
     
     // CHECK alarm - portfolio price updates
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
@@ -212,9 +219,36 @@ async function setupAlarms() {
       logger.info('AUTORUN alarm created', { interval: settings.interval });
     }
     
+    // Clean up legacy/unknown alarms
+    await cleanupLegacyAlarms();
+    
+    // X51LABS-66: HEARTBEAT removed - MV3 service workers should be allowed to sleep
+    // Service worker will restart on-demand when needed (alarms, messages, events)
+    // Keeping it alive wastes battery and resources
+    
     logger.info('Alarms setup completed');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
+  }
+}
+
+/**
+ * Clean up legacy alarms from old versions
+ * Known alarms: CHECK, AUTORUN, POLL, autoSync, firebaseSync
+ */
+async function cleanupLegacyAlarms() {
+  try {
+    const knownAlarms = ['CHECK', 'AUTORUN', 'POLL', 'autoSync', 'firebaseSync'];
+    const allAlarms = await chrome.alarms.getAll();
+    
+    for (const alarm of allAlarms) {
+      if (!knownAlarms.includes(alarm.name)) {
+        await chrome.alarms.clear(alarm.name);
+        logger.info('Cleared legacy alarm', { name: alarm.name });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to cleanup legacy alarms', { error });
   }
 }
 

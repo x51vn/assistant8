@@ -54,6 +54,11 @@
 /**
  * Standard error codes used throughout the application
  */
+/**
+ * Standard error codes used throughout the application
+ * Use these codes for programmatic error handling
+ * @const {Object.<string, string>}
+ */
 export const ERROR_CODES = {
   // Communication errors
   TAB_NOT_FOUND: 'TAB_NOT_FOUND',
@@ -65,11 +70,24 @@ export const ERROR_CODES = {
   INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
   OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
   TIMEOUT: 'TIMEOUT',
+  OPERATION_FAILED: 'OPERATION_FAILED',
   
   // Validation errors
   INVALID_INPUT: 'INVALID_INPUT',
   EMPTY_PROMPT: 'EMPTY_PROMPT',
   INVALID_TAB_ID: 'INVALID_TAB_ID',
+  
+  // Authentication errors
+  AUTH_FAILED: 'AUTH_FAILED',
+  AUTH_EXPIRED: 'AUTH_EXPIRED',
+  
+  // Network errors
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  
+  // Storage errors
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+  STORAGE_ERROR: 'STORAGE_ERROR',
   
   // Unknown/Generic
   UNKNOWN_ERROR: 'UNKNOWN_ERROR'

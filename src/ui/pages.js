@@ -13,8 +13,9 @@ export function setActivePage({ pages, btns, page }) {
     'portfolio': 1,
     'results': 2,
     'errors': 3,
-    'templates': 4,
-    'settings': 5
+    'english': 4,
+    'templates': 5,
+    'settings': 6
   };
 
   const index = pageMap[page];

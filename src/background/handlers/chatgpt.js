@@ -50,14 +50,28 @@ registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
  * Gets output from ChatGPT
  */
 registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
-  const { tabId, options = {} } = message;
+  const { tabId, options = {} } = message.payload || {};
   
   logger.info('Handling CHATGPT_GET_OUTPUT', { 
     correlationId: message.correlationId,
-    tabId 
+    requestedTabId: tabId
   });
   
-  const result = await ChatGPTSession.getOutput(tabId, options);
+  let targetTabId = tabId;
+  
+  // If no tabId provided, find ChatGPT tab
+  if (!targetTabId) {
+    const chatgptTabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
+    if (chatgptTabs.length === 0) {
+      return createResponse(message, MESSAGE_TYPES.ERROR, {
+        error: 'No ChatGPT tab found'
+      });
+    }
+    targetTabId = chatgptTabs[0].id;
+    logger.info('Found ChatGPT tab', { tabId: targetTabId });
+  }
+  
+  const result = await ChatGPTSession.getOutput(targetTabId, options);
   
   if (!result.success) {
     return createResponse(message, MESSAGE_TYPES.ERROR, {
@@ -66,7 +80,11 @@ registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
   }
   
   return createResponse(message, MESSAGE_TYPES.CHATGPT_OUTPUT_READY, {
-    data: result.data
+    output: result.data.result,
+    chatId: result.data.chatId,
+    chatUrl: result.data.chatUrl,
+    assistantMessageId: result.data.assistantMessageId,
+    status: result.data.status
   });
 });
 

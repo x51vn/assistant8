@@ -34,7 +34,8 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
     });
 
     if (tabResult.error) {
-      throw new Error(`Failed to ensure ChatGPT tab: ${tabResult.error}`);
+      const errorMsg = typeof tabResult.error === 'string' ? tabResult.error : 'Failed to ensure ChatGPT tab';
+      throw new Error(errorMsg);
     }
 
     // Send prompt
@@ -77,7 +78,8 @@ registerHandler(MESSAGE_TYPES.ENSURE_CHATGPT_OPEN, async (message, sender) => {
     });
 
     if (tabResult.error) {
-      throw new Error(tabResult.error);
+      const errorMsg = typeof tabResult.error === 'string' ? tabResult.error : 'Failed to ensure ChatGPT tab';
+      throw new Error(errorMsg);
     }
 
     logger.info('ChatGPT tab ready', { correlationId, tabId: tabResult.tabId });

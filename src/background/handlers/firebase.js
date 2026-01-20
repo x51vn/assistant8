@@ -11,8 +11,72 @@ import * as firebaseService from '../../firebaseService.js';
 
 const logger = createLogger('FirebaseHandlers');
 
-// Track Firebase user state for alarms
-let firebaseUser = null;
+/**
+ * FIREBASE_AUTH - Handle authentication actions (login, logout, get_user)
+ */
+registerHandler(MESSAGE_TYPES.FIREBASE_AUTH, async (message, sender) => {
+  const correlationId = logger.startOperation('firebaseAuth', message.correlationId);
+  const { action, email, password } = message.payload || {};
+  
+  try {
+    if (action === 'login') {
+      if (!email || !password) {
+        throw new Error('Email and password required');
+      }
+      
+      logger.info('Firebase login attempt', { correlationId, email });
+      const result = await firebaseService.loginWithEmail(email, password);
+      
+      if (!result.success) {
+        // Extract error message properly
+        const errorMsg = typeof result.error === 'string' 
+          ? result.error 
+          : result.error?.message || result.error?.code || 'Login failed';
+        throw new Error(errorMsg);
+      }
+      
+      logger.info('Firebase login successful', { correlationId, uid: result.user.uid });
+      logger.endOperation(correlationId, 'success');
+      
+      return createResponse(message, MESSAGE_TYPES.FIREBASE_AUTH, { 
+        success: true, 
+        user: result.user 
+      });
+    }
+    
+    if (action === 'logout') {
+      logger.info('Firebase logout', { correlationId });
+      const result = await firebaseService.logout();
+      
+      if (!result.success) {
+        const errorMsg = typeof result.error === 'string' 
+          ? result.error 
+          : result.error?.message || result.error?.code || 'Logout failed';
+        throw new Error(errorMsg);
+      }
+      
+      logger.endOperation(correlationId, 'success');
+      
+      return createResponse(message, MESSAGE_TYPES.FIREBASE_AUTH, { success: true });
+    }
+    
+    if (action === 'get_user') {
+      logger.info('Get current user', { correlationId });
+      const result = await firebaseService.getCurrentUser();
+      
+      logger.endOperation(correlationId, 'success', { hasUser: !!result.user });
+      
+      return createResponse(message, MESSAGE_TYPES.FIREBASE_AUTH, result);
+    }
+    
+    throw new Error(`Unknown action: ${action}`);
+    
+  } catch (error) {
+    logger.error('Firebase auth failed', { correlationId, action, error });
+    logger.endOperation(correlationId, 'error', { error });
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
+  }
+});
 
 /**
  * FIREBASE_SYNC - Sync data to Firestore
@@ -92,9 +156,6 @@ export async function syncToFirebaseHandler() {
       throw new Error(authResult.error || 'Authentication failed');
     }
     
-    // Update user state for alarms
-    firebaseUser = authResult.user;
-    
     // Get all data from storage
     const data = await chrome.storage.local.get(null);
     
@@ -126,7 +187,7 @@ export async function syncToFirebaseHandler() {
  * @returns {Promise<{message: string}>}
  */
 export async function restoreFromFirebaseHandler(backupId) {
-  const correlationId = logger.startOperation('restoreFromFirebase', undefined, { backupId });
+  const correlationId = logger.startOperation('restoreFromFirebase');
   
   try {
     // Ensure user is authenticated
@@ -192,10 +253,5 @@ export async function listBackupsHandler() {
   }
 }
 
-/**
- * Get Firebase user (for alarms)
- * @returns {any} Firebase user object
- */
-export function getFirebaseUser() {
-  return firebaseUser;
-}
+// X51LABS-77: Removed getFirebaseUser() - module-level state violates MV3 SW lifecycle
+// Use firebaseService.getCurrentUser() instead

@@ -18,7 +18,12 @@ chrome-extension-backup/
 # Development
 .env
 .env.local
+.env.production
 debug.log
+
+# SECURITY: Never commit Firebase credentials
+config.json
+firebase-config.json
 
 # OS specific
 Thumbs.db
