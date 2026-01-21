@@ -53,7 +53,10 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_SENT, {
       tabId: tabResult.tabId,
-      success: true
+      success: true,
+      chatId: sendResult.data?.chatId || null,
+      chatUrl: sendResult.data?.chatUrl || null,
+      status: sendResult.data?.status || null
     });
 
   } catch (error) {

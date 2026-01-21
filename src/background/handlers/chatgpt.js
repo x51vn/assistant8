@@ -51,9 +51,11 @@ registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
  */
 registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
   const { tabId, options = {} } = message.payload || {};
+  const trackingChatId = message.chatId; // Get chatId from message root for tracking
   
   logger.info('Handling CHATGPT_GET_OUTPUT', { 
     correlationId: message.correlationId,
+    trackingChatId,
     requestedTabId: tabId
   });
   
@@ -68,7 +70,7 @@ registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
       });
     }
     targetTabId = chatgptTabs[0].id;
-    logger.info('Found ChatGPT tab', { tabId: targetTabId });
+    logger.info('Found ChatGPT tab', { tabId: targetTabId, trackingChatId });
   }
   
   const result = await ChatGPTSession.getOutput(targetTabId, options);
@@ -78,6 +80,12 @@ registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
       error: result.error
     });
   }
+  
+  logger.info('ChatGPT output retrieved', { 
+    trackingChatId,
+    outputLength: result.data.result?.length,
+    chatId: result.data.chatId
+  });
   
   return createResponse(message, MESSAGE_TYPES.CHATGPT_OUTPUT_READY, {
     output: result.data.result,

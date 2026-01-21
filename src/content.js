@@ -55,6 +55,42 @@ let selectorStats = {
   newChatButton: { lastMatch: null, matchCount: {} }
 };
 
+// X51LABS-61: Storage keys for selector cache
+const SELECTOR_CACHE_KEY = 'x51labs_selector_cache_v1';
+
+// X51LABS-61: Load cached selector preference from storage
+async function loadSelectorCache() {
+  try {
+    const data = await chrome.storage.local.get([SELECTOR_CACHE_KEY]);
+    const cached = data[SELECTOR_CACHE_KEY];
+    
+    if (cached && typeof cached === 'object') {
+      console.log('[Content] Loaded selector cache:', cached);
+      return cached;
+    }
+  } catch (err) {
+    console.warn('[Content] Failed to load selector cache:', err);
+  }
+  return null;
+}
+
+// X51LABS-61: Save selector stats to storage for recovery after reload
+async function saveSelectorStats() {
+  try {
+    const toCache = {
+      editor: selectorStats.editor.lastMatch,
+      newChatButton: selectorStats.newChatButton.lastMatch,
+      timestamp: Date.now(),
+      version: detectChatGPTVersion()
+    };
+    
+    await chrome.storage.local.set({ [SELECTOR_CACHE_KEY]: toCache });
+    console.log('[Content] Selector stats cached:', toCache);
+  } catch (err) {
+    console.warn('[Content] Failed to save selector cache:', err);
+  }
+}
+
 // X51LABS-61: Detect ChatGPT version from page metadata
 function detectChatGPTVersion() {
   try {
@@ -93,13 +129,37 @@ function detectChatGPTVersion() {
   }
 }
 
-function trySelectorsChain(chainName) {
+function trySelectorsChain(chainName, cachedSelectors = null) {
   const chain = SELECTOR_CHAINS[chainName];
   if (!chain) {
     console.error(`[Content] Unknown selector chain: ${chainName}`);
     return null;
   }
   
+  // X51LABS-61: Try cached selector first (fast recovery from prior UI state)
+  if (cachedSelectors && cachedSelectors[chainName]) {
+    const cachedName = cachedSelectors[chainName];
+    const cachedDef = chain.find(c => c.name === cachedName);
+    
+    if (cachedDef) {
+      try {
+        const element = document.querySelector(cachedDef.selector);
+        if (element) {
+          selectorStats[chainName].matchCount[cachedName] = (selectorStats[chainName].matchCount[cachedName] || 0) + 1;
+          selectorStats[chainName].lastMatch = cachedName;
+          
+          console.log(`[Content] ✅ ${chainName} found via cached: ${cachedName} (${cachedDef.selector})`);
+          saveSelectorStats(); // Update cache on success
+          return element;
+        }
+      } catch (err) {
+        console.warn(`[Content] Cached selector failed: ${cachedDef.selector}`, err);
+        // Fall through to full chain scan
+      }
+    }
+  }
+  
+  // X51LABS-61: Full fallback chain scan
   for (const { selector, name } of chain) {
     try {
       const element = document.querySelector(selector);
@@ -112,6 +172,7 @@ function trySelectorsChain(chainName) {
         selectorStats[chainName].lastMatch = name;
         
         console.log(`[Content] ✅ ${chainName} found via: ${name} (${selector})`);
+        saveSelectorStats(); // Persist successful match
         return element;
       }
     } catch (err) {
@@ -123,13 +184,26 @@ function trySelectorsChain(chainName) {
   return null;
 }
 
+// X51LABS-61: Cache loaded at module init
+let cachedSelectors = null;
+
 function findEditor() {
-  return trySelectorsChain('editor');
+  return trySelectorsChain('editor', cachedSelectors);
 }
 
 function findNewChatButton() {
-  return trySelectorsChain('newChatButton');
+  return trySelectorsChain('newChatButton', cachedSelectors);
 }
+
+// X51LABS-61: Initialize selector cache on content script load
+(async () => {
+  try {
+    cachedSelectors = await loadSelectorCache();
+    console.log('[Content] Selector cache initialized:', cachedSelectors);
+  } catch (err) {
+    console.warn('[Content] Cache init failed (non-blocking):', err);
+  }
+})();
 
 // X51LABS-94: Expose selector stats and send telemetry to background
 function getSelectorStats() {

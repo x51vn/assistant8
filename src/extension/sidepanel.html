@@ -51,7 +51,16 @@
       <div class="content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h2 style="margin: 0;">Danh Mục</h2>
-          <span id="realtimeStatus" style="font-size: 12px; color: #999;"><i class="fas fa-chart-line"></i> Manual Update</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+            <span id="realtimeStatus" style="font-size: 12px; color: #999;"><i class="fas fa-chart-line"></i> Manual Update</span>
+            <span id="lastUpdateTime" style="font-size: 11px; color: #aaa;">Chưa có dữ liệu</span>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button id="refreshPricesBtn" class="secondary-btn" style="flex: 1;" title="Làm mới giá thủ công">
+            <i class="fas fa-sync-alt"></i> Làm mới giá
+          </button>
         </div>
         
         <div id="portfolioSummary" class="portfolio-summary" style="display: none;">

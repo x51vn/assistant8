@@ -27,6 +27,7 @@ export function setupHistory(dom) {
   }
 
   function renderHistoryItem(item) {
+    const displayChat = item.chatUrl || (item.chatId ? `https://chatgpt.com/c/${item.chatId}` : '—');
     const div = document.createElement('div');
     div.className = 'history-item';
     div.dataset.chatId = item.chatId;
@@ -34,7 +35,7 @@ export function setupHistory(dom) {
     div.innerHTML = `
       <div class="history-item-header">
         <span class="history-timestamp">${formatDate(item.timestamp)}</span>
-        <span class="history-chat-id">${truncate(item.chatId, 12)}</span>
+        <span class="history-chat-id">${displayChat}</span>
       </div>
       <div class="history-prompt"><strong>Prompt:</strong> ${truncate(item.prompt, 150)}</div>
       <div class="history-response"><strong>Response:</strong> ${truncate(item.response, 200)}</div>
@@ -50,6 +51,12 @@ export function setupHistory(dom) {
   function showHistoryDetail(item) {
     if (!item) return;
     
+    const hasChat = !!(item.chatUrl || item.chatId);
+    if (!hasChat) {
+      alert('Không có chatId/chatUrl hợp lệ để mở.');
+      return;
+    }
+
     console.log('[History] Opening chat:', item.chatId);
     
     // Open ChatGPT tab with the specific chat ID using v1 schema
@@ -74,7 +81,8 @@ export function setupHistory(dom) {
       if (response && response.type === MESSAGE_TYPES.CHAT_OPENED) {
         console.log('[History] Chat opened in tab:', response.payload?.tabId);
       } else if (response && response.type === MESSAGE_TYPES.ERROR) {
-        console.error('[History] Failed to open chat:', response.payload?.error);
+        const errorMsg = response.error?.message || response.error || response.payload?.error || 'unknown_error';
+        console.error('[History] Failed to open chat:', errorMsg);
         alert('Không thể mở chat.');
       }
     });
@@ -89,47 +97,73 @@ export function setupHistory(dom) {
     }
     
     try {
-      // Get all storage keys starting with 'conversation_'
+      // Get all storage keys and also chatHistory array
       const allData = await chrome.storage.local.get(null);
       const conversations = [];
-      
+
       for (const [key, value] of Object.entries(allData)) {
         if (key.startsWith('conversation_')) {
+          const normalized = normalizeChatMeta(value.chatId, value.chatUrl);
           conversations.push({
             key,
             timestamp: value.timestamp || parseInt(key.split('_')[1]) || 0,
             prompt: value.prompt || '',
-            result: value.result || value.response || '',
-            chatUrl: value.chatUrl || '',
-            chatId: extractChatId(value.chatUrl) || key
+            response: value.result || value.response || '',
+            chatUrl: normalized.chatUrl,
+            chatId: normalized.chatId,
+            source: 'results'
           });
         }
       }
+
+      const chatHistory = Array.isArray(allData.chatHistory) ? allData.chatHistory : [];
+      chatHistory.forEach((item, index) => {
+        const normalized = normalizeChatMeta(item.chatId, item.chatUrl);
+        conversations.push({
+          key: item.timestamp ? `chatHistory_${item.timestamp}` : `chatHistory_${index}`,
+          timestamp: item.timestamp || 0,
+          prompt: item.prompt || '',
+          response: item.response || '',
+          chatUrl: normalized.chatUrl,
+          chatId: normalized.chatId,
+          source: item.source || 'portfolio'
+        });
+      });
+
+      // De-duplicate by chatId + timestamp when possible
+      const seen = new Set();
+      const deduped = [];
+      for (const item of conversations) {
+        const key = `${item.chatId || 'nochat'}_${item.timestamp || 0}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(item);
+      }
       
       // Sort by timestamp descending (newest first)
-      conversations.sort((a, b) => b.timestamp - a.timestamp);
+      deduped.sort((a, b) => b.timestamp - a.timestamp);
       
-      console.log('[History] Found', conversations.length, 'conversations');
+      console.log('[History] Found', deduped.length, 'conversations');
       
-      if (conversations.length === 0) {
+      if (deduped.length === 0) {
         historyList.innerHTML = '<p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>';
         return;
       }
       
       // Render history items
       historyList.innerHTML = '';
-      conversations.slice(0, 100).forEach(item => { // Limit to 100 most recent
+      deduped.slice(0, 100).forEach(item => { // Limit to 100 most recent
         const itemEl = renderHistoryItem({
           chatId: item.chatId,
           chatUrl: item.chatUrl,
           timestamp: item.timestamp,
           prompt: item.prompt,
-          response: item.result
+          response: item.response
         });
         historyList.appendChild(itemEl);
       });
       
-      console.log('[History] Rendered', Math.min(conversations.length, 100), 'history items');
+      console.log('[History] Rendered', Math.min(deduped.length, 100), 'history items');
       
     } catch (error) {
       console.error('[History] Error loading history:', error);
@@ -139,8 +173,32 @@ export function setupHistory(dom) {
   
   function extractChatId(chatUrl) {
     if (!chatUrl) return null;
-    const match = chatUrl.match(/\/c\/([^/?#]+)/);
+    const match = chatUrl.match(/\/(?:c|g)\/([^/?#]+)/);
     return match ? match[1] : null;
+  }
+
+  function normalizeChatMeta(chatId, chatUrl) {
+    let id = typeof chatId === 'string' ? chatId.trim() : '';
+    let url = typeof chatUrl === 'string' ? chatUrl.trim() : '';
+
+    if (id && (id.startsWith('http://') || id.startsWith('https://'))) {
+      url = id;
+      id = extractChatId(url) || '';
+    }
+
+    if (id.startsWith('conversation_')) {
+      id = '';
+    }
+
+    if (!id && url) {
+      id = extractChatId(url) || '';
+    }
+
+    if (!url && id) {
+      url = `https://chatgpt.com/c/${id}`;
+    }
+
+    return { chatId: id, chatUrl: url };
   }
 
   // Load history when switching to history page

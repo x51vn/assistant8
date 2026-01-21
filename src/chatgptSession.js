@@ -275,6 +275,23 @@ export async function getOutput(tabId, options = {}) {
             status: response.status || 'completed',
             retryAttempt: attempt
           };
+          
+          // X51LABS-62: Save successful result to storage for fallback
+          try {
+            await chrome.storage.local.set({
+              'lastResult': {
+                result: response.result,
+                chatId: response.chatId || null,
+                chatUrl: response.chatUrl || null,
+                timestamp: Date.now(),
+                attempt: attempt
+              }
+            });
+            logger.info(`[getOutput] Result cached to storage`, { correlationId, attempt });
+          } catch (cacheErr) {
+            logger.warn(`[getOutput] Failed to cache result`, { correlationId, error: cacheErr });
+          }
+          
           logger.endOperation(correlationId, 'success', { attempt });
           return createSuccessResponse(data);
         }
@@ -288,7 +305,29 @@ export async function getOutput(tabId, options = {}) {
         // No result but no explicit error - might succeed on retry
         logger.warn(`[getOutput] No result in response, attempt ${attempt}/${maxRetries}`, { correlationId });
         if (attempt === maxRetries) {
-          // Last attempt failed, return error with partial if available
+          // Last attempt failed, check for cached result fallback
+          logger.info(`[getOutput] All retries exhausted, checking cache for fallback`, { correlationId });
+          
+          let cachedResult = null;
+          try {
+            const data = await chrome.storage.local.get(['lastResult']);
+            cachedResult = data.lastResult;
+            if (cachedResult && Date.now() - cachedResult.timestamp < 60 * 60 * 1000) { // 1 hour TTL
+              logger.info(`[getOutput] Using cached result fallback (age: ${Math.round((Date.now() - cachedResult.timestamp) / 1000)}s)`, { correlationId });
+              return createSuccessResponse({
+                result: cachedResult.result,
+                chatId: cachedResult.chatId,
+                chatUrl: cachedResult.chatUrl,
+                status: 'fallback-cached',
+                retryAttempt: attempt,
+                isCached: true
+              });
+            }
+          } catch (cacheErr) {
+            logger.warn(`[getOutput] Failed to load cache fallback`, { correlationId, error: cacheErr });
+          }
+          
+          // Return error with partial if available
           logger.endOperation(correlationId, 'error', 'No result after retries');
           return createErrorResponse(
             ERROR_CODES.OUTPUT_FETCH_FAILED,

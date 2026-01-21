@@ -1,5 +1,7 @@
 const PORTFOLIO_KEY = 'portfolio';
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
+const CHAT_HISTORY_KEY = 'chatHistory';
+const MAX_CHAT_HISTORY = 100;
 
 import { calculateStockPL, calculatePortfolioTotalPL, formatCurrency, formatPercent, getPLClass } from './portfolioPL.js';
 import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
@@ -51,6 +53,23 @@ export async function initPortfolio({
   // Add stock button
   addStockBtn?.addEventListener('click', () => openAddStockModal(portfolioTable));
   
+  // Refresh prices button
+  const refreshPricesBtn = document.getElementById('refreshPricesBtn');
+  refreshPricesBtn?.addEventListener('click', async () => {
+    try {
+      refreshPricesBtn.disabled = true;
+      refreshPricesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang tải...';
+      await manualRefreshPrices(portfolioTable);
+      refreshPricesBtn.disabled = false;
+      refreshPricesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Làm mới giá';
+    } catch (err) {
+      console.error('[Portfolio] Manual refresh failed:', err);
+      refreshPricesBtn.disabled = false;
+      refreshPricesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Làm mới giá';
+      alert('Lỗi khi làm mới giá: ' + err.message);
+    }
+  });
+  
   // Keep backward compatibility - remove addCashBtn listener
 
   // Evaluate button
@@ -66,13 +85,27 @@ export async function initPortfolio({
       await chrome.storage.local.set({ [PORTFOLIO_PROMPT_KEY]: prompt });
       console.log('[Portfolio] Prompt saved');
       
-      // Wait for evaluate to complete
-      const success = await evaluatePortfolio(prompt);
-      if (!success) {
-        console.error('[Portfolio] Failed to evaluate portfolio');
+      // Disable button while processing
+      evaluateBtn.disabled = true;
+      evaluateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang gửi...';
+      
+      // Wait for evaluate to complete and get chatId
+      const result = await evaluatePortfolio(prompt);
+      
+      evaluateBtn.disabled = false;
+      evaluateBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i>';
+      
+      if (!result.success) {
+        console.error('[Portfolio] Failed to evaluate portfolio:', result.error);
+        alert('Lỗi gửi prompt: ' + (result.error || 'Unknown error'));
+      } else {
+        console.log('[Portfolio] Evaluation sent successfully, chatId:', result.chatId);
       }
     } catch (err) {
       console.error('[Portfolio] Evaluate error:', err);
+      evaluateBtn.disabled = false;
+      evaluateBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i>';
+      alert('Lỗi: ' + err.message);
     }
   });
 
@@ -85,35 +118,24 @@ export async function initPortfolio({
     }
 
     try {
-      // Send prompt to ChatGPT via background using proper message format
-      const message = {
-        v: 1,
-        type: MESSAGE_TYPES.SEND_PROMPT,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        payload: {
-          prompt: prompt,
-          options: {
-            createNewChat: true,
-            focusTab: true
-          }
-        }
-      };
+      teaStockBtn.disabled = true;
+      teaStockBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang gửi...';
       
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(message, (response) => {
-          resolve(response);
-        });
-      });
-
-      if (response && response.type !== MESSAGE_TYPES.ERROR) {
-        console.log('[Portfolio] Tea stock prompt sent to ChatGPT');
+      const result = await sendPromptWithHistory(prompt, 'Tea Stock Search', true);
+      
+      teaStockBtn.disabled = false;
+      teaStockBtn.innerHTML = '<i class="fas fa-leaf"></i>';
+      
+      if (!result.success) {
+        console.error('[Portfolio] Failed to send tea stock prompt:', result.error);
+        alert('Lỗi gửi prompt: ' + (result.error || 'Unknown error'));
       } else {
-        console.error('[Portfolio] Failed to send tea stock prompt:', response);
-        alert('Lỗi gửi prompt. Vui lòng mở tab ChatGPT.');
+        console.log('[Portfolio] Tea stock prompt sent, chatId:', result.chatId);
       }
     } catch (err) {
       console.error('[Portfolio] Tea stock error:', err);
+      teaStockBtn.disabled = false;
+      teaStockBtn.innerHTML = '<i class="fas fa-leaf"></i>';
       alert('Lỗi: ' + err.message);
     }
   });
@@ -157,6 +179,9 @@ export async function loadPortfolioUI(table) {
 
   // Update realtime status UI
   checkRealtimeStatus();
+  
+  // Update last update time display
+  updateLastUpdateTime(portfolio);
 
   table.innerHTML = '';
   if (portfolio.length === 0) {
@@ -493,54 +518,34 @@ export async function evaluatePortfolio(prompt) {
   
   // Build portfolio string
   let portfolioText = '## DANH MỤC HIỆN CÓ\n\n';
-  portfolioText += '| Mã | Entry | Khối lượng | Giá trị |\n';
-  portfolioText += '|----|----|----|-|\n';
+  portfolioText += '| Mã | Entry | Current | Khối lượng | P&L |\n';
+  portfolioText += '|----|-------|---------|-----------|-----|\n';
   
-  let totalValue = 0;
+  let totalEntry = 0;
+  let totalCurrent = 0;
   portfolio.forEach(stock => {
-    const value = stock.entry * stock.quantity;
-    totalValue += value;
-    portfolioText += `| ${stock.code} | ${stock.entry} | ${stock.quantity} | ${value.toFixed(2)} |\n`;
+    const entryValue = stock.entry * stock.quantity;
+    const currentValue = (stock.currentPrice || stock.entry) * stock.quantity;
+    const pl = currentValue - entryValue;
+    const plPercent = entryValue > 0 ? ((pl / entryValue) * 100).toFixed(2) : 0;
+    
+    totalEntry += entryValue;
+    totalCurrent += currentValue;
+    
+    portfolioText += `| ${stock.code} | ${stock.entry} | ${stock.currentPrice || '-'} | ${stock.quantity} | ${pl.toFixed(2)} (${plPercent}%) |\n`;
   });
   
-  portfolioText += `\n**Tổng giá trị danh mục: ${totalValue.toFixed(2)}**\n\n`;
+  const totalPL = totalCurrent - totalEntry;
+  const totalPLPercent = totalEntry > 0 ? ((totalPL / totalEntry) * 100).toFixed(2) : 0;
+  portfolioText += `\n**Tổng P&L: ${totalPL.toFixed(2)} (${totalPLPercent}%)**\n\n`;
 
   // Combine with prompt
   const fullPrompt = `${portfolioText}\n## YÊU CẦU\n${prompt}`;
 
   console.log('[Portfolio] Evaluate request:', fullPrompt);
 
-  // Send to background using proper message format
-  return new Promise((resolve) => {
-    const message = {
-      v: 1,
-      type: MESSAGE_TYPES.SEND_PROMPT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      payload: {
-        prompt: fullPrompt,
-        options: {
-          createNewChat: true,
-          focusTab: true
-        }
-      }
-    };
-    
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('[Portfolio] Error:', chrome.runtime.lastError.message);
-        resolve(false);
-        return;
-      }
-      if (!response || response.type === MESSAGE_TYPES.ERROR) {
-        console.error('[Portfolio] Failed to send prompt:', response?.error);
-        resolve(false);
-        return;
-      }
-      console.log('[Portfolio] Sent to ChatGPT successfully');
-      resolve(true);
-    });
-  });
+  // Send with history tracking
+  return await sendPromptWithHistory(fullPrompt, 'Portfolio Evaluation', true);
 }
 
 // Price update functions
@@ -630,11 +635,11 @@ function initRealtimeClient() {
 async function startRealtimeUpdates(portfolioTable) {
   try {
     if (!realtimeClient) {
-      initRealtimeClient();
+      realtimeClient = initRealtimeClient();
     }
     
-    // Wait a bit for client to initialize
-    if (!realtimeClient) {
+    // Verify client is properly initialized
+    if (!realtimeClient || typeof realtimeClient.subscribe !== 'function') {
       throw new Error('Realtime client failed to initialize');
     }
     
@@ -732,37 +737,21 @@ async function evaluateStock(stockCode) {
     
     let fullPrompt = prompt;
     if (stock) {
-      const context = `Mã: ${stock.code}, Entry: ${stock.entry}, Giá hiện tại: ${stock.currentPrice || 'N/A'}, Khối lượng: ${stock.quantity}`;
-      fullPrompt = `${prompt}\n\nThông tin hiện tại: ${context}`;
+      const pl = stock.currentPrice ? ((stock.currentPrice - stock.entry) / stock.entry * 100).toFixed(2) : 'N/A';
+      const context = `\n\n**Thông tin hiện tại:**\n- Mã: ${stock.code}\n- Entry: ${stock.entry}\n- Giá hiện tại: ${stock.currentPrice || 'N/A'}\n- Khối lượng: ${stock.quantity}\n- P&L: ${pl}%`;
+      fullPrompt = `${prompt}${context}`;
     }
     
     console.log('[Portfolio] Sending stock evaluation:', { stockCode, prompt: fullPrompt });
     
-    const message = {
-      v: 1,
-      type: MESSAGE_TYPES.SEND_PROMPT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      payload: {
-        prompt: fullPrompt,
-        options: {
-          createNewChat: true,
-          focusTab: true
-        }
-      }
-    };
+    // Send with history tracking
+    const result = await sendPromptWithHistory(fullPrompt, `Stock Evaluation: ${stockCode}`, true);
     
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        alert('Lỗi: ' + chrome.runtime.lastError.message);
-        return;
-      }
-      if (response && response.type !== MESSAGE_TYPES.ERROR) {
-        console.log('[Portfolio] Stock evaluation sent successfully');
-      } else {
-        alert('Không thể gửi đánh giá!');
-      }
-    });
+    if (!result.success) {
+      alert('Không thể gửi đánh giá: ' + (result.error || 'Unknown error'));
+    } else {
+      console.log('[Portfolio] Stock evaluation sent, chatId:', result.chatId);
+    }
   } catch (err) {
     console.error('[Portfolio] Error evaluating stock:', err);
     alert('Lỗi khi đánh giá mã: ' + err.message);
@@ -791,5 +780,443 @@ function checkRealtimeStatus() {
       updatePricesBtn.textContent = '▶️ Bật Realtime';
       updatePricesBtn.style.backgroundColor = '#666';
     }
+  }
+}
+
+/**
+ * Send prompt to ChatGPT and save to history
+ * @param {string} prompt - The prompt to send
+ * @param {string} title - Short title for history entry
+ * @param {boolean} createNewChat - Whether to create new chat
+ * @returns {Promise<{success: boolean, chatId?: string, chatUrl?: string, error?: string}>}
+ */
+async function sendPromptWithHistory(prompt, title, createNewChat = true) {
+  try {
+    // Create history entry immediately with pending status
+    const timestamp = Date.now();
+    const historyEntry = {
+      prompt: prompt,
+      title: title,
+      response: '[Đang chờ ChatGPT trả lời...]',
+      timestamp: timestamp,
+      chatUrl: '',
+      chatId: '',
+      source: 'portfolio',
+      pending: true
+    };
+    
+    // Save to history
+    await saveChatToHistory(historyEntry);
+    console.log('[Portfolio] Saved pending chat to history');
+    
+    // Send prompt to ChatGPT
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: timestamp,
+      payload: {
+        prompt: prompt,
+        options: {
+          createNewChat: createNewChat,
+          focusTab: true
+        }
+      }
+    };
+    
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        resolve(response);
+      });
+    });
+
+    if (chrome.runtime.lastError) {
+      console.error('[Portfolio] Send error:', chrome.runtime.lastError.message);
+      // Update history with error
+      historyEntry.pending = false;
+      historyEntry.response = `[Lỗi: ${chrome.runtime.lastError.message}]`;
+      await saveChatToHistory(historyEntry);
+      return { success: false, error: chrome.runtime.lastError.message };
+    }
+    
+    if (!response || response.type === MESSAGE_TYPES.ERROR) {
+      const errorMsg = response?.payload?.error || response?.error || 'Unknown error';
+      console.error('[Portfolio] Failed to send prompt:', errorMsg);
+      // Update history with error
+      historyEntry.pending = false;
+      historyEntry.response = `[Lỗi: ${errorMsg}]`;
+      await saveChatToHistory(historyEntry);
+      return { success: false, error: errorMsg };
+    }
+    
+    console.log('[Portfolio] Prompt sent successfully to ChatGPT');
+    
+    // Get chatId/chatUrl from response - it should have chatUrl at least
+    let finalChatId = response.payload?.chatId || null;
+    let finalChatUrl = response.payload?.chatUrl || null;
+    
+    console.log('[Portfolio] Initial response chatId:', finalChatId, 'chatUrl:', finalChatUrl);
+    
+    // Extract chatId from URL if we have URL but no ID
+    if (!finalChatId && finalChatUrl) {
+      finalChatId = extractChatIdFromUrl(finalChatUrl);
+      console.log('[Portfolio] Extracted chatId from URL:', finalChatId);
+    }
+    
+    // If still no URL, try polling for it (in case chat was just created)
+    if (!finalChatUrl && !response.reviewMode) {
+      console.log('[Portfolio] ChatUrl not available, polling for it...');
+      
+      // Poll up to 20 times with 500ms interval = 10 seconds
+      for (let i = 0; i < 20; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Get chatUrl from CHATGPT_GET_OUTPUT which queries the content script directly
+        const pollMessage = {
+          v: 1,
+          type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          chatId: finalChatId, // Pass chatId for tracking
+          payload: { wait: false }
+        };
+        
+        const pollResponse = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(pollMessage, (response) => {
+            resolve(response);
+          });
+        });
+        
+        if (pollResponse?.payload?.chatUrl) {
+          finalChatUrl = pollResponse.payload.chatUrl;
+          finalChatId = pollResponse.payload.chatId || extractChatIdFromUrl(finalChatUrl);
+          console.log('[Portfolio] Got chatUrl from poll attempt', i + 1, ':', finalChatUrl);
+          break;
+        }
+      }
+    }
+    
+    // Build URL from chatId if we only have ID
+    if (finalChatId && !finalChatUrl) {
+      finalChatUrl = `https://chatgpt.com/c/${finalChatId}`;
+    }
+    
+    // Update history entry with chatId/chatUrl
+    if (finalChatId || finalChatUrl) {
+      historyEntry.chatId = finalChatId || '';
+      historyEntry.chatUrl = finalChatUrl || '';
+      await saveChatToHistory(historyEntry);
+      console.log('[Portfolio] Updated history with chatId:', historyEntry.chatId, 'chatUrl:', historyEntry.chatUrl);
+    } else {
+      console.warn('[Portfolio] No chatId or chatUrl found after polling');
+    }
+    
+    // Start polling for response in background (don't wait)
+    if (!response.reviewMode) {
+      pollForResponse(historyEntry.timestamp, prompt).catch(err => {
+        console.error('[Portfolio] Background polling error:', err);
+      });
+    }
+    
+    return { 
+      success: true, 
+      chatId: finalChatId, 
+      chatUrl: finalChatUrl 
+    };
+  } catch (err) {
+    console.error('[Portfolio] sendPromptWithHistory error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Poll for ChatGPT response and update history entry
+ * @param {number} timestamp - Timestamp of the history entry to update
+ * @param {string} originalPrompt - Original prompt sent
+ */
+async function pollForResponse(timestamp, originalPrompt) {
+  console.log('[Portfolio] Starting response polling for timestamp:', timestamp);
+  let pollCount = 0;
+  const maxPolls = 120; // 10 minutes max (120 x 5s)
+  
+  const pollInterval = setInterval(async () => {
+    pollCount++;
+    
+    if (pollCount > maxPolls) {
+      console.log('[Portfolio] Max poll attempts reached, stopping');
+      clearInterval(pollInterval);
+      return;
+    }
+    
+    try {
+      // Poll for output using CHATGPT_GET_OUTPUT
+      const pollMessage = {
+        v: 1,
+        type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        chatId: timestamp, // Use timestamp as tracking ID since it uniquely identifies this prompt
+        payload: {
+          wait: false
+        }
+      };
+      
+      const pollResponse = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(pollMessage, (response) => {
+          resolve(response);
+        });
+      });
+      
+      if (chrome.runtime.lastError) {
+        console.error('[Portfolio] Poll error:', chrome.runtime.lastError);
+        return;
+      }
+      
+      // Check if we got the result
+      if (pollResponse?.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && pollResponse.payload) {
+        const { output, chatUrl, chatId } = pollResponse.payload;
+        
+        if (output) {
+          console.log('[Portfolio] Got response! Length:', output.length);
+          clearInterval(pollInterval);
+          
+          // Update history entry with actual response
+          const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+          const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+          const entryIndex = history.findIndex(h => h.timestamp === timestamp && h.prompt === originalPrompt);
+          
+          if (entryIndex >= 0) {
+            const normalized = normalizeChatMeta(chatId, chatUrl);
+            history[entryIndex].response = output;
+            history[entryIndex].pending = false;
+            if (normalized.chatId) history[entryIndex].chatId = normalized.chatId;
+            if (normalized.chatUrl) history[entryIndex].chatUrl = normalized.chatUrl;
+            
+            await chrome.storage.local.set({ [CHAT_HISTORY_KEY]: history });
+            console.log('[Portfolio] History entry updated with response, chatId:', normalized.chatId);
+          } else {
+            console.warn('[Portfolio] History entry not found for timestamp:', timestamp);
+          }
+        }
+      } else if (pollResponse?.type === MESSAGE_TYPES.ERROR) {
+        console.error('[Portfolio] Error getting output:', pollResponse.error);
+        clearInterval(pollInterval);
+      }
+    } catch (err) {
+      console.error('[Portfolio] Polling iteration error:', err);
+    }
+  }, 5000); // Poll every 5 seconds
+}
+
+/**
+ * Save chat entry to history storage
+ * @param {Object} entry - Chat entry to save
+ */
+async function saveChatToHistory(entry) {
+  try {
+    // Normalize chatId/chatUrl before saving
+    const normalized = normalizeChatMeta(entry.chatId, entry.chatUrl);
+    const normalizedEntry = {
+      ...entry,
+      chatId: normalized.chatId,
+      chatUrl: normalized.chatUrl
+    };
+
+    console.log('[Portfolio] Saving to history:', {
+      title: normalizedEntry.title,
+      timestamp: normalizedEntry.timestamp,
+      chatId: normalizedEntry.chatId,
+      chatUrl: normalizedEntry.chatUrl,
+      source: normalizedEntry.source,
+      pending: normalizedEntry.pending,
+      promptLength: normalizedEntry.prompt?.length,
+      responseLength: normalizedEntry.response?.length
+    });
+
+    const stored = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+    const history = Array.isArray(stored[CHAT_HISTORY_KEY]) ? stored[CHAT_HISTORY_KEY] : [];
+    
+    // Check if entry already exists (by timestamp)
+    const existingIndex = history.findIndex(h => h.timestamp === normalizedEntry.timestamp);
+    
+    if (existingIndex >= 0) {
+      // Update existing entry
+      history[existingIndex] = normalizedEntry;
+      console.log('[Portfolio] Updated existing history entry at index:', existingIndex, 'chatId:', normalizedEntry.chatId);
+    } else {
+      // Add new entry at the beginning
+      history.unshift(normalizedEntry);
+      console.log('[Portfolio] Added new history entry, chatId:', normalizedEntry.chatId);
+    }
+    
+    // Keep only last MAX_CHAT_HISTORY entries
+    if (history.length > MAX_CHAT_HISTORY) {
+      history.length = MAX_CHAT_HISTORY;
+    }
+    
+    await chrome.storage.local.set({ [CHAT_HISTORY_KEY]: history });
+    console.log('[Portfolio] Chat history saved successfully, total entries:', history.length);
+    
+    // Verify what was saved
+    const verified = await chrome.storage.local.get([CHAT_HISTORY_KEY]);
+    const lastEntry = verified[CHAT_HISTORY_KEY]?.[0];
+    console.log('[Portfolio] Verification - Last entry in storage:', {
+      chatId: lastEntry?.chatId,
+      chatUrl: lastEntry?.chatUrl,
+      timestamp: lastEntry?.timestamp
+    });
+  } catch (err) {
+    console.error('[Portfolio] Failed to save to history:', err);
+  }
+}
+
+/**
+ * Extract chatId from ChatGPT URL
+ * @param {string} url - ChatGPT URL
+ * @returns {string|null} - Extracted chatId or null
+ */
+function extractChatIdFromUrl(url) {
+  if (!url) return null;
+  const match = url.match(/\/(?:c|g)\/([^\/\?#]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Normalize chatId and chatUrl to ensure consistency
+ * @param {string} chatId - Chat ID
+ * @param {string} chatUrl - Chat URL
+ * @returns {{chatId: string, chatUrl: string}}
+ */
+function normalizeChatMeta(chatId, chatUrl) {
+  let id = typeof chatId === 'string' ? chatId.trim() : '';
+  let url = typeof chatUrl === 'string' ? chatUrl.trim() : '';
+
+  // If chatId looks like a URL, extract the ID from it
+  if (id && (id.startsWith('http://') || id.startsWith('https://'))) {
+    url = id;
+    id = extractChatIdFromUrl(url) || '';
+  }
+
+  // Remove conversation_ prefix if present
+  if (id.startsWith('conversation_')) {
+    id = '';
+  }
+
+  // Extract ID from URL if we don't have an ID
+  if (!id && url) {
+    id = extractChatIdFromUrl(url) || '';
+  }
+
+  // Build URL from ID if we don't have a URL
+  if (!url && id) {
+    url = `https://chatgpt.com/c/${id}`;
+  }
+
+  return { chatId: id, chatUrl: url };
+}
+
+/**
+ * Manual refresh prices for all stocks in portfolio
+ */
+async function manualRefreshPrices(portfolioTable) {
+  try {
+    // Ensure realtime client is initialized
+    if (!realtimeClient) {
+      realtimeClient = initRealtimeClient();
+    }
+    
+    if (!realtimeClient || typeof realtimeClient.getStockInfo !== 'function') {
+      throw new Error('Realtime client not properly initialized');
+    }
+    
+    const portfolio = await getPortfolio();
+    const stocks = portfolio.filter(s => s.code !== 'CASH');
+    
+    if (stocks.length === 0) {
+      console.log('[Portfolio] No stocks to refresh');
+      return;
+    }
+    
+    console.log(`[Portfolio] Manual refresh for ${stocks.length} stocks`);
+    
+    // Fetch prices for all stocks
+    const pricePromises = stocks.map(stock => 
+      realtimeClient.getStockInfo(stock.code)
+        .then(data => ({ code: stock.code, data }))
+        .catch(err => ({ code: stock.code, error: err }))
+    );
+    
+    const results = await Promise.all(pricePromises);
+    
+    // Update portfolio with new prices
+    let updated = 0;
+    results.forEach(result => {
+      if (result.data && result.data.price) {
+        const stock = portfolio.find(s => s.code === result.code);
+        if (stock) {
+          stock.currentPrice = result.data.price;
+          stock.priceUpdatedAt = new Date().toISOString();
+          updated++;
+        }
+      } else if (result.error) {
+        console.warn(`[Portfolio] Failed to fetch ${result.code}:`, result.error.message);
+      }
+    });
+    
+    if (updated > 0) {
+      await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+      await loadPortfolioUI(portfolioTable);
+      console.log(`[Portfolio] Updated ${updated}/${stocks.length} stock prices`);
+    } else {
+      console.log('[Portfolio] No prices updated');
+      alert('Không lấy được giá mới. Vui lòng thử lại.');
+    }
+  } catch (err) {
+    console.error('[Portfolio] manualRefreshPrices error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Update last update time display
+ */
+function updateLastUpdateTime(portfolio) {
+  const lastUpdateEl = document.getElementById('lastUpdateTime');
+  if (!lastUpdateEl) return;
+  
+  // Find the most recent price update
+  let latestUpdate = null;
+  portfolio.forEach(stock => {
+    if (stock.priceUpdatedAt) {
+      const updateTime = new Date(stock.priceUpdatedAt).getTime();
+      if (!latestUpdate || updateTime > latestUpdate) {
+        latestUpdate = updateTime;
+      }
+    }
+  });
+  
+  if (latestUpdate) {
+    const now = Date.now();
+    const diff = now - latestUpdate;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    let timeStr;
+    if (days > 0) {
+      timeStr = `${days} ngày trước`;
+    } else if (hours > 0) {
+      timeStr = `${hours} giờ trước`;
+    } else if (minutes > 0) {
+      timeStr = `${minutes} phút trước`;
+    } else {
+      timeStr = 'Vừa xong';
+    }
+    
+    lastUpdateEl.textContent = `Cập nhật: ${timeStr}`;
+    lastUpdateEl.style.color = minutes < 5 ? '#4caf50' : (minutes < 30 ? '#ff9800' : '#999');
+  } else {
+    lastUpdateEl.textContent = 'Chưa có dữ liệu';
+    lastUpdateEl.style.color = '#aaa';
   }
 }

@@ -13,18 +13,28 @@
 
 import { MarketDataClient } from './client.js';
 import { SSIRealtimeProvider } from './ssi-realtime.provider.js';
+import { SSIProvider } from './ssi.provider.js';
 
 class AdvancedMarketDataClient extends MarketDataClient {
   constructor(config = {}) {
-    // Initialize with REST provider as fallback
-    super(config);
+    // Initialize base client with providers array
+    super(Array.isArray(config.providers) ? config.providers : []);
     
+    if (!this.activeProvider && this.providers.length > 0) {
+      this.activeProvider = this.providers[0];
+    }
+
     this.realtimeConfig = {
       enabled: config.realtimeEnabled !== false,
       provider: config.realtimeProvider || new SSIRealtimeProvider(config),
       usePrimaryOnly: config.usePrimaryOnly || false,
       minUpdateInterval: config.minUpdateInterval || 500, // ms
     };
+
+    // Ensure we always have a REST fallback provider
+    if (!this.activeProvider) {
+      this.addProvider(config.restProvider || new SSIProvider(config), true);
+    }
 
     this.realtimeProvider = null;
     this.subscriptions = new Map(); // symbol -> { callback, type }
@@ -201,10 +211,11 @@ class AdvancedMarketDataClient extends MarketDataClient {
   }
 
   /**
-   * Override getStockInfo to check realtime cache first
+   * Get stock info with realtime support
+   * Checks realtime provider first, falls back to REST provider
    */
   async getStockInfo(symbol) {
-    if (this.isRealtimeConnected) {
+    if (this.isRealtimeConnected && this.realtimeProvider) {
       try {
         return await this.realtimeProvider.getStockInfo(symbol);
       } catch (error) {
@@ -212,8 +223,15 @@ class AdvancedMarketDataClient extends MarketDataClient {
       }
     }
 
-    // Fallback to REST provider
-    return super.getStockInfo(symbol);
+    // Fallback to REST provider (base class uses getStockPrice)
+    return super.getStockPrice(symbol);
+  }
+
+  /**
+   * Alias for getStockInfo to align with base class API
+   */
+  async getStockPrice(symbol) {
+    return this.getStockInfo(symbol);
   }
 
   /**
