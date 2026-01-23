@@ -1,35 +1,34 @@
-# GitHub Copilot — Engineering Principles (Repo-wide)
+---
+applyTo: "**/*"
+---
 
-## 1) Documentation placement (Markdown)
-- When creating NEW Markdown files, ALWAYS place them under `docs/`.
-- NEVER create new Markdown files at repository root.
-- If the user does not specify a path for a new Markdown file, default to `docs/<topic>/<name>.md`.
+# GitHub Copilot — Nguyên tắc kỹ thuật (toàn repo)
 
-## 2) Reuse before create
-- DO NOT create a new file/function/class if an equivalent or similar one already exists.
-- Before adding anything new, search the codebase for existing candidates and prefer:
-  1) reuse,
-  2) extend,
-  3) refactor minimally.
-- If you still propose creating something new, you MUST justify why reuse is not viable and reference the closest existing artifacts (files/symbols).
+## 1) Vị trí đặt docs (Markdown)
+- Khi tạo file Markdown MỚI, luôn đặt trong `docs/`.
+- Không tạo Markdown mới ở repo root.
+- Nếu user không chỉ rõ path, mặc định `docs/<topic>/<name>.md`.
 
-## 3) Coding principles (SOLID + common best practices)
-- STRICTLY follow SOLID principles and common best practices (DRY, KISS).
-- Avoid unnecessary abstraction. Prefer clear, testable design.
+## 2) Ưu tiên tái sử dụng
+- Không tạo file/function/class mới nếu đã có cái tương tự.
+- Trước khi thêm mới: search codebase và ưu tiên: (1) reuse, (2) extend, (3) refactor tối thiểu.
+- Nếu vẫn cần tạo mới, phải nêu lý do và chỉ ra artifact gần nhất.
 
-## 4) Structured thinking (mandatory)
-For non-trivial tasks, ALWAYS respond in this structure:
-1) Goal & constraints (explicit)
-2) Options (2–3 approaches) + trade-offs
-3) Decision (pick best-fit for this repo) + rationale
-4) Implementation plan (smallest safe diff)
-5) Verification plan (how to build/test/validate)
+## 3) Nguyên tắc code
+- SOLID / DRY / KISS.
+- Tránh abstraction không cần thiết; ưu tiên rõ ràng, dễ test.
 
-## 5) Best solution with maintainability & scalability
-- Choose the best solution while prioritizing maintainability, readability, and extensibility.
-- Prefer minimal, reversible changes; avoid large refactors unless explicitly requested.
-- When introducing behavior changes, update/add tests where appropriate.
+## 4) Trình bày có cấu trúc (khi task không trivial)
+- Nêu rõ goal/constraints.
+- Đề xuất 2–3 option + trade-offs.
+- Chọn 1 option best-fit cho repo + lý do.
+- Plan thay đổi (smallest safe diff) + plan kiểm chứng (build/test).
+
+## 5) Ưu tiên maintainability
+- Ưu tiên dễ đọc, dễ bảo trì, dễ mở rộng.
+- Thay đổi nhỏ, dễ rollback; tránh refactor lớn nếu không được yêu cầu.
+- Nếu đổi hành vi, cập nhật/thêm test khi hợp lý.
 
 ## Data integrity
-- Do not fabricate file contents, APIs, metrics, or dependencies.
-- Ask clarifying questions only if truly blocking progress.
+- Không bịa nội dung file/API/metrics/dependencies.
+- Chỉ hỏi khi thật sự bị block.

@@ -16,6 +16,7 @@
 import { createLogger } from '../logger.js';
 import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
+import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import './handlers/index.js'; // This will register all handlers
 
 // CRITICAL: Static imports to avoid Vite preload helper injection

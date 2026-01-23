@@ -94,7 +94,7 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_ADD, async (message, sender) => {
     logger.info('Portfolio entry added', { correlationId, stockCode, portfolioSize: portfolio.length });
     logger.endOperation(correlationId, 'success');
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_UPDATE, {
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_ADDED, {
       success: true,
       entry: newEntry,
       portfolioSize: portfolio.length

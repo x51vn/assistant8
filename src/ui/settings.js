@@ -3,6 +3,7 @@ import { showStatus } from './status.js';
 import { loadSettings } from './storage.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
+import { logout, checkAuthStatus } from './auth.js';
 
 const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
 const STOCK_EVAL_PROMPT_KEY = 'stockEvalPrompt';
@@ -30,6 +31,40 @@ export function setupSettings(dom) {
     contextMenuPromptInput,
     englishPromptInput,
   } = dom;
+
+  // GPT-008: Load user info on settings page
+  loadUserInfo();
+
+  // GPT-008: Setup logout button
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      const userEmail = document.getElementById('userEmail');
+      if (userEmail) {
+        userEmail.textContent = 'Đang đăng xuất...';
+      }
+      
+      logoutBtn.disabled = true;
+      logoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang đăng xuất...';
+
+      const result = await logout();
+      
+      if (result.success) {
+        console.log('[Settings] Logout successful');
+        // Auth gate will handle UI reload automatically via listenAuthStateChanges
+      } else {
+        console.error('[Settings] Logout failed:', result.error);
+        showStatus(saveStatus, result.error || 'Đăng xuất thất bại', 'error');
+        
+        // Reset button state
+        logoutBtn.disabled = false;
+        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Đăng xuất';
+        
+        // Reload user info
+        loadUserInfo();
+      }
+    });
+  }
 
   // Load prompts on init
   loadPortfolioPrompt(portfolioPromptInput);
@@ -116,6 +151,24 @@ export function setupSettings(dom) {
       }
     });
   });
+
+async function loadUserInfo() {
+  const userEmailEl = document.getElementById('userEmail');
+  if (!userEmailEl) return;
+
+  try {
+    const { authenticated, user } = await checkAuthStatus();
+    
+    if (authenticated && user) {
+      userEmailEl.textContent = user.email || 'Unknown';
+    } else {
+      userEmailEl.textContent = 'Not logged in';
+    }
+  } catch (error) {
+    console.error('[Settings] Failed to load user info:', error);
+    userEmailEl.textContent = 'Error loading user';
+  }
+}
 
   loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
 }

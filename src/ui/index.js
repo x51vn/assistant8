@@ -12,8 +12,81 @@ import { loadCachedResultFast } from './storage.js';
 import { setupTemplates, initializeTemplates } from './templates.js';
 import { setupSync, setupNotes } from './sync.js';
 import { initEnglish } from './english.js';
+import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
 
-(function init() {
+// Auth gate container
+let authContainer = null;
+let mainContainer = null;
+
+async function init() {
+  // Create auth container
+  authContainer = document.createElement('div');
+  authContainer.id = 'authContainer';
+  document.body.appendChild(authContainer);
+
+  // Get main container
+  mainContainer = document.querySelector('.container');
+
+  // Check auth status
+  const { authenticated, user } = await checkAuthStatus();
+
+  if (!authenticated) {
+    // Show login screen
+    console.log('[Auth] User not authenticated, showing login screen');
+    showLoginScreen();
+  } else {
+    // User is authenticated, proceed with normal UI
+    console.log('[Auth] User authenticated:', user);
+    hideLoginAndInitializeApp();
+  }
+
+  // Listen for auth state changes
+  listenAuthStateChanges(({ authenticated, user }) => {
+    if (authenticated) {
+      console.log('[Auth] User logged in:', user);
+      hideLoginAndInitializeApp();
+    } else {
+      console.log('[Auth] User logged out');
+      showLoginScreen();
+    }
+  });
+}
+
+function showLoginScreen() {
+  // Hide main UI
+  if (mainContainer) {
+    mainContainer.style.display = 'none';
+  }
+
+  // Show login screen
+  if (authContainer) {
+    authContainer.style.display = 'block';
+    renderLoginScreen(authContainer, (user) => {
+      console.log('[Auth] Login success, initializing app for user:', user);
+      hideLoginAndInitializeApp();
+    });
+  }
+}
+
+function hideLoginAndInitializeApp() {
+  // Hide login screen
+  if (authContainer) {
+    hideLoginScreen(authContainer);
+  }
+
+  // Show main UI
+  if (mainContainer) {
+    mainContainer.style.display = 'flex';
+  }
+
+  // Initialize app (only once)
+  if (!window.__appInitialized) {
+    initializeApp();
+    window.__appInitialized = true;
+  }
+}
+
+function initializeApp() {
   const dom = {
     // Nav buttons
     notesBtn: byId('notesBtn'),
@@ -155,4 +228,9 @@ import { initEnglish } from './english.js';
   } catch {
     // ignore
   }
-})();
+}
+
+// Start the app
+init().catch(error => {
+  console.error('[Auth] Failed to initialize app:', error);
+});

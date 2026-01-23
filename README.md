@@ -10,9 +10,9 @@ A Chrome extension for automating ChatGPT interactions with cloud sync, portfoli
 # 1. Install dependencies
 npm install
 
-# 2. Configure Firebase (required for cloud sync)
-cp .env.template .env
-# Edit .env and add your Firebase credentials
+# 2. Configure Supabase (required for cloud storage)
+cp .env.example .env
+# Edit .env and add your Supabase credentials from https://app.supabase.com/project/_/settings/api
 
 # 3. Build extension
 npm run build
@@ -23,18 +23,19 @@ npm run build
 
 ### 🔑 Environment Setup
 
-Create `.env` file with your Firebase configuration:
+Create `.env` file with your Supabase configuration:
 
 ```env
-VITE_FIREBASE_API_KEY=your-api-key-here
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123456789:web:abcdef
+# Supabase Configuration
+# Get these values from: https://app.supabase.com/project/_/settings/api
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Optional: Environment mode
+VITE_ENV=development
 ```
 
-**Security Note**: Never commit `.env` to git. Use `.env.template` for reference.
+**Security Note**: Never commit `.env` to git. Use `.env.example` as template.
 
 ---
 

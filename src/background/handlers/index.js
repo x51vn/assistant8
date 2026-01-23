@@ -22,5 +22,10 @@ import './prompt.js';
 import './content.js';
 import './history.js';
 import './errors.js';
+import './alarms.js';
+import './contextMenu.js';
+import './telemetry.js';
+import './health.js'; // GPT-004: Sample handler demonstrating supabaseWithRetry
+import './supabaseAuth.js'; // GPT-007: Supabase authentication handlers
 
 logger.info('All message handlers registered');

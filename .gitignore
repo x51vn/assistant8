@@ -21,6 +21,10 @@ chrome-extension-backup/
 .env.production
 debug.log
 
+# Supabase (GPT-001-004)
+supabase/.branches
+supabase/.temp
+
 # SECURITY: Never commit Firebase credentials
 config.json
 firebase-config.json

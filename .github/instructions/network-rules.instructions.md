@@ -3,10 +3,10 @@ applyTo: "**/*.{js,ts,json}"
 ---
 
 # Network modification rules (public extensions)
-- If blocking/modifying requests is required:
-  - Prefer `declarativeNetRequest` rules.
-  - Avoid blocking `webRequest` listeners unless this is an enterprise-only deployment with a justified exception.
-- Rules must be explicit, minimal, and documented (docs/).
+- Nếu cần chặn/sửa request:
+  - Ưu tiên `declarativeNetRequest`.
+  - Tránh `webRequest` blocking listeners (trừ khi có lý do đặc biệt cho enterprise-only).
+- Rules phải rõ ràng, tối thiểu, và có docs trong `docs/`.
 
 Output requirement:
 - Provide:
