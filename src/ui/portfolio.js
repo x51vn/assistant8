@@ -1343,10 +1343,10 @@ function updateLastUpdateTime(portfolio) {
 }
 
 /**
- * ✅ Auto-refresh portfolio on login
- * Called when user logs in to fetch latest portfolio data from Supabase
+ * ✅ Refresh portfolio UI - fetch latest data from Supabase and render
+ * Can be called from navigation, login, or manual refresh
  */
-export async function refreshPortfolioOnLogin() {
+export async function refreshPortfolioUI() {
   try {
     const portfolioTable = document.getElementById('portfolioTable');
     if (!portfolioTable) {
@@ -1361,10 +1361,19 @@ export async function refreshPortfolioOnLogin() {
       return;
     }
 
-    console.log('[Portfolio] Refreshing portfolio data on login...');
+    console.log('[Portfolio] Refreshing portfolio data...');
     await loadPortfolioUI(tbody);
-    console.log('[Portfolio] ✓ Portfolio data refreshed successfully on login');
+    console.log('[Portfolio] ✓ Portfolio data refreshed successfully');
   } catch (error) {
-    console.error('[Portfolio] Failed to refresh portfolio on login:', error);
+    console.error('[Portfolio] Failed to refresh portfolio:', error);
   }
+}
+
+/**
+ * ✅ Auto-refresh portfolio on login
+ * Called when user logs in to fetch latest portfolio data from Supabase
+ */
+export async function refreshPortfolioOnLogin() {
+  console.log('[Portfolio] Refreshing portfolio on login...');
+  await refreshPortfolioUI();
 }

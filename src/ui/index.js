@@ -6,7 +6,7 @@ import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
 import { setupErrors } from './errors.js';
 import { setupBackup } from './backup.js';
-import { initPortfolio, refreshPortfolioOnLogin } from './portfolio.js';
+import { initPortfolio, refreshPortfolioOnLogin, refreshPortfolioUI } from './portfolio.js';
 import { initEnglish } from './english.js';
 import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
 let authContainer = null;

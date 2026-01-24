@@ -1,5 +1,6 @@
 import { setActivePage } from './pages.js';
 import { loadSettings } from './storage.js';
+import { refreshPortfolioUI } from './portfolio.js';
 
 export function setupNavigation(dom) {
   const { 
@@ -13,6 +14,8 @@ export function setupNavigation(dom) {
 
   portfolioBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'portfolio' });
+    // ✅ Reload portfolio data from Supabase when switching to portfolio tab
+    refreshPortfolioUI();
   });
 
   resultsBtn?.addEventListener('click', () => {
