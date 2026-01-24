@@ -1,7 +1,7 @@
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
-import { ENGLISH_PROMPT_KEY } from './settings.js';
 
+const ENGLISH_PROMPT_KEY = 'englishPrompt';
 const ENGLISH_SENTENCES_KEY = 'englishSentences';
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;

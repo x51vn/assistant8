@@ -1,8 +1,41 @@
 // Portfolio P&L Calculation Module
 
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
+
+/**
+ * ✅ Get portfolio data from Supabase via background handler
+ */
 export async function getPortfolioData() {
-  const stored = await chrome.storage.local.get('portfolio');
-  return stored.portfolio || [];
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+    
+    if (response.errorCode) {
+      console.warn('[PortfolioPL] Failed to get portfolio:', response.errorMessage);
+      return [];
+    }
+    
+    // Convert Supabase format to UI format
+    const items = response.data?.items || [];
+    return items.map(item => ({
+      id: item.id,
+      code: item.symbol,
+      symbol: item.symbol,
+      quantity: item.quantity,
+      entry: item.avg_price,
+      avg_price: item.avg_price,
+      currentPrice: item.current_price,
+      current_price: item.current_price
+    }));
+  } catch (error) {
+    console.error('[PortfolioPL] Get portfolio error:', error);
+    return [];
+  }
 }
 
 export function calculateStockPL(stock) {
@@ -55,31 +88,78 @@ export function calculatePortfolioTotalPL(portfolio) {
 }
 
 export async function updateStockCurrentPrice(code, price) {
-  const portfolio = await getPortfolioData();
-  const index = portfolio.findIndex(s => s.code === code);
-  
-  if (index >= 0) {
-    portfolio[index].currentPrice = price;
-    portfolio[index].priceUpdatedAt = new Date().toISOString();
-    await chrome.storage.local.set({ portfolio });
-    return portfolio[index];
+  try {
+    const portfolio = await getPortfolioData();
+    const stock = portfolio.find(s => s.symbol === code || s.code === code);
+    
+    if (!stock) {
+      console.warn('[PortfolioPL] Stock not found:', code);
+      return null;
+    }
+    
+    // Update via Supabase
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: {
+        id: stock.id,
+        updates: {
+          current_price: price,
+          updated_at: new Date().toISOString()
+        }
+      }
+    });
+    
+    if (response.errorCode) {
+      console.warn('[PortfolioPL] Failed to update stock price:', response.errorMessage);
+      return null;
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('[PortfolioPL] Update stock price error:', error);
+    return null;
   }
-  return null;
 }
 
 export async function bulkUpdatePrices(priceMap) {
   // priceMap: { 'VNM': 100.5, 'BID': 45.2 }
-  const portfolio = await getPortfolioData();
-  
-  portfolio.forEach(stock => {
-    if (priceMap[stock.code]) {
-      stock.currentPrice = priceMap[stock.code];
-      stock.priceUpdatedAt = new Date().toISOString();
+  try {
+    const portfolio = await getPortfolioData();
+    const updates = [];
+    
+    portfolio.forEach(stock => {
+      if (priceMap[stock.symbol] || priceMap[stock.code]) {
+        const newPrice = priceMap[stock.symbol] || priceMap[stock.code];
+        updates.push({
+          id: stock.id,
+          updates: {
+            current_price: newPrice,
+            updated_at: new Date().toISOString()
+          }
+        });
+      }
+    });
+    
+    // Send batch updates
+    for (const update of updates) {
+      await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        data: update
+      });
     }
-  });
-  
-  await chrome.storage.local.set({ portfolio });
-  return portfolio;
+    
+    // Return updated portfolio
+    return await getPortfolioData();
+  } catch (error) {
+    console.error('[PortfolioPL] Bulk update prices error:', error);
+    return [];
+  }
 }
 
 export function formatCurrency(value) {

@@ -5,11 +5,6 @@ import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { logout, checkAuthStatus } from './auth.js';
 
-const PORTFOLIO_PROMPT_KEY = 'portfolioPrompt';
-const STOCK_EVAL_PROMPT_KEY = 'stockEvalPrompt';
-const CONTEXT_MENU_PROMPT_KEY = 'contextMenuPrompt';
-const ENGLISH_PROMPT_KEY = 'englishPrompt';
-
 export function setupSettings(dom) {
   const {
     promptInput,
@@ -28,6 +23,7 @@ export function setupSettings(dom) {
     settingsBtn,
     portfolioPromptInput,
     stockEvalPromptInput,
+    teaStockPromptInput,
     contextMenuPromptInput,
     englishPromptInput,
   } = dom;
@@ -66,11 +62,14 @@ export function setupSettings(dom) {
     });
   }
 
-  // Load prompts on init
-  loadPortfolioPrompt(portfolioPromptInput);
-  loadStockEvalPrompt(stockEvalPromptInput);
-  loadContextMenuPrompt(contextMenuPromptInput);
-  loadEnglishPrompt(englishPromptInput);
+  // ✅ GPT-FIX: Load ALL prompts in ONE request (batch load, not 4 separate)
+  loadAllPromptsAtOnce({
+    portfolioPromptInput,
+    stockEvalPromptInput,
+    teaStockPromptInput,
+    contextMenuPromptInput,
+    englishPromptInput
+  });
 
   saveBtn?.addEventListener('click', async () => {
     const prompt = (promptInput?.value || '').trim();
@@ -92,28 +91,87 @@ export function setupSettings(dom) {
 
     // Save both regular settings and all prompts in one go
     const stockEvalPrompt = (stockEvalPromptInput?.value || '').trim();
+    const teaStockPrompt = (teaStockPromptInput?.value || '').trim();
     const contextMenuPrompt = (contextMenuPromptInput?.value || '').trim();
     const englishPrompt = (englishPromptInput?.value || '').trim();
-    await chrome.storage.local.set(settings);
-    await chrome.storage.local.set({ 
-      [PORTFOLIO_PROMPT_KEY]: portfolioPrompt,
-      [STOCK_EVAL_PROMPT_KEY]: stockEvalPrompt,
-      [CONTEXT_MENU_PROMPT_KEY]: contextMenuPrompt,
-      [ENGLISH_PROMPT_KEY]: englishPrompt
-    });
-    console.log('[Settings] All settings saved including all prompts');
-    showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
+    
+    // ✅ GPT-FIX: Save settings to Supabase instead of local storage
+    showStatus(saveStatus, 'Đang lưu...', 'info');
+    
+    try {
+      // Save to Supabase settings table
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.SETTINGS_UPDATE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        data: {
+          config: {
+            ...settings,
+            prompts: {
+              portfolio: portfolioPrompt,
+              stockEval: stockEvalPrompt,
+              teaStock: teaStockPrompt,
+              contextMenu: contextMenuPrompt,
+              english: englishPrompt
+            }
+          }
+        }
+      });
+      
+      if (response.errorCode) {
+        throw new Error(response.errorMessage || 'Lưu thất bại');
+      }
+      
+      console.log('[Settings] All settings saved to Supabase');
+      showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
+    } catch (error) {
+      console.error('[Settings] Save failed:', error);
+      showStatus(saveStatus, `Lưu thất bại: ${error.message}`, 'error');
+    }
   });
 
-  resetBtn?.addEventListener('click', () => {
+  resetBtn?.addEventListener('click', async () => {
+    // ✅ GPT-FIX: Reset to defaults AND delete Supabase settings
     if (promptInput) promptInput.value = '';
     if (autoRunCheckbox) autoRunCheckbox.checked = false;
     if (evaluatePreviousCheckbox) evaluatePreviousCheckbox.checked = false;
     if (reviewPromptCheckbox) reviewPromptCheckbox.checked = false;
     if (realtimeEnabledCheckbox) realtimeEnabledCheckbox.checked = false;
     if (intervalInput) intervalInput.value = 5;
-    chrome.storage.local.clear();
-    showStatus(saveStatus, 'Reset cấu hình!', 'info');
+    if (portfolioPromptInput) portfolioPromptInput.value = '';
+    if (stockEvalPromptInput) stockEvalPromptInput.value = 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+    if (teaStockPromptInput) teaStockPromptInput.value = '';
+    if (contextMenuPromptInput) contextMenuPromptInput.value = 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    if (englishPromptInput) englishPromptInput.value = `Teach me English about: {TOPIC}
+
+Provide:
+1. An English sentence/phrase
+2. Vietnamese translation
+3. Usage example
+4. Common situations to use it`;
+
+    // Delete settings from Supabase
+    showStatus(saveStatus, 'Đang xóa settings...', 'info');
+    try {
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.SETTINGS_DELETE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now()
+      });
+      
+      if (response.errorCode) {
+        console.warn('[Settings] Delete failed:', response.errorMessage);
+        showStatus(saveStatus, 'Reset UI thành công nhưng xóa trên server thất bại', 'warning');
+        return;
+      }
+      
+      showStatus(saveStatus, 'Reset thành công! Tất cả cài đặt đã được xóa.', 'success');
+    } catch (error) {
+      console.error('[Settings] Delete failed:', error);
+      showStatus(saveStatus, 'Reset UI thành công nhưng xóa trên server thất bại', 'warning');
+    }
   });
 
   sendBtn?.addEventListener('click', async () => {
@@ -173,35 +231,56 @@ async function loadUserInfo() {
   loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
 }
 
-async function loadPortfolioPrompt(portfolioPromptInput) {
-  if (!portfolioPromptInput) return;
-  const stored = await chrome.storage.local.get([PORTFOLIO_PROMPT_KEY]);
-  portfolioPromptInput.value = stored[PORTFOLIO_PROMPT_KEY] || '';
+// ✅ GPT-FIX: Load ALL prompts in ONE Supabase request (batch load)
+async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
+  if (!portfolioPromptInput && !stockEvalPromptInput && !teaStockPromptInput && !contextMenuPromptInput && !englishPromptInput) {
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+    
+    if (response.errorCode) {
+      console.warn('[Settings] Failed to load prompts from Supabase:', response.errorMessage);
+      setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+      return;
+    }
+    
+    const prompts = response.data?.config?.prompts || {};
+    
+    // ✅ Populate all prompts from single response
+    if (portfolioPromptInput) portfolioPromptInput.value = prompts.portfolio || '';
+    if (stockEvalPromptInput) stockEvalPromptInput.value = prompts.stockEval || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+    if (teaStockPromptInput) teaStockPromptInput.value = prompts.teaStock || '';
+    if (contextMenuPromptInput) contextMenuPromptInput.value = prompts.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    if (englishPromptInput) englishPromptInput.value = prompts.english || getDefaultEnglishPrompt();
+    
+  } catch (error) {
+    console.error('[Settings] Load prompts error:', error);
+    setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+  }
 }
 
-async function loadStockEvalPrompt(stockEvalPromptInput) {
-  if (!stockEvalPromptInput) return;
-  const stored = await chrome.storage.local.get([STOCK_EVAL_PROMPT_KEY]);
-  stockEvalPromptInput.value = stored[STOCK_EVAL_PROMPT_KEY] || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+// Helper to set default values
+function setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
+  if (portfolioPromptInput) portfolioPromptInput.value = '';
+  if (stockEvalPromptInput) stockEvalPromptInput.value = 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+  if (teaStockPromptInput) teaStockPromptInput.value = '';
+  if (contextMenuPromptInput) contextMenuPromptInput.value = 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+  if (englishPromptInput) englishPromptInput.value = getDefaultEnglishPrompt();
 }
 
-async function loadContextMenuPrompt(contextMenuPromptInput) {
-  if (!contextMenuPromptInput) return;
-  const stored = await chrome.storage.local.get([CONTEXT_MENU_PROMPT_KEY]);
-  contextMenuPromptInput.value = stored[CONTEXT_MENU_PROMPT_KEY] || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
-}
-
-async function loadEnglishPrompt(englishPromptInput) {
-  if (!englishPromptInput) return;
-  const stored = await chrome.storage.local.get([ENGLISH_PROMPT_KEY]);
-  const defaultPrompt = `Teach me English about: {TOPIC}
+function getDefaultEnglishPrompt() {
+  return `Teach me English about: {TOPIC}
 
 Provide:
 1. An English sentence/phrase
 2. Vietnamese translation
 3. Usage example
 4. Common situations to use it`;
-  englishPromptInput.value = stored[ENGLISH_PROMPT_KEY] || defaultPrompt;
 }
-
-export { ENGLISH_PROMPT_KEY };

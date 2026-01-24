@@ -8,6 +8,103 @@ import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 
+// ✅ GPT-FIX: Message-based Portfolio Operations (Supabase-backed)
+/**
+ * Get portfolio from Supabase via background handler
+ */
+async function getPortfolioFromSupabase() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+    
+    if (response.errorCode) {
+      console.warn('[Portfolio] Supabase fetch error:', response.errorMessage);
+      return [];
+    }
+    
+    return response.data?.items || [];
+  } catch (error) {
+    console.error('[Portfolio] Message error:', error);
+    return [];
+  }
+}
+
+/**
+ * Add stock to Supabase portfolio
+ */
+async function addStockToSupabase(symbol, quantity, avgPrice) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_ADD,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { symbol: symbol.toUpperCase(), quantity: parseFloat(quantity), avgPrice: parseFloat(avgPrice) }
+    });
+    
+    if (response.errorCode) {
+      throw new Error(response.errorMessage || 'Failed to add stock');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('[Portfolio] Add stock error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update stock in Supabase portfolio
+ */
+async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { id, updates: { symbol: symbol.toUpperCase(), quantity: parseFloat(quantity), avg_price: parseFloat(avgPrice) } }
+    });
+    
+    if (response.errorCode) {
+      throw new Error(response.errorMessage || 'Failed to update stock');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('[Portfolio] Update stock error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Remove stock from Supabase portfolio
+ */
+async function removeStockFromSupabase(id) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PORTFOLIO_REMOVE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { id }
+    });
+    
+    if (response.errorCode) {
+      throw new Error(response.errorMessage || 'Failed to remove stock');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('[Portfolio] Remove stock error:', error);
+    throw error;
+  }
+}
+
 /**
  * Escape HTML to prevent XSS attacks
  * @param {string} str - String to escape
@@ -81,9 +178,8 @@ export async function initPortfolio({
     }
     
     try {
-      // Auto-save prompt before evaluating
-      await chrome.storage.local.set({ [PORTFOLIO_PROMPT_KEY]: prompt });
-      console.log('[Portfolio] Prompt saved');
+      // ✅ GPT-FIX: Prompt is now saved to Supabase via settings handler
+      // (Settings page handle prompt saving, not here)
       
       // Disable button while processing
       evaluateBtn.disabled = true;
@@ -480,8 +576,8 @@ function openEditStockModal(id, portfolioTable) {
 }
 
 export async function getPortfolio() {
-  const stored = await chrome.storage.local.get([PORTFOLIO_KEY]);
-  return Array.isArray(stored[PORTFOLIO_KEY]) ? stored[PORTFOLIO_KEY] : [];
+  // ✅ GPT-FIX: Use Supabase via background handler instead of chrome.storage.local
+  return await getPortfolioFromSupabase();
 }
 
 export async function loadPortfolioPrompt(promptInput) {
@@ -491,26 +587,21 @@ export async function loadPortfolioPrompt(promptInput) {
 }
 
 export async function addStock(code, entry, quantity) {
-  const portfolio = await getPortfolio();
-  portfolio.push({ code, entry: parseFloat(entry), quantity: parseFloat(quantity), timestamp: Date.now() });
-  await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
-  console.log('[Portfolio] Stock added:', code);
+  // ✅ GPT-FIX: Use Supabase via background handler
+  await addStockToSupabase(code, quantity, entry);
+  console.log('[Portfolio] Stock added to Supabase:', code);
 }
 
 export async function updateStock(id, code, entry, quantity) {
-  const portfolio = await getPortfolio();
-  if (portfolio[id]) {
-    portfolio[id] = { code, entry: parseFloat(entry), quantity: parseFloat(quantity), timestamp: Date.now() };
-    await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
-    console.log('[Portfolio] Stock updated:', code);
-  }
+  // ✅ GPT-FIX: Use Supabase via background handler
+  await updateStockInSupabase(id, code, quantity, entry);
+  console.log('[Portfolio] Stock updated in Supabase:', code);
 }
 
 export async function deleteStock(id) {
-  const portfolio = await getPortfolio();
-  portfolio.splice(id, 1);
-  await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
-  console.log('[Portfolio] Stock deleted');
+  // ✅ GPT-FIX: Use Supabase via background handler
+  await removeStockFromSupabase(id);
+  console.log('[Portfolio] Stock removed from Supabase');
 }
 
 export async function evaluatePortfolio(prompt) {
@@ -592,7 +683,9 @@ async function savePriceUpdates(portfolioTable) {
   });
 
   if (updated) {
-    await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+    // ✅ GPT-FIX: Price updates are now handled by Supabase
+    // Don't save to local storage anymore
+    // await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
     await loadPortfolioUI(portfolioTable);
     console.log('[Portfolio] Prices updated');
   }
@@ -676,7 +769,8 @@ async function startRealtimeUpdates(portfolioTable) {
             if (stockInPortfolio) {
               stockInPortfolio.currentPrice = data.price;
               stockInPortfolio.priceUpdatedAt = new Date().toISOString();
-              await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+              // ✅ GPT-FIX: Don't save to local storage, rely on Supabase for persistence
+              // await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
               
               // Update UI only if table exists
               if (portfolioTable) {
@@ -1164,7 +1258,8 @@ async function manualRefreshPrices(portfolioTable) {
     });
     
     if (updated > 0) {
-      await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+      // ✅ GPT-FIX: Don't save to local storage
+      // await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
       await loadPortfolioUI(portfolioTable);
       console.log(`[Portfolio] Updated ${updated}/${stocks.length} stock prices`);
     } else {

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-002 Add Supabase SDK & env plumbing
 
 ## Project Context (MUST READ)

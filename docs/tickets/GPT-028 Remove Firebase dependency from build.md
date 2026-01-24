@@ -1,3 +1,5 @@
+DONE
+
 # GPT-028 Remove Firebase dependency from build
 
 ## Project Context (MUST READ)

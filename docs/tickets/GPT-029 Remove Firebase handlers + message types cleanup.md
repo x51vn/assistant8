@@ -1,3 +1,5 @@
+DONE
+
 # GPT-029 Remove Firebase handlers + message types cleanup
 
 ## Project Context (MUST READ)

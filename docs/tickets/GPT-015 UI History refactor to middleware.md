@@ -1,3 +1,5 @@
+DONE
+
 # GPT-015 UI History refactor to middleware
 
 ## Project Context (MUST READ)

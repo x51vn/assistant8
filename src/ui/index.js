@@ -4,17 +4,11 @@ import { setupResults } from './results.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
-import { setupHistory } from './history.js';
 import { setupErrors } from './errors.js';
 import { setupBackup } from './backup.js';
 import { initPortfolio } from './portfolio.js';
-import { loadCachedResultFast } from './storage.js';
-import { setupTemplates, initializeTemplates } from './templates.js';
-import { setupSync, setupNotes } from './sync.js';
 import { initEnglish } from './english.js';
 import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
-
-// Auth gate container
 let authContainer = null;
 let mainContainer = null;
 
@@ -89,7 +83,6 @@ function hideLoginAndInitializeApp() {
 function initializeApp() {
   const dom = {
     // Nav buttons
-    notesBtn: byId('notesBtn'),
     resultsBtn: byId('resultsBtn'),
     portfolioBtn: byId('portfolioBtn'),
     errorsBtn: byId('errorsBtn'),
@@ -97,7 +90,6 @@ function initializeApp() {
     settingsBtn: byId('settingsBtn'),
     
     // Pages
-    notesPage: byId('notesPage'),
     resultsPage: byId('resultsPage'),
     portfolioPage: byId('portfolioPage'),
     errorsPage: byId('errorsPage'),
@@ -116,9 +108,6 @@ function initializeApp() {
     portfolioModal: byId('portfolioModal'),
     closePortfolioModal: byId('closePortfolioModal'),
     cancelPortfolioBtn: byId('cancelPortfolioBtn'),
-
-    historyList: byId('historyList'),
-    refreshHistoryBtn: byId('refreshHistoryBtn'),
 
     errorList: byId('errorList'),
     addErrorBtn: byId('addErrorBtn'),
@@ -145,6 +134,7 @@ function initializeApp() {
     saveStatus: byId('saveStatus'),
     portfolioPromptInput: byId('portfolioPromptInput'),
     stockEvalPromptInput: byId('stockEvalPromptInput'),
+    teaStockPromptInput: byId('teaStockPromptInput'),
     contextMenuPromptInput: byId('contextMenuPromptInput'),
     exportBtn: byId('exportBtn'),
     importBtn: byId('importBtn'),
@@ -159,20 +149,6 @@ function initializeApp() {
     syncStatus: byId('syncStatus'),
     backupsList: byId('backupsList'),
     
-    // Templates
-    templatesBtn: byId('templatesBtn'),
-    templatesPage: byId('templatesPage'),
-    templateList: byId('templateList'),
-    newTemplateBtn: byId('newTemplateBtn'),
-    templateModal: byId('templateModal'),
-    closeTemplateModal: byId('closeTemplateModal'),
-    templateNameInput: byId('templateNameInput'),
-    templateDescInput: byId('templateDescInput'),
-    templateCategorySelect: byId('templateCategorySelect'),
-    templateContentInput: byId('templateContentInput'),
-    saveTemplateBtn: byId('saveTemplateBtn'),
-    cancelTemplateBtn: byId('cancelTemplateBtn'),
-    
     // English Learning
     englishTopicInput: byId('englishTopicInput'),
     generateSentenceBtn: byId('generateSentenceBtn'),
@@ -181,19 +157,13 @@ function initializeApp() {
     englishPromptInput: byId('englishPromptInput'),
   };
 
-  // Initialize templates
-  initializeTemplates();
 
   setupNavigation(dom);
 
   setupResults(dom);
   setupSettings(dom);
   setupBackup(dom);
-  setupSync(dom);
-  setupNotes();
-  setupHistory(dom);
   setupErrors(dom);
-  setupTemplates(dom);
   initPortfolio({
     portfolioPage: dom.portfolioPage,
     portfolioBtn: dom.portfolioBtn,

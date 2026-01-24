@@ -1,3 +1,5 @@
+DONE
+
 # GPT-022 Alarms scheduling (market hours + cleanup)
 
 ## Project Context (MUST READ)

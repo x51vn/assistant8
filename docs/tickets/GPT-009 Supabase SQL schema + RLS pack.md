@@ -1,3 +1,5 @@
+DONE
+
 # GPT-009 Supabase SQL schema + RLS pack
 
 ## Project Context (MUST READ)

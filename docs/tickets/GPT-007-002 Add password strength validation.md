@@ -1,3 +1,5 @@
+DONE
+
 # GPT-007-002 Add password strength validation
 
 ## Project Context (MUST READ)

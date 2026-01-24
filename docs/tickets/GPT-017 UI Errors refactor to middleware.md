@@ -1,3 +1,5 @@
+DONE
+
 # GPT-017 UI Errors refactor to middleware
 
 ## Project Context (MUST READ)

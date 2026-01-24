@@ -1,3 +1,5 @@
+DONE
+
 # GPT-012 Background prompts CRUD + search (Supabase)
 
 ## Project Context (MUST READ)

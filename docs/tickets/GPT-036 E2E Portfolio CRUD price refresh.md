@@ -1,3 +1,5 @@
+DONE
+
 # GPT-036 E2E Portfolio CRUD price refresh
 
 ## Project Context (MUST READ)

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-031 Manifest permissions + host_permissions alignment
 
 ## Project Context (MUST READ)

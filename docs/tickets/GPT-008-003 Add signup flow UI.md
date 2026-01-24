@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008-003 Add signup flow UI
 
 ## Project Context (MUST READ)

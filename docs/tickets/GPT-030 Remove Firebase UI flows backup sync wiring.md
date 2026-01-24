@@ -1,3 +1,5 @@
+DONE
+
 # GPT-030 Remove Firebase UI flows (backup/sync) + wiring
 
 ## Project Context (MUST READ)

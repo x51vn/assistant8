@@ -1,3 +1,5 @@
+DONE
+
 # GPT-003 Supabase Service Worker client (chromeStorageAdapter)
 
 ## Project Context (MUST READ)

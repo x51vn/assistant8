@@ -1,3 +1,5 @@
+DONE
+
 # GPT-034 Unit tests for handlers (mock Supabase + chrome)
 
 ## Project Context (MUST READ)

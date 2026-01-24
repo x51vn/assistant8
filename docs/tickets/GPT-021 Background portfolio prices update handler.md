@@ -1,3 +1,5 @@
+DONE
+
 # GPT-021 Background portfolio prices update handler
 
 ## Project Context (MUST READ)

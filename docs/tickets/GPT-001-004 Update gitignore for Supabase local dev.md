@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001-004 Update gitignore for Supabase local dev
 
 ## Project Context (MUST READ)

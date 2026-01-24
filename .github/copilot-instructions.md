@@ -2,22 +2,24 @@
 
 ## Mục tiêu Dự án
 
-**ChatGPT Assistant** là Chrome MV3 extension quản lý prompts, categories, chat history với 3 lĩnh vực:
+**ChatGPT Assistant** là Chrome MV3 extension tương tác với ChatGPT với 3 lĩnh vực chính:
 
-1. **📋 Quản lý Prompts & Categories**: 
-   - Library prompt templates có categories/tags
-   - Favorites, usage tracking
-   - Tất cả data theo user (login required)
-
-2. **📈 Quản lý Portfolio Chứng khoán**: 
-   - Theo dõi cổ phiếu yêu thích
+1. **📈 Quản lý Portfolio Chứng khoán**: 
+   - Theo dõi cổ phiếu yêu thích trên Supabase
    - SSI iBoard API integration
    - Auto-update prices mỗi 5 phút (market hours)
+   - P&L tracking và portfolio analysis
 
-3. **📚 Lưu lịch sử Chat & Phân tích**: 
-   - Chat history với ChatGPT
-   - Link prompt template với responses
-   - Error retrospective tracking
+2. **📚 Lưu lịch sử Chat & Phân tích**: 
+   - Chat history với ChatGPT (lưu Supabase)
+   - Error retrospective tracking (lưu Supabase)
+   - Performance analytics
+   - Link transactions với responses
+
+3. **🌐 Bổ trợ tiện ích**:
+   - English learning module
+   - Settings management (Supabase-backed)
+   - User authentication (Supabase Auth)
 
 ## Kiến trúc Hệ thống
 
@@ -41,23 +43,27 @@ Supabase Cloud (PostgreSQL + Auth + Realtime)
 
 - **Background SW**: `src/background/index.js` (listeners đăng ký top-level, đồng bộ)
 - **Message Router**: `src/background/messageRouter.js` (Command Pattern)
-- **Handlers**: `src/background/handlers/*.js` (prompts, categories, portfolio, history, errors, supabase auth, chatgpt, prompt orchestration, alarms, contextMenu)
+- **Handlers**: `src/background/handlers/*.js` 
+  - ✅ ACTIVE: `chatgpt.js`, `portfolio.js`, `history.js`, `chatHistory.js`, `errorTracking.js`, `supabaseAuth.js`, `settings.js`, `migration.js`, `alarms.js`, `contextMenu.js`, `telemetry.js`, `health.js`, `prompt.js` (core SEND_PROMPT)
+  - ❌ REMOVED (GPT-031): `prompts.js`, `categories.js` (UI features removed, handler code remains as reference)
 - **Content Script**: `src/content.js` (ChatGPT DOM automation)
-- **UI**: `src/ui/*` (prompts, categories, portfolio, history, errors, settings, results)
-- **Message Schema**: `src/shared/messageSchema.js` (65+ MESSAGE_TYPES)
+- **UI**: `src/ui/*.js` (portfolio, history, errors, settings, results, english) - **No prompts/categories UI**
+- **Message Schema**: `src/shared/messageSchema.js` (Message types for all operations)
 
 ### Database (Supabase PostgreSQL)
 
-**Tables với user_id**:
-- `prompts` - User prompt templates (title, content, category_id, is_favorite, usage_count)
-- `categories` - Categories/Tags (name, color, icon)
-- `chat_history` - ChatGPT conversations (prompt, response, prompt_id, chat_id, chat_url)
-- `portfolio` - Stock holdings (symbol, quantity, avg_price, current_price)
-- `errors` - Error tracking (title, description, severity, type, resolved)
-- `settings` - User settings (JSONB config)
+**⚠️ YÊU CẦU**: TẤT CẢ dữ liệu người dùng phải lưu trên Supabase, KHÔNG lưu locally.
+
+**Tables với user_id** (all user data must be stored here):
+- `portfolio` - Stock holdings (symbol, quantity, avg_price, current_price) ✅ ACTIVE
+- `chat_history` - ChatGPT conversations (prompt, response, chat_id, chat_url) ✅ ACTIVE
+- `errors` - Error tracking (title, description, severity, type, resolved) ✅ ACTIVE
+- `settings` - User settings (JSONB config) ✅ ACTIVE
+- `prompts` - User prompt templates (stored for future migration) - UI REMOVED GPT-031
+- `categories` - Categories/Tags (stored for future migration) - UI REMOVED GPT-031
 - `runs` - Execution tracking
 
-**RLS Policies**: `auth.uid() = user_id` trên tất cả tables
+**RLS Policies**: `auth.uid() = user_id` trên tất cả tables - Enforces user isolation at database level
 
 ### Ràng buộc MV3 Quan trọng
 
@@ -162,10 +168,18 @@ if (error.message.includes('Failed to fetch')) {
 
 ### Khi Sửa Code
 
+**🔴 QUAN TRỌNG: Lưu dữ liệu lên Supabase**
+- ✅ TẤT CẢ business data phải lưu vào Supabase PostgreSQL
+- ✅ Sử dụng các tables có `user_id` + RLS policies
+- ✅ Gọi Supabase từ Background handler (middleware pattern)
+- ❌ KHÔNG lưu data vào `chrome.storage.local` (chỉ dùng cho auth token)
+- ❌ KHÔNG lưu data vào `localStorage` trong Service Worker
+
 **Background Handlers** (`src/background/handlers/*.js`):
 - Stateless - mỗi handler là independent function
-- Dùng `requireAuth()` để get user_id
-- Wrap Supabase calls với `supabaseWithRetry()`
+- Dùng `requireAuth()` để get user_id từ Supabase session
+- Wrap Supabase calls với `supabaseWithRetry()` (exponential backoff)
+- Always call Supabase - KHÔNG lưu state in-memory
 - Return `createResponse()` hoặc `createErrorResponse()`
 
 **Content Script** (`src/content.js`):
@@ -174,10 +188,11 @@ if (error.message.includes('Failed to fetch')) {
 - Poll cho stable response (không thay đổi trong 2s)
 
 **UI Modules** (`src/ui/*.js`):
-- Gọi background qua `chrome.runtime.sendMessage()`
-- Handle errors với user-friendly messages
-- Realtime subscriptions trong UI (not background)
+- Gọi background qua `chrome.runtime.sendMessage()` (UI → Background → Supabase)
+- Handle errors với user-friendly Vietnamese messages
+- Realtime subscriptions trong UI (not background) 
 - Update UI optimistically, revert on error
+- **Không được lưu business data locally - all via background handlers**
 
 ### Permissions Cần Thiết
 
@@ -203,12 +218,14 @@ if (error.message.includes('Failed to fetch')) {
 
 ### Anti-Patterns (TRÁNH)
 
-❌ Lưu data vào `chrome.storage.local` (chỉ dùng cho auth token)  
+❌ **Lưu business data vào `chrome.storage.local`** (chỉ dùng cho auth token) → Use Supabase instead  
+❌ **Lưu business data vào `localStorage`** (không hoạt động trong SW) → Use Supabase  
 ❌ Dùng `localStorage` trong Service Worker (không available)  
 ❌ Init Realtime subscriptions trong Background (WebSocket unstable)  
 ❌ Giữ state in-memory trong handlers (SW có thể terminate)  
 ❌ Đăng ký listeners trong async function (phải top-level sync)  
 ❌ Dynamic imports trong background (Vite inject incompatible code)
+❌ **Lưu dữ liệu người dùng locally** - TẤT CẢ phải đi qua Supabase
 
 ### Best Practices
 

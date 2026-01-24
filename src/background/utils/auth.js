@@ -10,6 +10,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { createErrorResponse } from '../../shared/messageSchema.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js';
 import { logger } from '../../logger.js';
+import { supabaseWithRetry } from './supabaseRetry.js';
 
 /**
  * Require authentication and return user ID
@@ -19,7 +20,7 @@ import { logger } from '../../logger.js';
  * fail-fast behavior with user-friendly error messages.
  * 
  * Flow:
- * 1. Call supabase.auth.getUser() to check session
+ * 1. Call supabase.auth.getUser() to check session (WITH RETRY)
  * 2. If user exists → return user.id (string UUID)
  * 3. If no user → throw formatted error response
  * 4. If error occurs → throw formatted error response
@@ -56,18 +57,49 @@ export async function requireAuth(message) {
   try {
     logger.debug('Checking authentication', { correlationId });
     
-    // Get current user from Supabase session
-    const { data: { user }, error } = await supabase.auth.getUser();
+    // Get current user from Supabase session WITH RETRY
+    // This handles transient errors like network issues
+    const result = await supabaseWithRetry(
+      async () => {
+        const authResult = await supabase.auth.getUser();
+        // If error, throw it so retry logic handles it
+        if (authResult.error) {
+          throw authResult.error;
+        }
+        return authResult;
+      },
+      {
+        operationName: 'supabase.auth.getUser',
+        maxRetries: 2,
+        correlationId,
+        willRetry: false // Don't retry auth errors (400 status)
+      }
+    );
+    
+    // Extract user from result
+    const { data: { user }, error } = result;
     
     // Handle authentication errors
+    // Note: With retry logic, we shouldn't get here unless it's a client error (4xx)
     if (error) {
-      logger.warn('Auth check failed', {
+      logger.warn('Auth check failed after retries', {
         correlationId,
         errorCode: error.code,
+        errorStatus: error.status,
         errorMessage: error.message
       });
       
-      // Token expired or invalid
+      // Check if it's "Auth session missing" (no token)
+      if (error.message?.includes('Auth session missing') || error.status === 400) {
+        throw createErrorResponse(
+          message,
+          ERROR_CODES.AUTH_REQUIRED,
+          getUserFriendlyMessage(ERROR_CODES.AUTH_REQUIRED),
+          { technicalError: error.message }
+        );
+      }
+      
+      // Token expired or invalid (should trigger re-login)
       throw createErrorResponse(
         message,
         ERROR_CODES.AUTH_EXPIRED,
@@ -117,18 +149,70 @@ export async function requireAuth(message) {
       throw error;
     }
     
+    // Safely extract error message
+    const errorMessage = error?.message || error?.error?.message || String(error) || 'Unknown error';
+    const errorStatus = error?.status || error?.statusCode;
+    const errorCode = error?.code;
+    
+    // Handle Supabase auth-specific errors
+    if (errorMessage.includes('Auth session missing')) {
+      logger.warn('No auth session found', { correlationId });
+      throw createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_REQUIRED,
+        getUserFriendlyMessage(ERROR_CODES.AUTH_REQUIRED),
+        { technicalError: errorMessage }
+      );
+    }
+    
+    // Invalid API key (configuration error)
+    if (errorMessage.includes('Invalid API key') || errorStatus === 401) {
+      logger.error('Invalid Supabase credentials', { 
+        correlationId,
+        errorMessage,
+        hint: 'Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env'
+      });
+      throw createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_ERROR,
+        'Lỗi cấu hình Supabase. Vui lòng kiểm tra API key.',
+        { 
+          technicalError: errorMessage,
+          hint: 'Invalid Supabase credentials. Check .env file.'
+        }
+      );
+    }
+    
+    if (errorStatus === 400 || errorCode === '400') {
+      logger.warn('Auth session invalid (400 error)', { correlationId });
+      throw createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_REQUIRED,
+        getUserFriendlyMessage(ERROR_CODES.AUTH_REQUIRED),
+        { technicalError: errorMessage }
+      );
+    }
+    
     // Unexpected error during auth check
     logger.error('Unexpected auth error', {
       correlationId,
-      errorMessage: error.message,
-      errorStack: error.stack
+      errorMessage,
+      errorStatus,
+      errorCode,
+      errorType: typeof error,
+      errorKeys: error ? Object.keys(error) : [],
+      errorStack: error?.stack
     });
     
     throw createErrorResponse(
       message,
       ERROR_CODES.AUTH_ERROR,
       getUserFriendlyMessage(ERROR_CODES.AUTH_ERROR),
-      { technicalError: error.message }
+      { 
+        technicalError: errorMessage,
+        errorStatus,
+        errorCode
+      }
     );
   }
 }

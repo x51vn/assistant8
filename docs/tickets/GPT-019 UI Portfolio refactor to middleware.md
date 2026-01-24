@@ -1,3 +1,5 @@
+DONE
+
 # GPT-019 UI Portfolio refactor to middleware
 
 ## Project Context (MUST READ)

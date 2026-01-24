@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008-002 Add password visibility toggle
 
 ## Project Context (MUST READ)

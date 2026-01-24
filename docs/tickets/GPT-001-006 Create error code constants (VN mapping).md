@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001-006 Create error code constants (VN mapping)
 
 ## Project Context (MUST READ)

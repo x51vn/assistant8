@@ -1,3 +1,5 @@
+DONE
+
 # GPT-011 UI Categories management page
 
 ## Project Context (MUST READ)

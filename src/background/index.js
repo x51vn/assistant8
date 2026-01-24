@@ -23,7 +23,7 @@ import './handlers/index.js'; // This will register all handlers
 // Dynamic imports cause Vite to inject document.* code which fails in Service Worker
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
-import './handlers/telemetry.js'; // X51LABS-94: Telemetry handlers
+// ❌ REMOVED: import './handlers/telemetry.js'; (dead code - no telemetry events called)
 
 const logger = createLogger('Background');
 
@@ -73,17 +73,44 @@ chrome.action.onClicked.addListener(async (tab) => {
   logger.info('Extension icon clicked', { tabId: tab?.id });
   
   try {
-    // Open side panel
-    if (chrome.sidePanel) {
-      await chrome.sidePanel.setOptions({ 
-        tabId: tab.id, 
-        path: 'sidepanel.html', 
-        enabled: true 
+    // Check if sidePanel API is available (Chrome 114+)
+    if (!chrome.sidePanel) {
+      logger.error('Side panel API not available', { 
+        chromeVersion: navigator.userAgent,
+        suggestion: 'Please update to Chrome 114 or later'
       });
-      await chrome.sidePanel.open({ tabId: tab.id });
+      return;
     }
+
+    // Validate tab
+    if (!tab || !tab.id) {
+      logger.error('Invalid tab context', { tab });
+      return;
+    }
+
+    // Open side panel
+    // Note: Don't call setOptions() before open() as it causes the user gesture
+    // context to expire. Since we have side_panel.default_path in manifest,
+    // we can call open() directly.
+    logger.debug('Opening side panel', { tabId: tab.id });
+    await chrome.sidePanel.open({ tabId: tab.id });
+    logger.info('Side panel opened successfully', { tabId: tab.id });
   } catch (error) {
-    logger.error('Failed to open side panel', { error });
+    // Enhanced error logging
+    const errorDetails = {
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack?.substring(0, 200),
+      tabId: tab?.id,
+      errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    };
+    
+    logger.error('Failed to open side panel', errorDetails);
+    
+    // Check if it's already open error (not critical)
+    if (error?.message?.includes('already') || error?.message?.includes('open')) {
+      logger.info('Side panel may already be open');
+    }
   }
 });
 
@@ -134,18 +161,8 @@ async function onInstall() {
     // Setup periodic alarms
     await setupAlarms();
     
-    // Set default settings
-    await chrome.storage.local.set({
-      settings: {
-        autoRun: false,
-        evaluatePrevious: false,
-        reviewPrompt: false,
-        realtimeEnabled: false,
-        interval: 5
-      },
-      portfolio: [],
-      notes: []
-    });
+    // ✅ Default settings now managed by Supabase (via settings handler)
+    // No longer setting defaults in chrome.storage.local
     
     logger.info('First-time setup completed');
   } catch (error) {
@@ -205,14 +222,9 @@ async function setupAlarms() {
     // CHECK alarm - portfolio price updates
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
     
-    // AUTORUN alarm - conditional based on settings
-    const result = await chrome.storage.local.get(['settings']);
-    const settings = result.settings || {};
-    
-    if (settings.autoRun && settings.interval > 0) {
-      chrome.alarms.create('AUTORUN', { periodInMinutes: settings.interval });
-      logger.info('AUTORUN alarm created', { interval: settings.interval });
-    }
+    // ✅ AUTORUN alarm setup moved to settings handler
+    // When user enables autoRun, settings.js will create the alarm
+    // This avoids reading from chrome.storage.local (deprecated)
     
     // Clean up legacy/unknown alarms
     await cleanupLegacyAlarms();

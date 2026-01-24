@@ -1,3 +1,5 @@
+DONE
+
 # GPT-009-002 Add database seed data for testing
 
 ## Project Context (MUST READ)

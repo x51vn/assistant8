@@ -1,3 +1,5 @@
+DONE
+
 # GPT-018 Background portfolio CRUD (Supabase)
 
 ## Project Context (MUST READ)

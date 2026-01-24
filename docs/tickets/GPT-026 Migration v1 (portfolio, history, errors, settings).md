@@ -1,3 +1,5 @@
+DONE
+
 # GPT-026 Migration v1 (portfolio, history, errors, settings)
 
 ## Project Context (MUST READ)

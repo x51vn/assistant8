@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001 Baseline audit & Architecture-Code mapping
 
 ## Project Context (MUST READ)

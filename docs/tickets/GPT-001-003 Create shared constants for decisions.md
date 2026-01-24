@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001-003 Create shared constants for decisions
 
 ## Project Context (MUST READ)

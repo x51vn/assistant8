@@ -1,3 +1,5 @@
+DONE
+
 # GPT-005 requireAuth utility
 
 ## Project Context (MUST READ)

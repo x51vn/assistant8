@@ -11,41 +11,13 @@
   <div class="container">
     <header>
       <div class="nav-buttons">
-        <button id="notesBtn" class="nav-btn active">Notes</button>
         <button id="portfolioBtn" class="nav-btn">Portfolio</button>
-        <button id="resultsBtn" class="nav-btn">Results</button>
+        <button id="resultsBtn" class="nav-btn active">Results</button>
         <button id="errorsBtn" class="nav-btn">Retro</button>
         <button id="englishBtn" class="nav-btn">English</button>
-        <button id="templatesBtn" class="nav-btn">Templ</button>
         <button id="settingsBtn" class="nav-btn" title="Settings"><i class="fas fa-cog"></i></button>
       </div>
     </header>
-
-    <div id="notesPage" class="page active">
-      <div class="content">
-        <div class="page-header">
-          <h2>Notes</h2>
-          <button id="addNoteBtn" class="icon-btn" title="Add/Edit today's note"><i class="fas fa-plus"></i></button>
-        </div>
-
-        <!-- Add/Edit Note Form -->
-        <div id="noteForm" style="display: none; margin-bottom: 16px; background: #f9f9f9; border: 1px solid #e0e0e0; border-left: 4px solid #667eea; padding: 12px;">
-          <div class="form-group">
-            <label>Today's Notes</label>
-            <textarea id="noteInput" class="textarea-input" placeholder="Add your tasks and notes for today..." rows="4"></textarea>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button id="saveNoteBtn" class="primary-btn">Save</button>
-            <button id="cancelNoteBtn" class="secondary-btn">Cancel</button>
-          </div>
-        </div>
-
-        <!-- Notes List (Read-only) -->
-        <div id="notesList" class="notes-list">
-          <p class="empty-state">No notes yet. Click + to add today's notes.</p>
-        </div>
-      </div>
-    </div>
 
     <div id="portfolioPage" class="page">
       <div class="content">
@@ -102,7 +74,7 @@
       </div>
     </div>
 
-    <div id="resultsPage" class="page">
+    <div id="resultsPage" class="page active">
       <div class="content">
         <!-- History Section -->
         <div class="history-section" style="border-top: 1px solid #eee; margin-top: 16px; padding-top: 16px;">
@@ -120,9 +92,7 @@
       </div>
     </div>
 
-    <div id="historyPage" class="page" style="display: none;"></div>
-
-    <div id="errorsPage" class="page">
+    <div id="errorsPage" class="page" style="display: none;">
       <div class="content">
         <div class="page-header">
           <h2>Retrospective</h2>
@@ -136,18 +106,6 @@
         </div>
         <div style="padding: 16px; text-align: center;">
           <button id="addErrorBtn" class="primary-btn">+ Thêm ghi chú</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="templatesPage" class="page">
-      <div class="content">
-        <div class="page-header">
-          <h2>Prompt Templates</h2>
-          <button id="newTemplateBtn" class="primary-btn">+ New Template</button>
-        </div>
-        <div id="templateList" class="template-list">
-          <p class="empty-state">Loading templates...</p>
         </div>
       </div>
     </div>
@@ -338,94 +296,6 @@ Sử dụng {TOPIC} để thay thế chủ đề"
           </div>
           <div id="backupStatus" class="status-message"></div>
         </div>
-
-        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;" class="auth-section">
-          <h3 style="margin-top: 0;">☁️ Supabase Authentication</h3>
-          
-          <!-- Supabase Login Form -->
-          <div id="supabase-auth-section" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
-            <div id="auth-status-display" style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px; display: none;">
-              <p style="margin: 0;">
-                <strong>✅ Đã đăng nhập:</strong> <span id="current-user-email"></span>
-              </p>
-              <button id="logout-btn" class="secondary-btn" style="margin-top: 10px; width: 100%;">Đăng xuất</button>
-            </div>
-
-            <div id="auth-forms">
-              <p style="margin-top: 0; font-weight: bold; color: #333;">Đăng nhập Supabase</p>
-              <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555;">Email:</label>
-                <input 
-                  type="email" 
-                  id="auth-email" 
-                  class="text-input" 
-                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
-                  placeholder="your@email.com" 
-                />
-              </div>
-
-              <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555;">Mật khẩu:</label>
-                <input 
-                  type="password" 
-                  id="auth-password" 
-                  class="text-input" 
-                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
-                  placeholder="••••••••" 
-                />
-              </div>
-
-              <button id="login-btn" class="primary-btn" style="width: 100%; padding: 12px; font-size: 16px; font-weight: bold;">
-                <i class="fas fa-lock"></i> Đăng nhập
-              </button>
-
-              <p style="font-size: 12px; color: #666; margin: 12px 0 0 0; text-align: center;">
-                <i class="fas fa-info-circle"></i> Supabase auto-syncs your data across devices
-              </p>
-            </div>
-
-            <div id="auth-message" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Template Modal -->
-  <div id="templateModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Create/Edit Template</h3>
-        <button class="modal-close" id="closeTemplateModal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="templateNameInput">Template Name:</label>
-          <input type="text" id="templateNameInput" class="text-input" placeholder="e.g., Stock Analysis" />
-        </div>
-        <div class="form-group">
-          <label for="templateDescInput">Description:</label>
-          <textarea id="templateDescInput" class="textarea-input" rows="2" placeholder="Brief description..."></textarea>
-        </div>
-        <div class="form-group">
-          <label for="templateCategorySelect">Category:</label>
-          <select id="templateCategorySelect" class="select-input">
-            <option value="analysis">Analysis</option>
-            <option value="portfolio">Portfolio</option>
-            <option value="risk">Risk</option>
-            <option value="market">Market</option>
-            <option value="coding">Coding</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="templateContentInput">Template Content:</label>
-          <textarea id="templateContentInput" class="textarea-input" rows="6" placeholder="Your template text here. Use {SYMBOL}, {PORTFOLIO}, {CODE} for variables..."></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="saveTemplateBtn" class="primary-btn">Save Template</button>
-        <button id="cancelTemplateBtn" class="secondary-btn">Cancel</button>
       </div>
     </div>
   </div>

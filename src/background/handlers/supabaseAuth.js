@@ -131,32 +131,47 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, async (message) => {
       return error;
     }
     
+    // Safely extract error message
+    const errorMessage = error?.message || error?.error?.message || String(error) || 'Unknown error';
+    
     // Map Supabase auth errors
-    if (error.message?.includes('Invalid login credentials')) {
+    if (errorMessage.includes('Invalid login credentials')) {
       return createErrorResponse(
         message,
         ERROR_CODES.AUTH_INVALID_CREDENTIALS,
         'Email hoặc mật khẩu không đúng',
-        { technicalError: error.message }
+        { technicalError: errorMessage }
       );
     }
     
-    if (error.message?.includes('Email not confirmed')) {
+    if (errorMessage.includes('Invalid API key')) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_ERROR,
+        'Lỗi cấu hình Supabase. Vui lòng kiểm tra API key trong file .env',
+        { 
+          technicalError: errorMessage,
+          hint: 'Get correct VITE_SUPABASE_ANON_KEY from https://app.supabase.com/project/_/settings/api'
+        }
+      );
+    }
+    
+    if (errorMessage.includes('Email not confirmed')) {
       return createErrorResponse(
         message,
         ERROR_CODES.AUTH_EMAIL_NOT_CONFIRMED,
         'Email chưa được xác nhận. Vui lòng kiểm tra hộp thư.',
-        { technicalError: error.message }
+        { technicalError: errorMessage }
       );
     }
     
     // Network/unexpected errors
-    if (error.message?.includes('fetch')) {
+    if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
       return createErrorResponse(
         message,
         ERROR_CODES.NETWORK_ERROR,
         ERROR_MESSAGES_VN[ERROR_CODES.NETWORK_ERROR],
-        { technicalError: error.message }
+        { technicalError: errorMessage }
       );
     }
     
@@ -164,7 +179,7 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, async (message) => {
       message,
       ERROR_CODES.AUTH_ERROR,
       ERROR_MESSAGES_VN[ERROR_CODES.AUTH_ERROR],
-      { technicalError: error.message }
+      { technicalError: errorMessage }
     );
   }
 });

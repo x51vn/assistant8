@@ -1,3 +1,5 @@
+DONE
+
 # GPT-030 Remove Firebase UI flows
 
 ## Project Context (MUST READ)

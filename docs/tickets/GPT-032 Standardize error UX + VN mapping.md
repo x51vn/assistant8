@@ -1,3 +1,5 @@
+DONE
+
 # GPT-032 Standardize error UX + VN mapping
 
 ## Project Context (MUST READ)

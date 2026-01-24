@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008-004 Add loading state to auth gate
 
 ## Project Context (MUST READ)

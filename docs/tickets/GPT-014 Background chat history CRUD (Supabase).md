@@ -1,3 +1,5 @@
+DONE
+
 # GPT-014 Background chat history CRUD (Supabase)
 
 ## Project Context (MUST READ)

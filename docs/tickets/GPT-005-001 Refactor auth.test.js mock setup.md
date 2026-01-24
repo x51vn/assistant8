@@ -1,3 +1,5 @@
+DONE
+
 # GPT-005-001 Refactor auth.test.js mock setup
 
 ## Project Context (MUST READ)

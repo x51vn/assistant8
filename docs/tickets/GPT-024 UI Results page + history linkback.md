@@ -1,3 +1,5 @@
+DONE
+
 # GPT-024 UI Results page + history linkback
 
 ## Project Context (MUST READ)

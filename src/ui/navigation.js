@@ -3,17 +3,13 @@ import { loadSettings } from './storage.js';
 
 export function setupNavigation(dom) {
   const { 
-    notesBtn, resultsBtn, portfolioBtn, errorsBtn, englishBtn, templatesBtn, settingsBtn, 
-    notesPage, resultsPage, portfolioPage, errorsPage, englishPage, templatesPage, settingsPage, 
+    resultsBtn, portfolioBtn, errorsBtn, englishBtn, settingsBtn, 
+    resultsPage, portfolioPage, errorsPage, englishPage, settingsPage, 
     promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput 
   } = dom;
 
-  const pages = [notesPage, portfolioPage, resultsPage, errorsPage, englishPage, templatesPage, settingsPage];
-  const btns = [notesBtn, portfolioBtn, resultsBtn, errorsBtn, englishBtn, templatesBtn, settingsBtn];
-
-  notesBtn?.addEventListener('click', () => {
-    setActivePage({ pages, btns, page: 'notes' });
-  });
+  const pages = [portfolioPage, resultsPage, errorsPage, englishPage, settingsPage];
+  const btns = [portfolioBtn, resultsBtn, errorsBtn, englishBtn, settingsBtn];
 
   portfolioBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'portfolio' });
@@ -29,10 +25,6 @@ export function setupNavigation(dom) {
   
   englishBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'english' });
-  });
-
-  templatesBtn?.addEventListener('click', () => {
-    setActivePage({ pages, btns, page: 'templates' });
   });
 
   settingsBtn?.addEventListener('click', () => {

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-020 SSI price fetcher (batch + concurrency)
 
 ## Project Context (MUST READ)

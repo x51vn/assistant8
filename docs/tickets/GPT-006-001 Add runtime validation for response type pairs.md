@@ -1,3 +1,5 @@
+DONE
+
 # GPT-006-001 Add runtime validation for response type pairs
 
 ## Project Context (MUST READ)

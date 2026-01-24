@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008-001 Add "Remember Me" checkbox
 
 ## Project Context (MUST READ)

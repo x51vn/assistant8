@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001-005 Document storage keys transition plan
 
 ## Project Context (MUST READ)

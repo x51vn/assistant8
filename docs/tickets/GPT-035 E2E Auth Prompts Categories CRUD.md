@@ -1,3 +1,5 @@
+DONE
+
 # GPT-035 E2E Auth Prompts Categories CRUD
 
 ## Project Context (MUST READ)

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-025 UI Supabase Realtime subscriptions + fallback polling
 
 ## Project Context (MUST READ)

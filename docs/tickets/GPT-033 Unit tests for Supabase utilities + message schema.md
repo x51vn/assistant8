@@ -1,3 +1,5 @@
+DONE
+
 # GPT-033 Unit tests for Supabase utilities + message schema
 
 ## Project Context (MUST READ)

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-027 Migration v2 (prompts + categories)
 
 ## Project Context (MUST READ)

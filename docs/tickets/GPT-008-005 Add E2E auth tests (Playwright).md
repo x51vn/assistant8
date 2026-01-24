@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008-005 Add E2E auth tests (Playwright)
 
 ## Project Context (MUST READ)

@@ -5,9 +5,37 @@
 
 import { createLogger } from '../../logger.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
-import { STORAGE_KEYS } from '../../constants.js';
+import { supabase } from '../../supabaseConfig.js';
 
 const logger = createLogger('ContextMenu');
+
+/**
+ * Get context menu prompt from Supabase settings
+ * @returns {Promise<string>} The context menu prompt template
+ */
+async function getContextMenuPrompt() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    }
+
+    const { data, error } = await supabase
+      .from('settings')
+      .select('config')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error || !data) {
+      return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    }
+
+    return data.config?.prompts?.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+  } catch (error) {
+    logger.error('Failed to get context menu prompt from Supabase', { error: error.message });
+    return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+  }
+}
 
 /**
  * Handle context menu click event
@@ -28,9 +56,8 @@ export async function handleContextMenuClick(info, tab) {
       // Continue to try page extraction
     }
     
-    // Get the context menu prompt from storage
-    const settings = await chrome.storage.local.get([STORAGE_KEYS.CONTEXT_MENU_PROMPT]);
-    let prompt = settings[STORAGE_KEYS.CONTEXT_MENU_PROMPT] || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    // ✅ Get the context menu prompt from Supabase
+    const prompt = await getContextMenuPrompt();
 
     // Extract content from the page
     let content = '';

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-009-003 Add database backup/restore scripts
 
 ## Project Context (MUST READ)

@@ -26,11 +26,38 @@ const logger = createLogger('Supabase');
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Validate Supabase configuration
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   const error = 'Supabase configuration missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env';
   logger.error(error);
   throw new Error(error);
 }
+
+// Validate URL format
+if (!SUPABASE_URL.startsWith('https://') || !SUPABASE_URL.includes('.supabase.co')) {
+  const error = `Invalid VITE_SUPABASE_URL format: ${SUPABASE_URL}. Should be https://your-project.supabase.co`;
+  logger.error(error);
+  throw new Error(error);
+}
+
+// Validate Anon Key format (JWT tokens are long ~200+ chars)
+if (SUPABASE_ANON_KEY.length < 100) {
+  const error = `Invalid VITE_SUPABASE_ANON_KEY: Too short (${SUPABASE_ANON_KEY.length} chars). Real Supabase anon keys are 200+ characters. Please get the correct key from Supabase Dashboard > Settings > API`;
+  logger.error(error);
+  throw new Error(error);
+}
+
+// Check for placeholder values
+if (SUPABASE_URL.includes('your-project') || SUPABASE_ANON_KEY.includes('your-anon-key')) {
+  const error = 'Supabase configuration contains placeholder values. Please replace with actual credentials from https://app.supabase.com/project/_/settings/api';
+  logger.error(error);
+  throw new Error(error);
+}
+
+logger.info('Supabase configuration validated', {
+  url: SUPABASE_URL,
+  anonKeyLength: SUPABASE_ANON_KEY.length
+});
 
 // ============================================================================
 // CHROME STORAGE ADAPTER

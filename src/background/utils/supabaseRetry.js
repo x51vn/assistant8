@@ -187,6 +187,16 @@ function determineIfRetryable(error) {
     return true;
   }
 
+  // Auth session errors - NO RETRY (user needs to login)
+  if (
+    error.message?.includes('Auth session missing') ||
+    error.message?.includes('session_not_found') ||
+    error.message?.includes('Invalid login credentials') ||
+    error.message?.includes('Email not confirmed')
+  ) {
+    return false;
+  }
+
   // HTTP status codes
   if (error.status || error.statusCode) {
     const status = error.status || error.statusCode;

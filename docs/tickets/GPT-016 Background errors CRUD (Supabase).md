@@ -1,3 +1,5 @@
+DONE
+
 # GPT-016 Background errors CRUD (Supabase)
 
 ## Project Context (MUST READ)

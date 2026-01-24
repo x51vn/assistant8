@@ -1,3 +1,5 @@
+DONE
+
 # GPT-001 Sub-Tickets Review & Summary
 
 **Parent**: GPT-001 Baseline audit & Architecture-Code mapping  

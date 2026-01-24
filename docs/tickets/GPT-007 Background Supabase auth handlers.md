@@ -1,3 +1,5 @@
+DONE
+
 # GPT-007 Background Supabase auth handlers
 
 ## Project Context (MUST READ)

@@ -1,3 +1,5 @@
+DONE
+
 # GPT-008 UI auth gate + login UX
 
 ## Project Context (MUST READ)

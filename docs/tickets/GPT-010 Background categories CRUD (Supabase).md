@@ -1,3 +1,5 @@
+DONE
+
 # GPT-010 Background categories CRUD (Supabase)
 
 ## Project Context (MUST READ)
