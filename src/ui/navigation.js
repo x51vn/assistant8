@@ -6,7 +6,7 @@ export function setupNavigation(dom) {
   const { 
     resultsBtn, portfolioBtn, errorsBtn, englishBtn, settingsBtn, 
     resultsPage, portfolioPage, errorsPage, englishPage, settingsPage, 
-    promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput 
+    promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput 
   } = dom;
 
   const pages = [portfolioPage, resultsPage, errorsPage, englishPage, settingsPage];
@@ -34,6 +34,6 @@ export function setupNavigation(dom) {
 
   settingsBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'settings' });
-    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput });
+    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
   });
 }

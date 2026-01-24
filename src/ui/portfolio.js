@@ -81,7 +81,8 @@ async function addStockToSupabase(symbol, quantity, avgPrice) {
       throw new Error(response.errorMessage || 'Failed to add stock');
     }
     
-    return response.data;
+    // 🔧 FIX: Handler returns item at top-level (spread operator), not in response.data
+    return response;
   } catch (error) {
     console.error('[Portfolio] Add stock error:', error);
     throw error;
@@ -105,7 +106,8 @@ async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
       throw new Error(response.errorMessage || 'Failed to update stock');
     }
     
-    return response.data;
+    // 🔧 FIX: Handler returns item at top-level (spread operator), not in response.data
+    return response;
   } catch (error) {
     console.error('[Portfolio] Update stock error:', error);
     throw error;
@@ -129,7 +131,8 @@ async function removeStockFromSupabase(id) {
       throw new Error(response.errorMessage || 'Failed to remove stock');
     }
     
-    return response.data;
+    // 🔧 FIX: Handler returns id at top-level (spread operator), not in response.data
+    return response;
   } catch (error) {
     console.error('[Portfolio] Remove stock error:', error);
     throw error;
@@ -1007,9 +1010,10 @@ async function sendPromptWithHistory(prompt, title, createNewChat = true) {
     
     console.log('[Portfolio] Prompt sent successfully to ChatGPT');
     
-    // Get chatId/chatUrl from response - it should have chatUrl at least
-    let finalChatId = response.payload?.chatId || null;
-    let finalChatUrl = response.payload?.chatUrl || null;
+    // Get chatId/chatUrl from response - createResponse spreads payload directly at top-level
+    // NOT nested: response.payload.chatId doesn't exist!
+    let finalChatId = response.chatId || null;
+    let finalChatUrl = response.chatUrl || null;
     
     console.log('[Portfolio] Initial response chatId:', finalChatId, 'chatUrl:', finalChatUrl);
     
@@ -1043,9 +1047,9 @@ async function sendPromptWithHistory(prompt, title, createNewChat = true) {
           });
         });
         
-        if (pollResponse?.payload?.chatUrl) {
-          finalChatUrl = pollResponse.payload.chatUrl;
-          finalChatId = pollResponse.payload.chatId || extractChatIdFromUrl(finalChatUrl);
+        if (pollResponse?.chatUrl) {
+          finalChatUrl = pollResponse.chatUrl;
+          finalChatId = pollResponse.chatId || extractChatIdFromUrl(finalChatUrl);
           console.log('[Portfolio] Got chatUrl from poll attempt', i + 1, ':', finalChatUrl);
           break;
         }

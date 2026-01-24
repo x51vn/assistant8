@@ -141,9 +141,12 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
       
       const response = await sendRuntimeMessage(message);
       
-      if (response && response.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && response.payload?.output) {
-        const { output, chatId, chatUrl } = response.payload;
-        
+      // ✅ Handle both response patterns: direct fields (correct) and payload nested (legacy)
+      const output = response?.output || response?.payload?.output;
+      const chatId = response?.chatId || response?.payload?.chatId;
+      const chatUrl = response?.chatUrl || response?.payload?.chatUrl;
+      
+      if (response && response.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && output) {
         clearInterval(currentPollInterval);
         currentPollInterval = null;
         

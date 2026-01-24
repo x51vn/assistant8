@@ -44,10 +44,11 @@ Supabase Cloud (PostgreSQL + Auth + Realtime)
 - **Background SW**: `src/background/index.js` (listeners đăng ký top-level, đồng bộ)
 - **Message Router**: `src/background/messageRouter.js` (Command Pattern)
 - **Handlers**: `src/background/handlers/*.js` 
-  - ✅ ACTIVE: `chatgpt.js`, `portfolio.js`, `history.js`, `chatHistory.js`, `errorTracking.js`, `supabaseAuth.js`, `settings.js`, `migration.js`, `alarms.js`, `contextMenu.js`, `telemetry.js`, `health.js`, `prompt.js` (core SEND_PROMPT)
-  - ❌ REMOVED (GPT-031): `prompts.js`, `categories.js` (UI features removed, handler code remains as reference)
+  - ✅ ACTIVE: `chatgpt.js`, `portfolio.js`, `chatHistory.js`, `errorTracking.js`, `supabaseAuth.js`, `settings.js`, `alarms.js`, `contextMenu.js`, `prompt.js`, `content.js`
+  - ❌ REMOVED: `prompts.js`, `categories.js` (UI removed), `state.js`, `health.js`, `migration.js`, `telemetry.js`, `history.js` (superseded by chatHistory)
 - **Content Script**: `src/content.js` (ChatGPT DOM automation)
-- **UI**: `src/ui/*.js` (portfolio, history, errors, settings, results, english) - **No prompts/categories UI**
+- **UI**: `src/ui/*.js` (portfolio, history, errors, settings, results, english, navigation, pages, dom, status)
+  - ❌ REMOVED: `backup.js` (obsolete - data in Supabase), `prompts.js`, `categories.js` (features removed)
 - **Message Schema**: `src/shared/messageSchema.js` (Message types for all operations)
 
 ### Database (Supabase PostgreSQL)
@@ -98,24 +99,33 @@ Supabase Cloud (PostgreSQL + Auth + Realtime)
 ```javascript
 // UI
 const response = await chrome.runtime.sendMessage({
-  type: MESSAGE_TYPES.PROMPT_ADD,
+  type: MESSAGE_TYPES.PORTFOLIO_GET,
   correlationId: generateCorrelationId(),
-  data: { title: 'My Prompt', content: '...' }
+  timestamp: Date.now()
 });
 
+// ⚠️ CRITICAL: Response uses spread operator
+// createResponse spreads payload directly, NOT nested in .data
+// ✅ CORRECT: response.items (direct property)
+// ❌ WRONG: response.data?.items (doesn't exist!)
+const items = response.items || []; // Direct access
+
 // Background Handler
-registerHandler(MESSAGE_TYPES.PROMPT_ADD, async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_GET, async (message) => {
   const userId = await requireAuth(message);
-  const data = await supabaseWithRetry(async () => {
+  const items = await supabaseWithRetry(async () => {
     const result = await supabase
-      .from('prompts')
-      .insert({ user_id: userId, ...message.data })
-      .select()
-      .single();
+      .from('portfolio')
+      .select('*')
+      .eq('user_id', userId);
     if (result.error) throw result.error;
     return result.data;
   });
-  return createResponse(message, MESSAGE_TYPES.PROMPT_ADDED, data);
+  // Payload spreads directly into response
+  return createResponse(message, MESSAGE_TYPES.PORTFOLIO_DATA, {
+    success: true,
+    items // ← Becomes response.items, NOT response.data.items
+  });
 });
 ```
 
@@ -181,6 +191,12 @@ if (error.message.includes('Failed to fetch')) {
 - Wrap Supabase calls với `supabaseWithRetry()` (exponential backoff)
 - Always call Supabase - KHÔNG lưu state in-memory
 - Return `createResponse()` hoặc `createErrorResponse()`
+- **⚠️ Field naming**: Support BOTH camelCase và snake_case trong updates:
+  ```javascript
+  // Example: PORTFOLIO_UPDATE handler
+  if (updates.currentPrice !== undefined) updateData.current_price = Number(updates.currentPrice);
+  if (updates.current_price !== undefined) updateData.current_price = Number(updates.current_price);
+  ```
 
 **Content Script** (`src/content.js`):
 - Selectors dễ vỡ → nhiều fallbacks
@@ -193,6 +209,15 @@ if (error.message.includes('Failed to fetch')) {
 - Realtime subscriptions trong UI (not background) 
 - Update UI optimistically, revert on error
 - **Không được lưu business data locally - all via background handlers**
+- **⚠️ CRITICAL Response Parsing**: `createResponse()` spreads payload directly
+  ```javascript
+  // ✅ CORRECT: Direct property access
+  const items = response.items || [];
+  const chatId = response.chatId;
+  
+  // ❌ WRONG: Nested data property doesn't exist
+  const items = response.data?.items; // undefined!
+  ```
 
 ### Permissions Cần Thiết
 
@@ -226,6 +251,7 @@ if (error.message.includes('Failed to fetch')) {
 ❌ Đăng ký listeners trong async function (phải top-level sync)  
 ❌ Dynamic imports trong background (Vite inject incompatible code)
 ❌ **Lưu dữ liệu người dùng locally** - TẤT CẢ phải đi qua Supabase
+❌ **Truy cập `response.data?.items`** - createResponse spreads payload directly, dùng `response.items`
 
 ### Best Practices
 
@@ -237,6 +263,8 @@ if (error.message.includes('Failed to fetch')) {
 ✅ Alarms cho periodic tasks (price updates mỗi 5min market hours)  
 ✅ RLS policies enforce user isolation  
 ✅ Correlation IDs cho request tracing
+✅ **Support both camelCase và snake_case** trong handler updates (field naming flexibility)
+✅ **Direct property access** trong response parsing (`response.items` không phải `response.data.items`)
 
 ## References
 

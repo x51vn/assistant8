@@ -168,6 +168,17 @@ registerHandler(MESSAGE_TYPES.HISTORY_ADD, async (message) => {
       );
     }
     
+    // ⚠️ XST-689: Warning if chat_id is missing (content script not ready)
+    // This is now ALLOWED - we can save with null chat_id and update later
+    if (!chat_id) {
+      logger.warn('Adding history without chat_id (content script may not be ready)', {
+        correlationId,
+        hasUrl: !!chat_url,
+        hasPromptId: !!prompt_id,
+        note: 'XST-689: chat_id is nullable - can be updated later'
+      });
+    }
+    
     const data = await supabaseWithRetry(
       async () => {
         const { data, error } = await supabase
@@ -180,7 +191,7 @@ registerHandler(MESSAGE_TYPES.HISTORY_ADD, async (message) => {
             chat_url: chat_url || null,
             prompt_id: prompt_id || null,
             run_id: run_id || null,
-            timestamp: new Date().toISOString()
+            timestamp: Date.now()  // ✅ FIX: bigint milliseconds, not ISO string
           })
           .select()
           .single();
@@ -223,20 +234,23 @@ registerHandler(MESSAGE_TYPES.HISTORY_ADD, async (message) => {
 
 /**
  * HISTORY_UPDATE - Update history entry (typically to add response)
+ * Supports update by:
+ * 1. id (database primary key) - direct update
+ * 2. chat_id (ChatGPT conversation ID) - finds latest entry by chat_id
  */
 registerHandler(MESSAGE_TYPES.HISTORY_UPDATE, async (message) => {
   const correlationId = logger.startOperation('updateHistory', message.correlationId);
-  const { id, response, chat_url } = message.data || {};
+  const { id, chat_id, response, chat_url } = message.data || {};
   
   try {
     const userId = await requireAuth(message);
     
-    if (!id) {
+    if (!id && !chat_id) {
       logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
       return createErrorResponse(
         message,
         ERROR_CODES.INVALID_INPUT,
-        'ID lịch sử không hợp lệ.'
+        'ID hoặc chat_id lịch sử không hợp lệ.'
       );
     }
     
@@ -246,13 +260,21 @@ registerHandler(MESSAGE_TYPES.HISTORY_UPDATE, async (message) => {
     
     const data = await supabaseWithRetry(
       async () => {
-        const { data, error } = await supabase
+        let query = supabase
           .from('chat_history')
           .update(updateData)
-          .eq('id', id)
-          .eq('user_id', userId)
-          .select()
-          .single();
+          .eq('user_id', userId);
+        
+        // Support both id and chat_id lookups
+        if (id) {
+          query = query.eq('id', id);
+        } else if (chat_id) {
+          // Find latest entry by chat_id for this user
+          query = query.eq('chat_id', chat_id);
+        }
+        
+        const result = await query.select().single();
+        const { data, error } = result;
         
         if (error) {
           if (error.code === 'PGRST116') {
@@ -268,7 +290,7 @@ registerHandler(MESSAGE_TYPES.HISTORY_UPDATE, async (message) => {
       }
     );
     
-    logger.endOperation(correlationId, 'success', { historyId: id });
+    logger.endOperation(correlationId, 'success', { historyId: id || chat_id });
     return createResponse(message, MESSAGE_TYPES.HISTORY_UPDATED, { history: data });
     
   } catch (error) {

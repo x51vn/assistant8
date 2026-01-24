@@ -27,6 +27,9 @@ import './prompt.js'; // GPT-012: Core prompt sending (KEEP - used by SEND_PROMP
 import './chatHistory.js'; // GPT-014: Chat History CRUD handlers
 import './errorTracking.js'; // GPT-016: Error tracking CRUD handlers
 import './settings.js'; // ✅ GPT-FIX: Settings handlers (Supabase-backed)
+import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
+
+logger.info('All message handlers registered');
 
 // ❌ REMOVED DEAD CODE HANDLERS (never called from UI):
 // import './state.js'; // Unused: STATE_GET/STATE_SET never called

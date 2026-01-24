@@ -117,7 +117,8 @@ export async function updateStockCurrentPrice(code, price) {
       return null;
     }
     
-    return response.data;
+    // 🔧 FIX: Handler returns item at top-level (spread operator), not in response.data
+    return response;
   } catch (error) {
     console.error('[PortfolioPL] Update stock price error:', error);
     return null;

@@ -40,7 +40,7 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
 
     // Send prompt
     const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt.trim(), {
-      createNewChat: options?.createNewChat || false,
+      createNewChat: options?.createNewChat !== false,
       reviewOnly: options?.reviewOnly || false
     });
 
@@ -49,13 +49,25 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
     }
 
     logger.info('Prompt sent successfully', { correlationId });
+    
+    // 🔍 DEBUG: Log captured chat metadata
+    const chatId = sendResult.data?.chatId || null;
+    const chatUrl = sendResult.data?.chatUrl || null;
+    console.log('🔍 [PromptHandler] Chat metadata captured:', {
+      chatId,
+      chatUrl,
+      hasId: !!chatId,
+      hasUrl: !!chatUrl,
+      fullData: sendResult.data
+    });
+    
     logger.endOperation(correlationId, 'success');
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_SENT, {
       tabId: tabResult.tabId,
       success: true,
-      chatId: sendResult.data?.chatId || null,
-      chatUrl: sendResult.data?.chatUrl || null,
+      chatId,
+      chatUrl,
       status: sendResult.data?.status || null
     });
 

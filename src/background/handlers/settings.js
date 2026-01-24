@@ -45,7 +45,10 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
     );
     
     logger.endOperation(correlationId, 'success');
-    return createResponse(message, MESSAGE_TYPES.SETTINGS_DATA, data);
+    // ✅ Extract only config field (not user_id or timestamps)
+    return createResponse(message, MESSAGE_TYPES.SETTINGS_DATA, {
+      config: data.config || {}
+    });
     
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });
@@ -118,7 +121,10 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
     );
     
     logger.endOperation(correlationId, 'success');
-    return createResponse(message, MESSAGE_TYPES.SETTINGS_UPDATED, data);
+    // ✅ Extract only config field (not user_id or timestamps)
+    return createResponse(message, MESSAGE_TYPES.SETTINGS_UPDATED, {
+      config: data.config || {}
+    });
     
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });

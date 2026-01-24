@@ -184,6 +184,7 @@ registerHandler(MESSAGE_TYPES.ERROR_ADD, async (message) => {
             severity: severity || 'medium',
             type: type || 'general',
             details: details || null,
+            timestamp: Date.now(),  // ✅ FIX: bigint milliseconds required
             resolved: false,
             created_at: new Date().toISOString()
           })

@@ -17,12 +17,14 @@ import { createLogger } from '../logger.js';
 import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import './handlers/index.js'; // This will register all handlers
 
 // CRITICAL: Static imports to avoid Vite preload helper injection
 // Dynamic imports cause Vite to inject document.* code which fails in Service Worker
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
+import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
 // ❌ REMOVED: import './handlers/telemetry.js'; (dead code - no telemetry events called)
 
 const logger = createLogger('Background');
@@ -40,6 +42,38 @@ const unsubscribeMessage = onMessage(async (message, sender) => {
   // Route to appropriate handler
   return await route(message, sender);
 });
+
+// X51LABS-156: Store extension reload marker for debugging
+// Helps detect when extension is reloaded without content script being re-injected
+const EXTENSION_START_MARKER = `extension_start_${Date.now()}`;
+chrome.storage.local.set({ 
+  'x51labs_extension_start_marker': EXTENSION_START_MARKER
+}).catch(err => {
+  logger.warn('Failed to store extension start marker', { error: err.message });
+});
+
+// ✅ NEW: Force session restoration when Service Worker starts
+// This ensures user stays logged in after Service Worker reload
+logger.info('Service Worker loaded - attempting to restore session...');
+// Note: Wrap in setTimeout to avoid blocking message routing
+setTimeout(() => {
+  restoreSessionOnServiceWorkerStart().catch(error => {
+    logger.error('Failed to restore session on SW start', { 
+      error: error.message 
+    });
+  });
+}, 100);
+
+// ✅ NEW (XST-687): Re-initialize content script registry after SW restart
+// This restores knowledge of which tabs have content scripts loaded
+// Delay 1000ms to allow content scripts to settle after page load
+setTimeout(() => {
+  contentScriptReadyModule.initializeOnStartup().catch(error => {
+    logger.error('Failed to initialize content script registry on SW start', { 
+      error: error.message 
+    });
+  });
+}, 1000);
 
 /**
  * Installation handler - runs once when extension is installed/updated
@@ -145,6 +179,27 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+/**
+ * Tab removed handler - cleanup content script ready status
+ * X51LABS-157: Prevents memory leaks in contentScriptReady registry
+ */
+chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+  logger.debug('Tab closed, cleaning up content script status', { 
+    tabId, 
+    isWindowClosing: removeInfo.isWindowClosing 
+  });
+  
+  try {
+    // Use static import (already imported at top of file)
+    contentScriptReadyModule.clearContentScriptStatus(tabId);
+  } catch (error) {
+    logger.error('Failed to clear content script status on tab close', { 
+      tabId, 
+      error: error.message 
+    });
+  }
+});
+
 // ========== INITIALIZATION HANDLERS (can be async) ==========
 
 /**
@@ -200,9 +255,66 @@ async function onStartup() {
     // Setup periodic alarms
     await setupAlarms();
     
+    // ✅ NEW: Force session restoration on startup
+    await restoreSessionOnStartup();
+    
     logger.info('Startup tasks completed');
   } catch (error) {
     logger.error('Startup tasks failed', { error });
+  }
+}
+
+/**
+ * Force session restoration when browser starts
+ * Ensures user stays logged in across browser restarts
+ */
+async function restoreSessionOnStartup() {
+  try {
+    logger.info('Attempting to restore session on startup...');
+    
+    // Force Supabase to read session from chrome.storage.local
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      logger.warn('Failed to restore session on startup', { 
+        error: error.message 
+      });
+      return;
+    }
+    
+    if (session) {
+      logger.info('✅ Session restored successfully', { 
+        userId: session.user?.id,
+        email: session.user?.email,
+        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
+      });
+      
+      // Broadcast to UI
+      // ✅ CRITICAL: Catch receiving end errors gracefully
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        data: {
+          authenticated: true,
+          user: {
+            id: session.user.id,
+            email: session.user.email
+          }
+        }
+      }).catch(broadcastError => {
+        // UI not open - this is normal
+        if (broadcastError?.message?.includes('Receiving end does not exist')) {
+          logger.debug('UI not open - session will restore when UI loads');
+        } else {
+          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
+        }
+      });
+    } else {
+      logger.info('No session found on startup - user needs to login');
+    }
+  } catch (error) {
+    logger.error('Session restoration failed', { 
+      error: error.message 
+    });
   }
 }
 
@@ -236,6 +348,62 @@ async function setupAlarms() {
     logger.info('Alarms setup completed');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
+  }
+}
+
+/**
+ * ✅ NEW: Restore session when Service Worker starts/reloads
+ * Ensures user stays logged in after SW restart
+ */
+async function restoreSessionOnServiceWorkerStart() {
+  try {
+    logger.info('Service Worker started - restoring auth session...');
+    
+    // Force Supabase to read session from chrome.storage.local
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      logger.warn('Failed to get session on SW start', { 
+        error: error.message 
+      });
+      return;
+    }
+    
+    if (session && session.user) {
+      logger.info('✅ Auth session restored', { 
+        userId: session.user.id,
+        email: session.user.email,
+        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
+      });
+      
+      // Broadcast to UI if it's open
+      // ✅ CRITICAL: Catch receiving end errors gracefully
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        data: {
+          authenticated: true,
+          event: 'SESSION_RESTORED',
+          user: {
+            id: session.user.id,
+            email: session.user.email
+          }
+        }
+      }).catch(broadcastError => {
+        // UI not open - this is normal
+        // Error: "Could not establish connection. Receiving end does not exist."
+        if (broadcastError?.message?.includes('Receiving end does not exist')) {
+          logger.debug('UI not open - session will restore when UI loads');
+        } else {
+          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
+        }
+      });
+    } else {
+      logger.info('No session found on SW start - user will need to login');
+    }
+  } catch (error) {
+    logger.error('Session restoration failed', { 
+      error: error.message 
+    });
   }
 }
 

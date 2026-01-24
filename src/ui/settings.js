@@ -191,7 +191,7 @@ Provide:
       payload: {
         prompt: prompt,
         options: {
-          createNewChat: false,
+          createNewChat: true,
           focusTab: true
         }
       }
@@ -228,7 +228,43 @@ async function loadUserInfo() {
   }
 }
 
-  loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
+// ✅ Load settings from Supabase on init
+async function loadSettingsFromSupabase(dom) {
+  const { promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput } = dom;
+  
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+    
+    if (response.errorCode) {
+      console.warn('[Settings] Failed to load settings:', response.errorMessage);
+      return;
+    }
+    
+    // ✅ createResponse spreads config directly
+    const config = response.config || {};
+    
+    console.log('[Settings] Loaded config from Supabase:', config);
+    
+    // Populate settings UI
+    if (promptInput && config.prompt !== undefined) promptInput.value = config.prompt;
+    if (autoRunCheckbox && config.autoRun !== undefined) autoRunCheckbox.checked = config.autoRun;
+    if (evaluatePreviousCheckbox && config.evaluatePrevious !== undefined) evaluatePreviousCheckbox.checked = config.evaluatePrevious;
+    if (reviewPromptCheckbox && config.reviewPrompt !== undefined) reviewPromptCheckbox.checked = config.reviewPrompt;
+    if (realtimeEnabledCheckbox && config.realtimeEnabled !== undefined) realtimeEnabledCheckbox.checked = config.realtimeEnabled;
+    if (intervalInput && config.interval !== undefined) intervalInput.value = config.interval;
+    
+  } catch (error) {
+    console.error('[Settings] Load settings error:', error);
+  }
+}
+
+  // Load settings when page initializes
+  loadSettingsFromSupabase(dom);
 }
 
 // ✅ GPT-FIX: Load ALL prompts in ONE Supabase request (batch load)
@@ -247,14 +283,32 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
     
     if (response.errorCode) {
       console.warn('[Settings] Failed to load prompts from Supabase:', response.errorMessage);
-      setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+      setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
       return;
     }
     
-    const prompts = response.data?.config?.prompts || {};
+    // ✅ createResponse spreads config directly at top-level, NOT nested in .data
+    const prompts = (response.config?.prompts) || {};
+    
+    console.log('[Settings] Loaded prompts from Supabase:', {
+      portfolioLength: prompts.portfolio?.length || 0,
+      stockEvalLength: prompts.stockEval?.length || 0,
+      teaStockLength: prompts.teaStock?.length || 0,
+      contextMenuLength: prompts.contextMenu?.length || 0,
+      englishLength: prompts.english?.length || 0
+    });
     
     // ✅ Populate all prompts from single response
-    if (portfolioPromptInput) portfolioPromptInput.value = prompts.portfolio || '';
+    // Portfolio prompt - handle large prompt with auto-height
+    if (portfolioPromptInput) {
+      portfolioPromptInput.value = prompts.portfolio || '';
+      // Trigger reflow to show content with proper height
+      setTimeout(() => {
+        portfolioPromptInput.style.height = 'auto';
+        portfolioPromptInput.style.height = Math.max(400, portfolioPromptInput.scrollHeight) + 'px';
+      }, 0);
+    }
+    
     if (stockEvalPromptInput) stockEvalPromptInput.value = prompts.stockEval || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
     if (teaStockPromptInput) teaStockPromptInput.value = prompts.teaStock || '';
     if (contextMenuPromptInput) contextMenuPromptInput.value = prompts.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
@@ -262,12 +316,12 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
     
   } catch (error) {
     console.error('[Settings] Load prompts error:', error);
-    setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+    setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
   }
 }
 
 // Helper to set default values
-function setPrompptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
+function setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
   if (portfolioPromptInput) portfolioPromptInput.value = '';
   if (stockEvalPromptInput) stockEvalPromptInput.value = 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
   if (teaStockPromptInput) teaStockPromptInput.value = '';

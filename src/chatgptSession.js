@@ -9,14 +9,26 @@ import {
   exceptionToErrorResponse 
 } from './types.js';
 import { createLogger } from './logger.js';
+import {
+  getContentScriptStatus,
+  isContentScriptReady
+} from './background/handlers/contentScriptReady.js';
 
 const logger = createLogger('ChatGPTSession');
 
 /**
  * X51LABS-82: Wait for tab to be ready and content script loaded
+ * X51LABS-157-003: REFACTORED with registry-based instant check (XST-685)
+ * 
+ * Architecture:
+ * 1. Check registry first (instant O(1), <10ms if already registered)
+ * 2. Wait for registry update (event-driven, 100-500ms if not yet registered)
+ * 3. Fallback to ping (500ms delay, for content script crash scenarios)
+ * 4. Race: whichever succeeds first wins
+ * 
  * @param {number} tabId - Tab ID to wait for
  * @param {number} [timeoutMs=10000] - Timeout in milliseconds
- * @returns {Promise<{success: boolean, error?: string}>}
+ * @returns {Promise<{success: boolean, source?: 'registry'|'ping', details?: object, error?: string, elapsed?: number}>}
  */
 export async function waitForTabReady(tabId, timeoutMs = 10000) {
   const correlationId = logger.startOperation('waitForTabReady');
@@ -27,54 +39,201 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       throw new Error('Invalid tab ID');
     }
     
-    // Wait for tab to exist and be complete
-    while (Date.now() - startTime < timeoutMs) {
-      try {
-        const tab = await chrome.tabs.get(tabId);
-        
-        // Check tab status
-        if (!tab) {
-          throw new Error('Tab not found');
-        }
-        
-        if (tab.status !== 'complete') {
-          await new Promise(resolve => setTimeout(resolve, 300));
-          continue;
-        }
-        
-        // Check URL is chatgpt.com
-        if (!tab.url?.includes('chatgpt.com')) {
-          throw new Error(`Tab URL is not chatgpt.com: ${tab.url}`);
-        }
-        
-        // Ping content script
-        try {
-          const pingResponse = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-          if (pingResponse?.pong === true) {
-            logger.endOperation(correlationId, 'success', { elapsed: Date.now() - startTime });
-            return { success: true };
-          }
-        } catch (error) {
-          // Content script not ready, retry
-          if (error.message?.includes('Receiving end does not exist')) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            continue;
-          }
-          throw error;
-        }
-      } catch (error) {
-        // Tab might be closed or invalid
-        if (Date.now() - startTime >= timeoutMs) {
-          throw error;
-        }
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
+    // OPTIMIZATION 1: Check registry first (instant O(1), <10ms)
+    // If content script has already signaled ready, return immediately
+    const registryStatus = getContentScriptStatus(tabId);
+    if (registryStatus?.ready) {
+      const elapsed = Date.now() - startTime;
+      logger.info('waitForTabReady: Registry hit (instant)', {
+        tabId,
+        elapsed,
+        hostname: registryStatus.hostname,
+        markerSet: registryStatus.markerSet
+      });
+      logger.endOperation(correlationId, 'success', { 
+        method: 'registry_hit',
+        elapsed,
+        source: 'registry'
+      });
+      return { 
+        success: true, 
+        source: 'registry', 
+        details: registryStatus,
+        elapsed
+      };
     }
     
-    throw new Error(`Timeout after ${timeoutMs}ms`);
+    // OPTIMIZATION 2: Wait for registry update (event-driven, 100-500ms)
+    // Helper: Poll registry until ready or timeout
+    const checkRegistryUntilReady = async () => {
+      const remainingMs = timeoutMs - (Date.now() - startTime);
+      if (remainingMs <= 0) {
+        throw new Error('Timeout waiting for registry');
+      }
+      
+      const pollIntervalMs = 50; // Check every 50ms
+      const maxPolls = Math.ceil(remainingMs / pollIntervalMs);
+      
+      for (let poll = 0; poll < maxPolls; poll++) {
+        const status = getContentScriptStatus(tabId);
+        if (status?.ready) {
+          const elapsed = Date.now() - startTime;
+          logger.info('waitForTabReady: Registry update received', {
+            tabId,
+            elapsed,
+            pollAttempt: poll + 1,
+            hostname: status.hostname
+          });
+          return { 
+            success: true, 
+            source: 'registry', 
+            details: status,
+            elapsed
+          };
+        }
+        
+        // Wait before next check
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      }
+      
+      // Registry never signaled ready
+      throw new Error('Registry signal timeout');
+    };
+    
+    // OPTIMIZATION 3: Fallback to ping (500ms delay, for edge cases)
+    // Helper: Ping content script until ready or timeout
+    const tryPingUntilReady = async () => {
+      const remainingMs = timeoutMs - (Date.now() - startTime);
+      if (remainingMs <= 0) {
+        throw new Error('Timeout before ping fallback');
+      }
+      
+      const pingIntervalMs = 300; // Ping every 300ms
+      const maxPings = Math.ceil(remainingMs / pingIntervalMs);
+      let pingAttempt = 0;
+      
+      for (let i = 0; i < maxPings; i++) {
+        pingAttempt++;
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          if (!tab) {
+            throw new Error('Tab not found');
+          }
+          
+          if (tab.status !== 'complete') {
+            logger.debug('waitForTabReady ping: Tab not complete yet', {
+              tabId,
+              status: tab.status,
+              pingAttempt
+            });
+            await new Promise(resolve => setTimeout(resolve, pingIntervalMs));
+            continue;
+          }
+          
+          // Try to ping content script
+          try {
+            const pingResponse = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+            
+            if (pingResponse && pingResponse.pong === true) {
+              const elapsed = Date.now() - startTime;
+              logger.info('waitForTabReady: Ping fallback succeeded', {
+                tabId,
+                elapsed,
+                pingAttempt,
+                hostname: pingResponse.hostname
+              });
+              return {
+                success: true,
+                source: 'ping',
+                details: pingResponse,
+                elapsed
+              };
+            } else {
+              logger.warn('waitForTabReady ping: Invalid response', {
+                tabId,
+                pingAttempt,
+                response: pingResponse
+              });
+              await new Promise(resolve => setTimeout(resolve, pingIntervalMs));
+              continue;
+            }
+          } catch (pingError) {
+            if (pingError.message?.includes('Receiving end does not exist')) {
+              logger.debug('waitForTabReady ping: Content script not ready', {
+                tabId,
+                pingAttempt
+              });
+              await new Promise(resolve => setTimeout(resolve, pingIntervalMs));
+              continue;
+            }
+            throw pingError;
+          }
+        } catch (error) {
+          if (Date.now() - startTime >= timeoutMs) {
+            throw new Error(`Ping timeout after ${pingAttempt} attempts: ${error.message}`);
+          }
+          
+          logger.debug('waitForTabReady ping: Attempt failed', {
+            tabId,
+            pingAttempt,
+            error: error.message
+          });
+          await new Promise(resolve => setTimeout(resolve, pingIntervalMs));
+        }
+      }
+      
+      throw new Error('Ping fallback exhausted all retries');
+    };
+    
+    // OPTIMIZATION 4: Race strategy
+    // - If registry is fast (100-500ms), use that
+    // - If registry fails, fallback to ping (triggered after 500ms)
+    // - Return whichever succeeds first
+    
+    // Start ping fallback after 500ms
+    const pingFallback = (async () => {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return await tryPingUntilReady();
+    })();
+    
+    // Try registry first, race against ping fallback
+    try {
+      const result = await Promise.race([
+        checkRegistryUntilReady(),
+        pingFallback
+      ]);
+      
+      logger.endOperation(correlationId, 'success', { 
+        method: 'registry_or_ping',
+        source: result.source,
+        elapsed: result.elapsed
+      });
+      
+      return result;
+    } catch (error) {
+      // Both registry and ping failed
+      const elapsed = Date.now() - startTime;
+      logger.warn('waitForTabReady: All strategies exhausted', {
+        tabId,
+        elapsed,
+        error: error.message
+      });
+      
+      throw new Error(
+        `Timeout after ${Math.min(elapsed, timeoutMs)}ms: ${error.message}`
+      );
+    }
   } catch (error) {
-    logger.endOperation(correlationId, 'error', error);
-    return { success: false, error: error.message };
+    const elapsed = Date.now() - startTime;
+    logger.endOperation(correlationId, 'error', {
+      error: error.message,
+      elapsed
+    });
+    return { 
+      success: false, 
+      error: error.message,
+      elapsed
+    };
   }
 }
 
@@ -677,7 +836,8 @@ export async function waitForContentScript(tabId, options = {}) {
   
   // First, verify tab exists
   try {
-    await chrome.tabs.get(tabId);
+    const tab = await chrome.tabs.get(tabId);
+    logger.debug('Tab exists', { tabId, url: tab.url, status: tab.status });
   } catch (error) {
     logger.warn('Tab does not exist', { tabId, error: error.message });
     return false;
@@ -686,9 +846,16 @@ export async function waitForContentScript(tabId, options = {}) {
   for (let i = 0; i < maxRetries; i++) {
     try {
       // Ping content script to check if it's ready
-      await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-      logger.debug('Content script ready', { tabId, attempt: i + 1 });
-      return true;
+      const pingResponse = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+      if (pingResponse && pingResponse.pong === true) {
+        logger.debug('Content script ready', { tabId, attempt: i + 1 });
+        return true;
+      }
+      logger.warn('Content script responded but pong !== true', { 
+        tabId, 
+        attempt: i + 1,
+        response: pingResponse 
+      });
     } catch (error) {
       // Check if tab still exists (might have been closed during retries)
       try {
@@ -701,7 +868,8 @@ export async function waitForContentScript(tabId, options = {}) {
       logger.debug('Content script not ready, retrying', { 
         tabId, 
         attempt: i + 1, 
-        maxRetries 
+        maxRetries,
+        error: error.message
       });
       if (i < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, retryDelay));
@@ -709,6 +877,24 @@ export async function waitForContentScript(tabId, options = {}) {
     }
   }
   
-  logger.error('Content script not ready after max retries', { tabId, maxRetries });
+  logger.error('Content script not ready after max retries', { 
+    tabId, 
+    maxRetries,
+    troubleshooting: {
+      possibleCauses: [
+        'Extension not reloaded after build',
+        'Tab opened before extension loaded',
+        'Content script failed to inject',
+        'ChatGPT URL changed',
+        'JavaScript error in content script'
+      ],
+      solutions: [
+        '1. Reload extension at chrome://extensions',
+        '2. Close and reopen ChatGPT tab',
+        '3. Check browser console for errors',
+        '4. Check manifest.json content_scripts matches'
+      ]
+    }
+  });
   return false;
 }

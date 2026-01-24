@@ -87,8 +87,10 @@ registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
     chatId: result.data.chatId
   });
   
+  // ✅ CRITICAL: Return 'response' not 'output' for UI compatibility
   return createResponse(message, MESSAGE_TYPES.CHATGPT_OUTPUT_READY, {
-    output: result.data.result,
+    response: result.data.result, // UI expects 'response' field
+    output: result.data.result,   // Keep for backward compatibility
     chatId: result.data.chatId,
     chatUrl: result.data.chatUrl,
     assistantMessageId: result.data.assistantMessageId,

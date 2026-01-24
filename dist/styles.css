@@ -235,6 +235,12 @@ label input[type="checkbox"] {
   font-family: 'Courier New', monospace;
 }
 
+.textarea-large {
+  height: auto;
+  min-height: 400px !important;
+  max-height: 600px !important;
+}
+
 .number-input {
   width: 100%;
 }

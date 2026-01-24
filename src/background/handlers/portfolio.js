@@ -205,6 +205,7 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     if (updates.current_price !== undefined) updateData.current_price = Number(updates.current_price);
     
     updateData.updated_at = new Date().toISOString();
+    updateData.timestamp = Date.now();  // ✅ FIX: Add timestamp for audit trail
     
     // Update in Supabase
     const item = await supabaseWithRetry(

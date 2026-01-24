@@ -61,19 +61,19 @@ test.describe('Settings Tests', () => {
     console.log('✅ Settings tab opened');
   });
 
-  test('should display Firebase sync toggle', async () => {
+  test('should display settings controls', async () => {
     const settingsTab = page.locator('button:has-text("Settings")');
     await settingsTab.click();
     await page.waitForTimeout(500);
 
-    // Check for Firebase sync checkbox
-    const firebaseSyncCheckbox = page.locator('input[type="checkbox"]').first();
-    expect(await firebaseSyncCheckbox.count()).toBeGreaterThan(0);
+    // Check for basic settings controls (not Firebase-specific)
+    const settingsPage = page.locator('#settings-page');
+    await expect(settingsPage).toBeVisible();
     
-    console.log('✅ Firebase sync toggle found');
+    console.log('✅ Settings controls visible');
   });
 
-  test('should toggle Firebase sync setting', async () => {
+  test('should toggle prompt setting', async () => {
     const settingsTab = page.locator('button:has-text("Settings")');
     await settingsTab.click();
     await page.waitForTimeout(500);

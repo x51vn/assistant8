@@ -1,6 +1,8 @@
 // Content Script - chạy trên ChatGPT
 
-console.log('[ChatGPT Assistant] content script loaded');
+console.log('[ChatGPT Assistant] content script loaded at', new Date().toISOString());
+console.log('[ChatGPT Assistant] Location:', location.href);
+console.log('[ChatGPT Assistant] Hostname:', location.hostname);
 
 // X51LABS-83: Detect and handle chatbot-ui.com redirect
 if (location.hostname.includes('chatbot-ui.com')) {
@@ -12,6 +14,12 @@ if (location.hostname.includes('chatbot-ui.com')) {
   }
 }
 
+// X51LABS-156: CRITICAL: Content script initialization marker for ping detection
+// This runs SYNCHRONOUSLY at module load, before any async operations
+window.__ChatGPTAssistantReady = true;
+window.__ChatGPTAssistantReadyTimestamp = Date.now();
+console.log('[Content] ✅ Window marker set for ping detection at:', new Date(window.__ChatGPTAssistantReadyTimestamp).toISOString());
+
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +30,15 @@ function getChatMeta() {
   const path = location.pathname || '';
   const match = path.match(/\/c\/([^/?#]+)/);
   const chatId = match ? match[1] : null;
+  
+  // 🔍 DEBUG: Log chat metadata extraction
+  console.log('🔍 [Content] getChatMeta:', {
+    chatUrl,
+    pathname: path,
+    chatId,
+    hasMatch: !!match
+  });
+  
   return { chatUrl, chatId };
 }
 
@@ -692,9 +709,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // X51LABS-82: Handle ping to check if content script is ready
+  // X51LABS-156: IMPROVED PING HANDLER - Critical for content script detection
+  // Must respond IMMEDIATELY with detailed status for background to detect if content script is loaded
   if (request.action === 'ping') {
-    safeSendResponse({ pong: true, status: 'ok', ready: true });
+    const response = {
+      pong: true,
+      status: 'ok',
+      ready: true,
+      // X51LABS-156: Additional diagnostics for troubleshooting
+      contentScriptVersion: 1,
+      markerSet: window.__ChatGPTAssistantReady === true,
+      markerTimestamp: window.__ChatGPTAssistantReadyTimestamp || null,
+      url: location.href,
+      hostname: location.hostname,
+      messageListenerReady: true
+    };
+    
+    console.log('[Content] 📡 Ping received and responding:', response);
+    safeSendResponse(response);
     return true; // Must return true to indicate async response
   }
 
@@ -743,10 +775,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const reviewOnly = request.reviewOnly === true;
         const runId = typeof request.runId === 'string' ? request.runId : null;
 
+        // 🔍 DEBUG: Log before sending
+        console.log('🔍 [Content] Before inputAndSendPrompt, URL:', location.href);
+        
         const success = await inputAndSendPrompt(prompt, { createNewChat, reviewOnly });
-        const meta = getChatMeta();
+        
+        // 🔍 DEBUG: Log after sending
+        console.log('🔍 [Content] After inputAndSendPrompt, success:', success, 'URL:', location.href);
+        
+        // ⏳ NEW: Wait for ChatGPT to update URL with new chat_id
+        // ChatGPT updates the URL asynchronously after sending prompt
+        // Give it up to 3 seconds to update
+        let meta = getChatMeta();
+        let retries = 0;
+        const maxRetries = 6; // 6 * 500ms = 3 seconds
+        
+        while (!meta.chatId && retries < maxRetries) {
+          console.log(`⏳ [Content] Waiting for chat_id (attempt ${retries + 1}/${maxRetries}), URL:`, location.href);
+          await sleep(500);
+          meta = getChatMeta();
+          retries++;
+        }
+        
+        if (meta.chatId) {
+          console.log(`✅ [Content] Got chat_id after ${retries * 500}ms:`, meta.chatId);
+        } else {
+          console.warn(`⚠️ [Content] No chat_id after waiting, URL might not have updated:`, location.href);
+        }
+        
         const status = reviewOnly ? 'filled' : (success ? 'sent' : 'failed');
-        console.log('[Content] send_input result, status:', status, 'meta:', meta);
+        
+        // 🔍 DEBUG: Log final response
+        console.log('🔍 [Content] send_input complete:', {
+          status,
+          chatId: meta.chatId,
+          chatUrl: meta.chatUrl,
+          success,
+          waitedMs: retries * 500
+        });
+        
         safeSendResponse({ status, runId, ...meta });
       } catch (e) {
         console.error('[Content] send_input error:', e);
@@ -765,17 +832,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const stableMs = Number.isFinite(request.stableMs) ? request.stableMs : 1500;
 
         const meta = getChatMeta();
+        
+        // 🔍 DEBUG: Log current state
+        console.log('🔍 [Content] get_output state:', {
+          wait,
+          generating: isGenerating(),
+          messageCount: getConversationMessageCount(),
+          chatId: meta.chatId,
+          chatUrl: meta.chatUrl
+        });
 
         if (!wait) {
           const latest = getLatestAssistantMessageMeta();
-          console.log('[Content] get_output (no wait), result length:', latest.text?.length || 0);
+          console.log('🔍 [Content] get_output (no wait), result length:', latest.text?.length || 0);
           safeSendResponse({ result: latest.text, assistantMessageId: latest.messageId, status: 'ok', ...meta });
           return;
         }
 
+        console.log('🔍 [Content] Waiting for stable response...');
         const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs });
         const latest = getLatestAssistantMessageMeta();
-        console.log('[Content] get_output (waited), result length:', (waited.text || latest.text)?.length || 0, 'status:', waited.status);
+        
+        // 🔍 DEBUG: Log captured response
+        console.log('🔍 [Content] Response captured:', {
+          status: waited.status,
+          resultLength: (waited.text || latest.text)?.length || 0,
+          messageId: latest.messageId,
+          preview: (waited.text || latest.text)?.substring(0, 100)
+        });
+        
         safeSendResponse({
           result: waited.text || latest.text,
           assistantMessageId: latest.messageId,
@@ -896,3 +981,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 drainPendingPrompt({ timeoutMs: 30000 }).catch(() => {});
 
 console.log('[ChatGPT Assistant] content script ready');
+// ========== X51LABS-157: PROACTIVE READINESS SIGNALING ==========
+// Send ready signal to background after message listener is registered
+// This eliminates race condition by proactively notifying background
+(async () => {
+  try {
+    // Wait 100ms for message listener to be fully registered
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Signal background that content script is ready for communication
+    // ✅ FIXED: Add v (version) and correlationId to pass message validation
+    chrome.runtime.sendMessage(
+      {
+        v: 1,  // ✅ Message version required by schema
+        type: 'CONTENT_SCRIPT_READY',
+        correlationId: `content-ready-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,  // ✅ Required by schema
+        url: location.href,
+        hostname: location.hostname,
+        timestamp: Date.now(),
+        markerSet: window.__ChatGPTAssistantReady
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[Content] Ready signal failed:', chrome.runtime.lastError.message);
+          return;
+        }
+        
+        // Log successful acknowledgment with details
+        console.log('[Content] ✅ Ready signal acknowledged by background', {
+          success: response?.success,
+          tabId: response?.tabId,
+          registrySize: response?.registrySize
+        });
+      }
+    );
+  } catch (error) {
+    // Graceful error handling - content script continues normally
+    console.error('[Content] Ready signal error:', error.message);
+  }
+})();
