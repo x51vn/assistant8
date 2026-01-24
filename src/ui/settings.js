@@ -281,6 +281,11 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
       timestamp: Date.now()
     });
     
+    // 🔍 DEBUG: Log full response
+    console.log('🔍 [Settings] SETTINGS_GET response:', response);
+    console.log('🔍 [Settings] Response keys:', Object.keys(response || {}));
+    console.log('🔍 [Settings] response.config:', response.config);
+    
     if (response.errorCode) {
       console.warn('[Settings] Failed to load prompts from Supabase:', response.errorMessage);
       setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
@@ -295,24 +300,47 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
       stockEvalLength: prompts.stockEval?.length || 0,
       teaStockLength: prompts.teaStock?.length || 0,
       contextMenuLength: prompts.contextMenu?.length || 0,
-      englishLength: prompts.english?.length || 0
+      englishLength: prompts.english?.length || 0,
+      hasPrompts: !!prompts.portfolio || !!prompts.stockEval || !!prompts.teaStock || !!prompts.contextMenu || !!prompts.english
     });
     
     // ✅ Populate all prompts from single response
     // Portfolio prompt - handle large prompt with auto-height
     if (portfolioPromptInput) {
-      portfolioPromptInput.value = prompts.portfolio || '';
+      const value = prompts.portfolio || '';
+      console.log('🔍 [Settings] Setting portfolio prompt, length:', value.length);
+      portfolioPromptInput.value = value;
       // Trigger reflow to show content with proper height
       setTimeout(() => {
         portfolioPromptInput.style.height = 'auto';
         portfolioPromptInput.style.height = Math.max(400, portfolioPromptInput.scrollHeight) + 'px';
+        console.log('✅ [Settings] Portfolio prompt textarea height set to:', portfolioPromptInput.style.height);
       }, 0);
     }
     
-    if (stockEvalPromptInput) stockEvalPromptInput.value = prompts.stockEval || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
-    if (teaStockPromptInput) teaStockPromptInput.value = prompts.teaStock || '';
-    if (contextMenuPromptInput) contextMenuPromptInput.value = prompts.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
-    if (englishPromptInput) englishPromptInput.value = prompts.english || getDefaultEnglishPrompt();
+    if (stockEvalPromptInput) {
+      const value = prompts.stockEval || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+      console.log('🔍 [Settings] Setting stockEval prompt, length:', value.length);
+      stockEvalPromptInput.value = value;
+    }
+    
+    if (teaStockPromptInput) {
+      const value = prompts.teaStock || '';
+      console.log('🔍 [Settings] Setting teaStock prompt, length:', value.length);
+      teaStockPromptInput.value = value;
+    }
+    
+    if (contextMenuPromptInput) {
+      const value = prompts.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+      console.log('🔍 [Settings] Setting contextMenu prompt, length:', value.length);
+      contextMenuPromptInput.value = value;
+    }
+    
+    if (englishPromptInput) {
+      const value = prompts.english || getDefaultEnglishPrompt();
+      console.log('🔍 [Settings] Setting english prompt, length:', value.length);
+      englishPromptInput.value = value;
+    }
     
   } catch (error) {
     console.error('[Settings] Load prompts error:', error);
