@@ -1315,3 +1315,23 @@ function updateLastUpdateTime(portfolio) {
     lastUpdateEl.style.color = '#aaa';
   }
 }
+
+/**
+ * ✅ Auto-refresh portfolio on login
+ * Called when user logs in to fetch latest portfolio data from Supabase
+ */
+export async function refreshPortfolioOnLogin() {
+  try {
+    const portfolioTable = document.getElementById('portfolioTable');
+    if (!portfolioTable) {
+      console.log('[Portfolio] Portfolio table not found (page may not be loaded yet)');
+      return;
+    }
+
+    console.log('[Portfolio] Refreshing portfolio data on login...');
+    await loadPortfolioUI(portfolioTable);
+    console.log('[Portfolio] ✓ Portfolio data refreshed successfully on login');
+  } catch (error) {
+    console.error('[Portfolio] Failed to refresh portfolio on login:', error);
+  }
+}

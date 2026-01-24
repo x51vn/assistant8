@@ -6,7 +6,7 @@ import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
 import { setupErrors } from './errors.js';
 import { setupBackup } from './backup.js';
-import { initPortfolio } from './portfolio.js';
+import { initPortfolio, refreshPortfolioOnLogin } from './portfolio.js';
 import { initEnglish } from './english.js';
 import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
 let authContainer = null;
@@ -39,6 +39,8 @@ async function init() {
     if (authenticated) {
       console.log('[Auth] User logged in:', user);
       hideLoginAndInitializeApp();
+      // ✅ Auto-refresh portfolio data on login
+      refreshPortfolioOnLogin();
     } else {
       console.log('[Auth] User logged out');
       showLoginScreen();
