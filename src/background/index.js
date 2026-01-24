@@ -195,13 +195,10 @@ async function onStartup() {
  * - AUTORUN: Auto-run evaluation (configurable interval)
  * 
  * NOTE: This function clears ALL alarms and recreates only CHECK and AUTORUN.
- * Sync alarms (autoSync, firebaseSync) are managed by Firebase auth listener and UI,
- * but will be cleared here. We need selective alarm management instead of clearAll().
  */
 async function setupAlarms() {
   try {
     // IMPORTANT: Only clear specific alarms, not all
-    // Other alarms (autoSync, firebaseSync) are managed elsewhere
     await chrome.alarms.clear('CHECK');
     await chrome.alarms.clear('AUTORUN');
     
@@ -232,11 +229,11 @@ async function setupAlarms() {
 
 /**
  * Clean up legacy alarms from old versions
- * Known alarms: CHECK, AUTORUN, POLL, autoSync, firebaseSync
+ * Known alarms: CHECK, AUTORUN, POLL
  */
 async function cleanupLegacyAlarms() {
   try {
-    const knownAlarms = ['CHECK', 'AUTORUN', 'POLL', 'autoSync', 'firebaseSync'];
+    const knownAlarms = ['CHECK', 'AUTORUN', 'POLL'];
     const allAlarms = await chrome.alarms.getAll();
     
     for (const alarm of allAlarms) {
