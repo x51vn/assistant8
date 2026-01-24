@@ -131,28 +131,9 @@ export const MESSAGE_ACTIONS = {
   CLEAR_CONVERSATION: 'clear_conversation',
   ENSURE_CHATGPT_OPEN: 'ensure_chatgpt_open',
 
-  // Firebase Auth
-  FIREBASE_LOGIN: 'firebase_login',
-  FIREBASE_LOGOUT: 'firebase_logout',
-  GET_CURRENT_USER: 'get_current_user',
-
-  // Sync & Backup
-  SYNC_TO_FIRESTORE: 'sync_to_firestore',
-  SYNC_TO_DRIVE: 'sync_to_drive',
-  RESTORE_FROM_DRIVE: 'restore_from_drive',
-
   // Status callbacks
   PROMPT_SENT: 'prompt_sent',
   PROMPT_FAILED: 'prompt_failed',
-};
-
-// ========== FIREBASE PATHS ==========
-export const FIREBASE_PATHS = {
-  USERS: 'users',
-  BACKUPS: 'backups',
-  BACKUPS_LATEST: 'latest',
-  CONFIG: 'config',
-  CONFIG_LATEST_BACKUP: 'latestBackup',
 };
 
 // ========== CHROMEEXTENSION IDS ==========

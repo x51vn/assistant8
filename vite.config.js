@@ -143,7 +143,6 @@ export default defineConfig({
         chunkFileNames: '[name]-[hash].js',
         format: 'es',
         // X51LABS-79: Removed manualChunks - Vite auto-splits optimally
-        // Firebase shared chunk created automatically for ui+content
       },
     },
   },

@@ -183,9 +183,6 @@ async function onStartup() {
     // Setup periodic alarms
     await setupAlarms();
     
-    // Check if user is authenticated for Firebase
-    // Auto-sync will be triggered by Firebase auth state listener
-    
     logger.info('Startup tasks completed');
   } catch (error) {
     logger.error('Startup tasks failed', { error });

@@ -54,9 +54,9 @@ VITE_ENV=development
 - **Smart History**: Save last 100 conversations with metadata
 
 ### 🔥 Cloud & Sync
-- **Firebase Backup**: Automatic cloud sync of settings and history
+- **Supabase Cloud**: All data stored in cloud with automatic sync
 - **Multi-Device**: Access your data from any browser
-- **Restore Points**: Create and restore from backups
+- **Row Level Security**: Your data is protected and isolated
 
 ### 🧪 Developer Features  
 - **MV3 Architecture**: Modern Chrome Extension Manifest V3
@@ -78,10 +78,10 @@ chatgpt-assistant/
 │   ├── content.js          # Content script (runs on chatgpt.com)
 │   ├── ui/                 # Sidepanel UI modules
 │   ├── platform/           # Chrome API adapters
-│   ├── firebaseService.js  # Firebase operations
+│   ├── supabaseConfig.js   # Supabase configuration
 │   └── chatgptSession.js   # ChatGPT automation
 ├── dist/                   # Built extension (load this in Chrome)
-├── .env                    # Firebase config (create from .env.template)
+├── .env                    # Environment config (create from .env.example)
 └── vite.config.js          # Build configuration
 ```
 
@@ -104,17 +104,16 @@ npm run build -- --watch # Watch mode (rebuild on file change)
 ## 📖 Documentation
 
 See `docs/` folder for detailed guides:
+- [Architecture](docs/ARCHITECTURE.md) - System design and patterns
+- [Storage](docs/STORAGE_EXPLAINED.md) - chrome.storage vs Supabase
 - [Quick Start](docs/MV3_QUICK_START.md) | [User Guide](docs/USER_GUIDE_vi.md)
-- [Architecture](docs/MV3_ARCHITECTURE_GUIDE.md) | [API Reference](docs/API.md)
-- [Features](docs/FEATURES.md) | [Firebase Setup](docs/FIRESTORE_USAGE.md)
 
 ---
 
 ## 🔒 Security
 
-- **Never commit `.env`** - Firebase credentials in environment variables only
-- Deploy Firestore rules: `firebase deploy --only firestore:rules`
-- Rotate exposed API keys (see `docs/CREDENTIAL_ROTATION.md`)
+- **Never commit `.env`** - Contains Supabase credentials
+- Rotate exposed API keys if necessary
 
 ---
 
@@ -124,8 +123,8 @@ See `docs/` folder for detailed guides:
 # Build issues
 rm -rf node_modules && npm install && npm run build
 
-# Firebase issues
-# Check .env configuration and ensure Firestore is enabled
+# Supabase connection issues
+# Check .env configuration and ensure credentials are correct
 
 # Extension not loading
 # Check chrome://extensions for errors, reload extension
@@ -133,4 +132,4 @@ rm -rf node_modules && npm install && npm run build
 
 ---
 
-**Built with ❤️ using Chrome Extension MV3, Firebase, and Vite**
+**Built with ❤️ using Chrome Extension MV3, Supabase, and Vite**
