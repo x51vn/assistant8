@@ -10,30 +10,36 @@ A Chrome extension for automating ChatGPT interactions with cloud sync, portfoli
 # 1. Install dependencies
 npm install
 
-# 2. Configure Supabase (required for cloud storage)
+# 2. Configure environment variables (REQUIRED - X51LABS-130)
 cp .env.example .env
 # Edit .env and add your Supabase credentials from https://app.supabase.com/project/_/settings/api
+# IMPORTANT: Use VITE_SUPABASE_ANON_KEY (not VITE_SUPABASE_KEY)
 
 # 3. Build extension
 npm run build
+# ✅ Build will fail with clear error if env vars are missing
 
 # 4. Load in Chrome
 # Open chrome://extensions → Enable "Developer mode" → "Load unpacked" → Select dist/ folder
 ```
 
-### 🔑 Environment Setup
+### 🔑 Environment Setup (Required)
 
 Create `.env` file with your Supabase configuration:
 
 ```env
-# Supabase Configuration
+# Supabase Configuration (X51LABS-130)
 # Get these values from: https://app.supabase.com/project/_/settings/api
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
+VITE_SUPABASE_ANON_KEY=your-anon-key-here  # ⚠️ Use ANON_KEY, not KEY!
 
 # Optional: Environment mode
 VITE_ENV=development
 ```
+
+**⚠️ Common Issues**:
+- **Build error "Missing environment variables"**: Ensure `.env` exists with both `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+- **Service Worker error "Supabase configuration missing"**: Your env vars were not injected. Check `.env` uses correct names (see above)
 
 **Security Note**: Never commit `.env` to git. Use `.env.example` as template.
 
