@@ -66,15 +66,16 @@ export function setupResults(dom) {
         console.log('[Results] Prompt sent successfully');
         
         // ✅ GPT-FIX: Save to Supabase chat_history instead of local storage
-        if (response.data?.chatId || response.data?.chatUrl) {
+        // Note: Properties are spread directly in response, not nested in response.data
+        if (response.chatId || response.chatUrl) {
           await chrome.runtime.sendMessage({
             v: 1,
             type: MESSAGE_TYPES.HISTORY_ADD,
             correlationId: generateCorrelationId(),
             timestamp: Date.now(),
             data: {
-              chat_id: response.data.chatId || extractChatIdFromUrl(response.data.chatUrl),
-              chat_url: response.data.chatUrl || '',
+              chat_id: response.chatId || extractChatIdFromUrl(response.chatUrl),
+              chat_url: response.chatUrl || '',
               prompt: promptStr,
               response: '[Đang chờ ChatGPT trả lời...]',
               timestamp: Date.now()
@@ -83,7 +84,7 @@ export function setupResults(dom) {
         }
         
         // Start polling for response (optional - can be removed if not needed)
-        startPollingForResponse(response.data?.chatId);
+        startPollingForResponse(response.chatId);
       } else {
         console.error('[Results] Failed to send prompt:', response);
         stopPolling();
@@ -110,8 +111,9 @@ export function setupResults(dom) {
       data: { limit: 1 } // Get latest only
     });
     
-    if (response.data?.items && response.data.items.length > 0) {
-      const latest = response.data.items[0];
+    // Note: HISTORY_GET_ALL returns { history: [...] }
+    if (response.history && response.history.length > 0) {
+      const latest = response.history[0];
       console.log('[Results] Latest chat:', latest);
       // Display in UI (implement as needed)
     }

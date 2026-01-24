@@ -198,8 +198,11 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     const updateData = {};
     if (updates.quantity !== undefined) updateData.quantity = Number(updates.quantity);
     if (updates.avgPrice !== undefined) updateData.avg_price = Number(updates.avgPrice);
+    if (updates.avg_price !== undefined) updateData.avg_price = Number(updates.avg_price);
     if (updates.notes !== undefined) updateData.notes = updates.notes;
+    // Support both camelCase and snake_case for current_price
     if (updates.currentPrice !== undefined) updateData.current_price = Number(updates.currentPrice);
+    if (updates.current_price !== undefined) updateData.current_price = Number(updates.current_price);
     
     updateData.updated_at = new Date().toISOString();
     

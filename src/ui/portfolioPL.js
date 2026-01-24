@@ -20,8 +20,8 @@ export async function getPortfolioData() {
       return [];
     }
     
-    // Convert Supabase format to UI format
-    const items = response.data?.items || [];
+    // ✅ FIX: Items are spread directly in response, not nested in response.data
+    const items = response.items || [];
     return items.map(item => ({
       id: item.id,
       code: item.symbol,

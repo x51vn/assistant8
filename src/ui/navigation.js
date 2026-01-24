@@ -13,8 +13,10 @@ export function setupNavigation(dom) {
   const btns = [portfolioBtn, resultsBtn, errorsBtn, englishBtn, settingsBtn];
 
   portfolioBtn?.addEventListener('click', () => {
+    console.log('[Navigation] Portfolio button clicked!');
     setActivePage({ pages, btns, page: 'portfolio' });
     // ✅ Reload portfolio data from Supabase when switching to portfolio tab
+    console.log('[Navigation] Calling refreshPortfolioUI...');
     refreshPortfolioUI();
   });
 

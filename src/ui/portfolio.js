@@ -14,6 +14,7 @@ import { generateCorrelationId } from '../logger.js';
  * Transform Supabase format to UI format
  */
 async function getPortfolioFromSupabase() {
+  console.log('[Portfolio] getPortfolioFromSupabase called');
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
@@ -22,29 +23,41 @@ async function getPortfolioFromSupabase() {
       timestamp: Date.now()
     });
     
+    console.log('[Portfolio] Response received:', response);
+    
     if (response.errorCode) {
       console.warn('[Portfolio] Supabase fetch error:', response.errorMessage);
       return [];
     }
     
-    const items = response.data?.items || [];
+    // ✅ FIX: Items are spread directly in response, not nested in response.data
+    const items = response.items || [];
+    console.log('[Portfolio] Items from Supabase:', items.length, 'items');
+    console.log('[Portfolio] Raw Supabase items:', JSON.stringify(items, null, 2));
     
     // ✅ Transform Supabase format to UI format
     // Supabase: { id, symbol, quantity, avg_price, current_price, ... }
     // UI expects: { code, entry, currentPrice, quantity, ... }
-    return items.map(item => ({
-      id: item.id,
-      code: item.symbol,
-      symbol: item.symbol,
-      quantity: item.quantity,
-      entry: item.avg_price,
-      avg_price: item.avg_price,
-      currentPrice: item.current_price,
-      current_price: item.current_price,
-      notes: item.notes,
-      created_at: item.created_at,
-      updated_at: item.updated_at
-    }));
+    const transformed = items.map(item => {
+      console.log(`[Portfolio] Transforming item:`, item);
+      console.log(`[Portfolio] - symbol: ${item.symbol}, current_price: ${item.current_price}`);
+      return {
+        id: item.id,
+        code: item.symbol,
+        symbol: item.symbol,
+        quantity: item.quantity,
+        entry: item.avg_price,
+        avg_price: item.avg_price,
+        currentPrice: item.current_price,
+        current_price: item.current_price,
+        notes: item.notes,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      };
+    });
+    
+    console.log('[Portfolio] Transformed items:', transformed);
+    return transformed;
   } catch (error) {
     console.error('[Portfolio] Message error:', error);
     return [];
@@ -339,7 +352,10 @@ export async function loadPortfolioUI(table) {
     return 0;
   });
 
+  console.log('[Portfolio] Rendering', indexedPortfolio.length, 'rows to table');
+  
   indexedPortfolio.forEach(({ stock, originalIdx }) => {
+    console.log('[Portfolio] Rendering stock:', stock.code, stock);
     const row = document.createElement('tr');
     const isCash = stock.code === 'CASH';
     
@@ -386,8 +402,11 @@ export async function loadPortfolioUI(table) {
         </td>
       `;
     }
+    console.log('[Portfolio] Appending row to table:', row);
     table.appendChild(row);
   });
+  
+  console.log('[Portfolio] ✓ All rows appended. Table HTML:', table.innerHTML.substring(0, 200));
 
   // Add event listeners for dropdown toggle
   table.querySelectorAll('.portfolio-actions-btn').forEach(btn => {
@@ -789,16 +808,33 @@ async function startRealtimeUpdates(portfolioTable) {
         const unsubscribe = realtimeClient.subscribe(symbol, async (data) => {
           try {
             console.log(`[Portfolio] Price update: ${symbol} = ${data.price}`);
-            // Update price in storage
+            
+            // Get current portfolio to find stock ID
             const portfolio = await getPortfolio();
             const stockInPortfolio = portfolio.find(s => s.code === symbol);
-            if (stockInPortfolio) {
+            
+            if (stockInPortfolio && stockInPortfolio.id) {
+              // Update price in memory
               stockInPortfolio.currentPrice = data.price;
               stockInPortfolio.priceUpdatedAt = new Date().toISOString();
-              // ✅ GPT-FIX: Don't save to local storage, rely on Supabase for persistence
-              // await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
               
-              // Update UI only if table exists
+              // ✅ Save to Supabase via PORTFOLIO_UPDATE handler
+              await chrome.runtime.sendMessage({
+                v: 1,
+                type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+                correlationId: generateCorrelationId(),
+                timestamp: Date.now(),
+                data: {
+                  id: stockInPortfolio.id,
+                  updates: {
+                    current_price: data.price
+                  }
+                }
+              }).catch(err => {
+                console.warn(`[Portfolio] Failed to save ${symbol} price to Supabase:`, err);
+              });
+              
+              // Update UI if table exists
               if (portfolioTable) {
                 await loadPortfolioUI(portfolioTable);
               }
@@ -1259,35 +1295,73 @@ async function manualRefreshPrices(portfolioTable) {
     
     console.log(`[Portfolio] Manual refresh for ${stocks.length} stocks`);
     
-    // Fetch prices for all stocks
+    // ✅ Fetch prices from SSI API via realtime client
     const pricePromises = stocks.map(stock => 
       realtimeClient.getStockInfo(stock.code)
-        .then(data => ({ code: stock.code, data }))
-        .catch(err => ({ code: stock.code, error: err }))
+        .then(data => {
+          console.log(`[Portfolio] SSI response for ${stock.code}:`, data);
+          return { code: stock.code, data };
+        })
+        .catch(err => {
+          console.error(`[Portfolio] SSI fetch failed for ${stock.code}:`, err);
+          return { code: stock.code, error: err };
+        })
     );
     
     const results = await Promise.all(pricePromises);
+    console.log('[Portfolio] All SSI fetch results:', results);
     
-    // Update portfolio with new prices
+    // Update portfolio with new prices and save to Supabase
     let updated = 0;
+    const updatePromises = [];
+    
     results.forEach(result => {
       if (result.data && result.data.price) {
         const stock = portfolio.find(s => s.code === result.code);
-        if (stock) {
+        if (stock && stock.id) {
+          console.log(`[Portfolio] Updating ${result.code}: price=${result.data.price}, stockId=${stock.id}`);
+          
           stock.currentPrice = result.data.price;
           stock.priceUpdatedAt = new Date().toISOString();
+          
+          // ✅ Save to Supabase via PORTFOLIO_UPDATE handler
+          const updatePromise = chrome.runtime.sendMessage({
+            v: 1,
+            type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+            correlationId: generateCorrelationId(),
+            timestamp: Date.now(),
+            data: {
+              id: stock.id,
+              updates: {
+                current_price: result.data.price
+              }
+            }
+          }).then(response => {
+            console.log(`[Portfolio] Supabase update response for ${result.code}:`, response);
+            return response;
+          }).catch(err => {
+            console.warn(`[Portfolio] Failed to update ${stock.code} in Supabase:`, err);
+          });
+          
+          updatePromises.push(updatePromise);
           updated++;
+        } else {
+          console.warn(`[Portfolio] Stock ${result.code} not found in portfolio or missing ID:`, stock);
         }
       } else if (result.error) {
         console.warn(`[Portfolio] Failed to fetch ${result.code}:`, result.error.message);
+      } else {
+        console.warn(`[Portfolio] No price data for ${result.code}:`, result.data);
       }
     });
     
     if (updated > 0) {
-      // ✅ GPT-FIX: Don't save to local storage
-      // await chrome.storage.local.set({ [PORTFOLIO_KEY]: portfolio });
+      // Wait for all Supabase updates to complete
+      await Promise.allSettled(updatePromises);
+      
+      // Reload UI from Supabase to show updated prices
       await loadPortfolioUI(portfolioTable);
-      console.log(`[Portfolio] Updated ${updated}/${stocks.length} stock prices`);
+      console.log(`[Portfolio] Updated ${updated}/${stocks.length} stock prices in Supabase`);
     } else {
       console.log('[Portfolio] No prices updated');
       alert('Không lấy được giá mới. Vui lòng thử lại.');
