@@ -10,7 +10,8 @@ import { generateCorrelationId } from '../logger.js';
 
 // ✅ GPT-FIX: Message-based Portfolio Operations (Supabase-backed)
 /**
- * Get portfolio from Supabase via background handler
+ * ✅ Get portfolio from Supabase via background handler
+ * Transform Supabase format to UI format
  */
 async function getPortfolioFromSupabase() {
   try {
@@ -26,7 +27,24 @@ async function getPortfolioFromSupabase() {
       return [];
     }
     
-    return response.data?.items || [];
+    const items = response.data?.items || [];
+    
+    // ✅ Transform Supabase format to UI format
+    // Supabase: { id, symbol, quantity, avg_price, current_price, ... }
+    // UI expects: { code, entry, currentPrice, quantity, ... }
+    return items.map(item => ({
+      id: item.id,
+      code: item.symbol,
+      symbol: item.symbol,
+      quantity: item.quantity,
+      entry: item.avg_price,
+      avg_price: item.avg_price,
+      currentPrice: item.current_price,
+      current_price: item.current_price,
+      notes: item.notes,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    }));
   } catch (error) {
     console.error('[Portfolio] Message error:', error);
     return [];
