@@ -339,11 +339,11 @@ Sử dụng {TOPIC} để thay thế chủ đề"
           <div id="backupStatus" class="status-message"></div>
         </div>
 
-        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;" class="sync-section">
-          <h3 style="margin-top: 0;">☁️ Firebase Cloud Sync</h3>
+        <div style="border-top: 1px solid #eee; margin-top: 24px; padding-top: 16px;" class="auth-section">
+          <h3 style="margin-top: 0;">☁️ Supabase Authentication</h3>
           
-          <!-- Firebase Login Form -->
-          <div id="firebase-auth-section" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
+          <!-- Supabase Login Form -->
+          <div id="supabase-auth-section" style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
             <div id="auth-status-display" style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px; display: none;">
               <p style="margin: 0;">
                 <strong>✅ Đã đăng nhập:</strong> <span id="current-user-email"></span>
@@ -352,7 +352,7 @@ Sử dụng {TOPIC} để thay thế chủ đề"
             </div>
 
             <div id="auth-forms">
-              <p style="margin-top: 0; font-weight: bold; color: #333;">Đăng nhập Firebase</p>
+              <p style="margin-top: 0; font-weight: bold; color: #333;">Đăng nhập Supabase</p>
               <div style="margin-bottom: 12px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555;">Email:</label>
                 <input 
@@ -380,21 +380,12 @@ Sử dụng {TOPIC} để thay thế chủ đề"
               </button>
 
               <p style="font-size: 12px; color: #666; margin: 12px 0 0 0; text-align: center;">
-                <i class="fas fa-info-circle"></i> Liên hệ admin để tạo tài khoản
+                <i class="fas fa-info-circle"></i> Supabase auto-syncs your data across devices
               </p>
             </div>
 
             <div id="auth-message" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
           </div>
-
-          <!-- Sync Controls -->
-          <div id="syncStatus" class="status-message"></div>
-          <div class="button-group" style="margin-top: 12px;">
-            <button id="syncNowBtn" class="primary-btn" disabled><i class="fas fa-cloud-upload-alt"></i> Đồng bộ ngay</button>
-          </div>
-          
-          <!-- Backups List -->
-          <div id="backupsList" style="margin-top: 16px; max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; background: white;"></div>
         </div>
       </div>
     </div>
