@@ -5,7 +5,6 @@ import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
 import { setupErrors } from './errors.js';
-import { setupBackup } from './backup.js';
 import { initPortfolio, refreshPortfolioOnLogin, refreshPortfolioUI } from './portfolio.js';
 import { initEnglish } from './english.js';
 import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
@@ -138,10 +137,6 @@ function initializeApp() {
     stockEvalPromptInput: byId('stockEvalPromptInput'),
     teaStockPromptInput: byId('teaStockPromptInput'),
     contextMenuPromptInput: byId('contextMenuPromptInput'),
-    exportBtn: byId('exportBtn'),
-    importBtn: byId('importBtn'),
-    importFileInput: byId('importFileInput'),
-    backupStatus: byId('backupStatus'),
     
     // Sync
     syncEnabledCheckbox: byId('syncEnabledCheckbox'),
@@ -164,7 +159,6 @@ function initializeApp() {
 
   setupResults(dom);
   setupSettings(dom);
-  setupBackup(dom);
   setupErrors(dom);
   initPortfolio({
     portfolioPage: dom.portfolioPage,
