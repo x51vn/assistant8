@@ -288,8 +288,15 @@ export async function initPortfolio({
 }
 
 export async function loadPortfolioUI(table) {
+  console.log('[Portfolio] loadPortfolioUI called, table:', table ? 'exists' : 'NULL');
+  
   const portfolio = await getPortfolio();
-  if (!table) return;
+  console.log('[Portfolio] Portfolio data loaded:', portfolio?.length || 0, 'items', portfolio);
+  
+  if (!table) {
+    console.warn('[Portfolio] ❌ Table element is NULL! Cannot render portfolio');
+    return;
+  }
 
   // Update realtime status UI
   checkRealtimeStatus();
@@ -299,6 +306,7 @@ export async function loadPortfolioUI(table) {
 
   table.innerHTML = '';
   if (portfolio.length === 0) {
+    console.log('[Portfolio] Portfolio is empty');
     const row = table.insertRow();
     const cell = row.insertCell();
     cell.colSpan = 6;
@@ -1342,12 +1350,19 @@ export async function refreshPortfolioOnLogin() {
   try {
     const portfolioTable = document.getElementById('portfolioTable');
     if (!portfolioTable) {
-      console.log('[Portfolio] Portfolio table not found (page may not be loaded yet)');
+      console.warn('[Portfolio] ❌ Portfolio table element not found');
+      return;
+    }
+
+    // Get tbody element (loadPortfolioUI expects tbody, not the table)
+    const tbody = portfolioTable.querySelector('tbody');
+    if (!tbody) {
+      console.warn('[Portfolio] ❌ Portfolio tbody element not found');
       return;
     }
 
     console.log('[Portfolio] Refreshing portfolio data on login...');
-    await loadPortfolioUI(portfolioTable);
+    await loadPortfolioUI(tbody);
     console.log('[Portfolio] ✓ Portfolio data refreshed successfully on login');
   } catch (error) {
     console.error('[Portfolio] Failed to refresh portfolio on login:', error);
