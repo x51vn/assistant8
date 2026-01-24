@@ -285,6 +285,90 @@ export function setupResults(dom) {
     await loadAndDisplayHistory();
   });
 
+  function createProgressSpinner() {
+    const container = document.createElement('div');
+    container.id = 'chatgpt-progress-spinner';
+    container.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #e0e0e0;
+      gap: 12px;
+    `;
+
+    // Spinner animation
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top: 4px solid #0066cc;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    `;
+
+    // Add animation keyframes
+    if (!document.getElementById('spinner-animation')) {
+      const style = document.createElement('style');
+      style.id = 'spinner-animation';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Status text
+    const statusText = document.createElement('div');
+    statusText.id = 'spinner-status';
+    statusText.style.cssText = `
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+      text-align: center;
+      min-width: 200px;
+    `;
+    statusText.textContent = 'ChatGPT đang xử lý...';
+
+    // Timer text
+    const timerText = document.createElement('div');
+    timerText.id = 'spinner-timer';
+    timerText.style.cssText = `
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+    `;
+    timerText.textContent = '(0s)';
+
+    container.appendChild(spinner);
+    container.appendChild(statusText);
+    container.appendChild(timerText);
+
+    return container;
+  }
+
+  function updateSpinner(elapsed) {
+    const timerEl = document.getElementById('spinner-timer');
+    if (timerEl) {
+      const secs = Math.round(elapsed / 1000);
+      timerEl.textContent = `(${secs}s)`;
+    }
+  }
+
+  function removeProgressSpinner() {
+    const spinner = document.getElementById('chatgpt-progress-spinner');
+    if (spinner) {
+      spinner.remove();
+    }
+  }
+
   function startPollingForResponse(chatId, historyId = null) {
     if (!chatId) {
       console.warn('❌ [Results] No chatId provided, cannot poll for response');
@@ -293,15 +377,28 @@ export function setupResults(dom) {
     }
 
     console.log('✅ [Results] Starting polling for response', { chatId, historyId });
+    
+    // ✅ NEW: Show progress spinner
+    const historyList = document.getElementById('historyList');
+    const spinner = createProgressSpinner();
+    if (historyList && historyList.parentElement) {
+      historyList.parentElement.insertBefore(spinner, historyList);
+    }
+
     let pollCount = 0;
     const maxPolls = 60; // 60 * 2s = 2 minutes max
+    const startTime = Date.now();
 
     currentPollInterval = setInterval(async () => {
       pollCount++;
+      const elapsed = Date.now() - startTime;
+      updateSpinner(elapsed);
+
       console.log(`[Results] 🔄 Poll ${pollCount}/${maxPolls} for chatId: ${chatId}`);
 
       if (pollCount >= maxPolls) {
         console.warn('[Results] ⏱️ Max polls reached (2 minutes), stopping');
+        removeProgressSpinner();
         stopPolling();
         return;
       }
@@ -378,7 +475,8 @@ export function setupResults(dom) {
             } else {
               console.log('✅ [Results] Response saved to Supabase successfully');
               
-              // ✅ Auto-reload history to show updated response
+              // ✅ Remove spinner and auto-reload history to show updated response
+              removeProgressSpinner();
               await loadAndDisplayHistory();
             }
             
