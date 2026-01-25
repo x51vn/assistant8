@@ -3,22 +3,21 @@
   "name": "ChatGPT Assistant",
   "version": "1.0.0",
   "description": "Tự động mở ChatGPT và xử lý prompt từ cấu hình",
-  "oauth2": {
-    "client_id": "1061609434838-glhk7tcpa604kbvl28e7qsqt3tg1ge86.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive.file"]
-  },
+  "minimum_chrome_version": "114",
   "permissions": [
     "storage",
     "tabs",
     "scripting",
     "alarms",
     "sidePanel",
-    "identity"
+    "contextMenus",
+    "activeTab"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://iboard-query.ssi.com.vn/*",
-    "https://iboard.ssi.com.vn/*"
+    "https://iboard.ssi.com.vn/*",
+    "https://*.supabase.co/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"

@@ -1,11 +1,22 @@
 /**
  * SSI iBoard Market Data Provider
  * 
- * Integrates with SSI's iBoard API to fetch stock prices, indices, and market data
- * API Documentation: https://iboard.ssi.com.vn/
+ * Optimized integration with SSI's iBoard API
+ * Uses verified endpoints from network analysis
+ * 
+ * API Endpoints:
+ * - GET /stock/{SYMBOL} - Individual stock data
+ * - GET /stock/group/{GROUP} - All stocks in a group
+ * - POST /exchange-index/multiple - Multiple indices
+ * - GET /system/time - Server time
+ * - GET /market-stat/exchange/{EXCHANGE} - Exchange statistics
+ * 
+ * Groups: VN30, HOSE, HNX, UPCOM, FUND, CW, ETF, VN30F1M, BOND
  */
 
 import { MarketDataProvider } from './provider.interface.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 
 export class SSIProvider extends MarketDataProvider {
   constructor(options = {}) {
@@ -13,30 +24,37 @@ export class SSIProvider extends MarketDataProvider {
     this.baseUrl = options.baseUrl || 'https://iboard-query.ssi.com.vn';
     this.timeout = options.timeout || 5000;
     this.name = 'SSI iBoard';
+    
+    // Known stock groups for efficient searching
+    this.stockGroups = ['VN30', 'HOSE', 'HNX', 'UPCOM', 'FUND', 'CW', 'ETF', 'VN30F1M', 'BOND'];
+    this.groupCache = new Map(); // group -> timestamp for quick lookups
   }
 
   /**
    * Get stock price data for a single stock
+   * Direct endpoint: GET /stock/{SYMBOL}
    * @param {string} symbol - Stock code (e.g., 'ACB')
    * @returns {Promise<StockPriceData>}
    */
   async getStockPrice(symbol) {
     try {
-      // SSI iBoard API doesn't have a direct single stock endpoint
-      // We fetch from price table and filter
-      const priceTable = await this.getPriceTable(symbol);
-      if (priceTable.stocks && priceTable.stocks.length > 0) {
-        return priceTable.stocks[0];
+      // Use direct stock endpoint
+      const data = await this._fetch(`${this.baseUrl}/stock/${symbol}`);
+      
+      if (!data || !data.data) {
+        throw new Error(`No data returned for symbol ${symbol}`);
       }
-      throw new Error(`Stock ${symbol} not found`);
+
+      return this.transformStockData(data.data);
     } catch (error) {
-      console.error('[SSI] Error fetching stock price:', error);
+      console.error(`[SSI] Error fetching stock ${symbol}:`, error);
       throw error;
     }
   }
 
   /**
-   * Get multiple stocks' data in one call
+   * Get multiple stocks' data efficiently
+   * Uses Promise.all for parallel requests
    * @param {string[]} symbols - Array of stock codes
    * @returns {Promise<StockPriceData[]>}
    */
@@ -49,6 +67,31 @@ export class SSIProvider extends MarketDataProvider {
       return results.filter(stock => stock !== null);
     } catch (error) {
       console.error('[SSI] Error fetching multiple stocks:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all stocks in a group efficiently
+   * Endpoint: GET /stock/group/{GROUP}
+   * @param {string} group - Group code (VN30, HOSE, HNX, etc.)
+   * @returns {Promise<StockPriceData[]>}
+   */
+  async getStocksInGroup(group) {
+    try {
+      if (!this.stockGroups.includes(group)) {
+        throw new Error(`Unknown stock group: ${group}. Valid groups: ${this.stockGroups.join(', ')}`);
+      }
+
+      const data = await this._fetch(`${this.baseUrl}/stock/group/${group}`);
+      
+      if (!data || !data.data || !Array.isArray(data.data)) {
+        return [];
+      }
+
+      return data.data.map(stock => this.transformStockData(stock));
+    } catch (error) {
+      console.error(`[SSI] Error fetching group ${group}:`, error);
       throw error;
     }
   }
@@ -118,40 +161,21 @@ export class SSIProvider extends MarketDataProvider {
     }
   }
 
+
   /**
-   * Get multiple indices at once
-   * 
-   * @param {string[]} indices - Array of index codes
-   * @returns {Promise<IndexData[]>}
+   * Get all indices data efficiently
+   * Endpoint: POST /exchange-index/multiple
+   * @param {string[]} indexCodes - Array of index codes
+   * @returns {Promise<any[]>}
    */
-  async getMultipleIndices(indices) {
+  async getMultipleIndices(indexCodes) {
     try {
-      const body = {
-        keys: indices
-      };
-      
-      const url = `${this.baseUrl}/exchange-index/multiple`;
-      const response = await this._fetch(url, {
+      const data = await this._fetch(`${this.baseUrl}/exchange-index/multiple`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: { keys: indexCodes }
       });
       
-      return (response.data || []).map(indexData => ({
-        indexCode: indexData.indexCode,
-        indexName: indexData.indexName || indexData.indexCode,
-        currentValue: indexData.indexPoint || 0,
-        change: indexData.change || 0,
-        percentChange: indexData.percent || 0,
-        volume: indexData.totalVol || 0,
-        value: indexData.totalVal || 0,
-        stats: {
-          advances: indexData.advances || 0,
-          declines: indexData.declines || 0,
-          unchanged: indexData.unchanged || 0
-        },
-        timestamp: Date.now()
-      }));
+      return data.data || [];
     } catch (error) {
       console.error('[SSI] Error fetching multiple indices:', error);
       throw error;
@@ -159,92 +183,30 @@ export class SSIProvider extends MarketDataProvider {
   }
 
   /**
-   * Get exchange statistics
-   * 
-   * @param {string} exchange - Exchange code ('hose', 'hnx')
-   * @returns {Promise<ExchangeStats>}
+   * Get exchange market statistics
+   * Endpoint: GET /market-stat/exchange/{EXCHANGE}
+   * @param {string} exchange - Exchange code (hose, hnx)
+   * @returns {Promise<any>}
    */
   async getExchangeStats(exchange) {
     try {
-      const url = `${this.baseUrl}/market-stat/exchange/${exchange.toLowerCase()}`;
-      
-      const response = await this._fetch(url);
-      
-      return {
-        exchange: exchange.toUpperCase(),
-        totalVolume: response.totalVol || 0,
-        totalValue: response.totalVal || 0,
-        advanceCount: response.advances || 0,
-        declineCount: response.declines || 0,
-        unchangedCount: response.unchanged || 0,
-        timestamp: Date.now()
-      };
+      const data = await this._fetch(`${this.baseUrl}/market-stat/exchange/${exchange}`);
+      return data;
     } catch (error) {
-      console.error('[SSI] Error fetching exchange stats:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get order book for a stock
-   * Note: SSI's API doesn't provide direct order book endpoint in the public API
-   * This would require additional integration with real-time data streams
-   * 
-   * @param {string} symbol - Stock code
-   * @returns {Promise<OrderBook>}
-   */
-  async getOrderBook(symbol) {
-    try {
-      // Get price table which includes order book levels
-      const priceTable = await this.getPriceTable(symbol);
-      
-      if (!priceTable.stocks || priceTable.stocks.length === 0) {
-        throw new Error(`Stock ${symbol} not found`);
-      }
-      
-      const stock = priceTable.stocks[0];
-      
-      return {
-        symbol: symbol,
-        bidLevels: stock.bidLevels || [],
-        askLevels: stock.askLevels || [],
-        timestamp: Date.now()
-      };
-    } catch (error) {
-      console.error('[SSI] Error fetching order book:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get stock information (name, exchange, type)
-   * 
-   * @returns {Promise<StockInfo[]>} List of all stocks
-   */
-  async getStockInfo() {
-    try {
-      const url = `${this.baseUrl}/stock/stock-info`;
-      const response = await this._fetch(url);
-      
-      return response.data || [];
-    } catch (error) {
-      console.error('[SSI] Error fetching stock info:', error);
+      console.error(`[SSI] Error fetching exchange ${exchange} stats:`, error);
       throw error;
     }
   }
 
   /**
    * Get system time from SSI server
-   * Useful for time synchronization
-   * 
-   * @returns {Promise<number>} Server timestamp in milliseconds
+   * Endpoint: GET /system/time
+   * @returns {Promise<number>}
    */
   async getSystemTime() {
     try {
-      const url = `${this.baseUrl}/system/time`;
-      const response = await this._fetch(url);
-      
-      return response.timestamp || Date.now();
+      const data = await this._fetch(`${this.baseUrl}/system/time`);
+      return data.timestamp || Date.now();
     } catch (error) {
       console.error('[SSI] Error fetching system time:', error);
       return Date.now();
@@ -253,7 +215,6 @@ export class SSIProvider extends MarketDataProvider {
 
   /**
    * Check if SSI API is available
-   * 
    * @returns {Promise<boolean>}
    */
   async isAvailable() {
@@ -267,7 +228,6 @@ export class SSIProvider extends MarketDataProvider {
 
   /**
    * Get provider name
-   * 
    * @returns {string}
    */
   getName() {
@@ -275,43 +235,76 @@ export class SSIProvider extends MarketDataProvider {
   }
 
   /**
+   * Transform raw SSI stock data to standard format
+   * Maps SSI API fields to common data structure
+   * @private
+   * @param {Object} stock - Raw stock data from SSI API
+   * @returns {Object} Transformed stock data
+   */
+  transformStockData(stock) {
+    return {
+      symbol: stock.stockSymbol || stock.symbol,
+      price: stock.matchedPrice || stock.priceClose || 0,
+      change: stock.priceChange || 0,
+      changePercent: stock.priceChangePercent || 0,
+      volume: stock.nmTotalTradedQty || stock.stockVol || 0,
+      value: stock.nmTotalTradedValue || 0,
+      bid: stock.best1Bid || 0,
+      bidVolume: stock.best1BidVol || 0,
+      ask: stock.best1Offer || 0,
+      askVolume: stock.best1OfferVol || 0,
+      high: stock.highest || 0,
+      low: stock.lowest || 0,
+      open: stock.openPrice || 0,
+      reference: stock.refPrice || 0,
+      ceiling: stock.ceiling || 0,
+      floor: stock.floor || 0,
+      foreignBuy: stock.buyForeignQtty || 0,
+      foreignSell: stock.sellForeignQtty || 0,
+      timestamp: Date.now()
+    };
+  }
+
+  /**
    * Internal HTTP fetch wrapper with error handling
    * Uses background service worker as proxy to bypass CORS
-   * 
    * @private
    * @param {string} url - API endpoint URL
    * @param {Object} options - Fetch options
    * @returns {Promise<Object>} Parsed JSON response
    */
   async _fetch(url, options = {}) {
-    // Extract endpoint from URL (remove base URL)
     const endpoint = url.replace('https://iboard-query.ssi.com.vn', '');
     
-    console.log(`[SSIProvider] Fetching via background proxy: ${endpoint}`);
+    console.log(`[SSIProvider] Fetching: ${endpoint}`);
     
     try {
       // Use background service worker as proxy to bypass CORS
       const response = await chrome.runtime.sendMessage({
-        action: 'fetch_ssi_api',
-        endpoint: endpoint
+        v: 1,
+        type: MESSAGE_TYPES.CONTENT_EXTRACT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          action: 'fetch_ssi_api',
+          endpoint: endpoint,
+          method: options.method || 'GET',
+          body: options.body
+        }
       });
-      
-      if (!response) {
-        throw new Error('No response from background service worker');
+
+      if (!response || response.type === MESSAGE_TYPES.ERROR) {
+        const errorMessage = response?.error?.message || response?.error || `Failed to fetch ${endpoint}`;
+        throw new Error(errorMessage);
       }
-      
-      if (!response.success) {
-        throw new Error(response.error || 'API request failed');
+
+      const apiResponse = response.payload?.data ?? response.data ?? response.payload;
+
+      if (!apiResponse) {
+        throw new Error(`No data in response from ${endpoint}`);
       }
-      
-      const data = response.data;
-      
-      // Check for API error response
-      if (data.errorCode || data.httpCode >= 400) {
-        throw new Error(data.message || `API Error: ${data.errorCode || data.httpCode}`);
-      }
-      
-      return data;
+
+      return apiResponse;
     } catch (error) {
       console.error(`[SSIProvider] Fetch error for ${endpoint}:`, error);
       throw error;

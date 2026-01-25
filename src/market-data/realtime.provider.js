@@ -192,7 +192,20 @@ export class RealtimeProvider {
    */
   log(...args) {
     if (this.config.debug) {
-      console.log('[RealtimeProvider]', ...args);
+      // Serialize errors properly
+      const serializedArgs = args.map(arg => {
+        if (arg instanceof Error) {
+          return `Error: ${arg.message}\n${arg.stack}`;
+        } else if (arg && typeof arg === 'object') {
+          try {
+            return JSON.stringify(arg, null, 2);
+          } catch {
+            return String(arg);
+          }
+        }
+        return arg;
+      });
+      console.log('[RealtimeProvider]', ...serializedArgs);
     }
   }
 

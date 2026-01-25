@@ -1,3 +1,6 @@
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
+
 export function setupErrors(dom) {
   const { 
     errorsBtn, errorsPage, errorList, addErrorBtn,
@@ -120,12 +123,18 @@ export function setupErrors(dom) {
 
     if (currentErrorId) {
       // Update existing error
-      chrome.runtime.sendMessage({
-        action: 'update_error',
-        errorId: currentErrorId,
-        ...errorData
-      }, (response) => {
-        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.ERROR_UPDATE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          errorId: currentErrorId,
+          ...errorData
+        }
+      };
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_UPDATED) {
           alert('Lỗi cập nhật!');
           return;
         }
@@ -134,11 +143,15 @@ export function setupErrors(dom) {
       });
     } else {
       // Add new error
-      chrome.runtime.sendMessage({
-        action: 'add_error',
-        ...errorData
-      }, (response) => {
-        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.ERROR_ADD,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: errorData
+      };
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ADDED) {
           alert('Lỗi thêm mới!');
           return;
         }
@@ -151,11 +164,15 @@ export function setupErrors(dom) {
   function deleteError(errorId) {
     if (!confirm('Bạn có chắc muốn xóa lỗi này?')) return;
 
-    chrome.runtime.sendMessage({
-      action: 'delete_error',
-      errorId: errorId
-    }, (response) => {
-      if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.ERROR_DELETE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: { errorId }
+    };
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_DELETED) {
         alert('Lỗi xóa!');
         return;
       }
@@ -164,15 +181,23 @@ export function setupErrors(dom) {
   }
 
   function loadErrors() {
-    chrome.runtime.sendMessage({ action: 'get_errors' }, (response) => {
-      if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.ERROR_GET_ALL,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {}
+    };
+    
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_LIST) {
         if (errorList) {
           errorList.innerHTML = '<p class="empty-state">Lỗi tải danh sách.</p>';
         }
         return;
       }
 
-      const errors = response.errors || [];
+      const errors = response.payload?.errors || [];
       
       if (!errorList) return;
 
@@ -200,9 +225,15 @@ export function setupErrors(dom) {
       if (!confirm('Bạn có chắc muốn xóa toàn bộ danh sách lỗi?')) return;
       
       console.log('[Errors] Clearing all errors...');
-      chrome.runtime.sendMessage({ action: 'clear_errors' }, (response) => {
-        console.log('[Errors] Clear response:', response);
-        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.ERROR_CLEAR_ALL,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {}
+      };
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
           alert('Lỗi khi xóa danh sách!');
           return;
         }
@@ -229,68 +260,13 @@ export function setupErrors(dom) {
 
       if (!confirm('Bắt đầu phân tích retrospective? Điều này sẽ gửi lịch sử và lỗi đến ChatGPT để phân tích.')) return;
       
-      retrospectiveBtn.disabled = false; // Keep enabled to allow stopping
+      retrospectiveBtn.disabled = true;
       retrospectiveBtn.innerHTML = '⏳ Đang phân tích...';
       
-      console.log('[Errors] Sending run_retrospective message...');
-      chrome.runtime.sendMessage({ action: 'run_retrospective' }, (response) => {
-        console.log('[Errors] run_retrospective response:', response);
-        if (chrome.runtime.lastError || !response || response.status !== 'ok') {
-          alert('Lỗi khi chạy retrospective!');
-          retrospectiveBtn.disabled = false;
-          retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
-          return;
-        }
-        
-        const runId = response.runId;
-        console.log('[Errors] Starting retrospective poll for runId:', runId);
-        
-        // Poll for result (no timeout - wait indefinitely)
-        let pollCount = 0;
-        
-        retrospectivePollInterval = setInterval(() => {
-          pollCount++;
-          const minutes = Math.floor(pollCount * 3 / 60);
-          const seconds = (pollCount * 3) % 60;
-          const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-          retrospectiveBtn.textContent = `⏳ ${timeStr} (Click để dừng)`;
-          
-          console.log('[Errors] Retrospective poll attempt', pollCount);
-          chrome.runtime.sendMessage({ action: 'get_result' }, (pollResponse) => {
-            console.log('[Errors] Poll response:', { hasResult: !!pollResponse?.result, source: pollResponse?.source });
-            if (chrome.runtime.lastError) {
-              clearInterval(retrospectivePollInterval);
-              retrospectivePollInterval = null;
-              retrospectiveBtn.disabled = false;
-              retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
-              return;
-            }
-            
-            if (pollResponse && pollResponse.result && pollResponse.source === 'live') {
-              console.log('[Errors] Got live retrospective result, stopping poll');
-              clearInterval(retrospectivePollInterval);
-              retrospectivePollInterval = null;
-              retrospectiveBtn.disabled = false;
-              retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
-              
-              // Save result as new error entry (type: retrospective)
-              const timestamp = Date.now();
-              const title = `Retrospective - ${new Date(timestamp).toLocaleString('vi-VN')}`;
-              
-              chrome.runtime.sendMessage({
-                action: 'add_error',
-                title: title,
-                description: pollResponse.result,
-                type: 'general',
-                severity: 'low'
-              }, () => {
-                loadErrors();
-                alert('Phân tích retrospective hoàn tất! Đã lưu vào danh sách lỗi.');
-              });
-            }
-          });
-        }, 3000);
-      });
+      console.log('[Errors] Retrospective feature temporarily disabled - needs migration to v1 schema');
+      alert('Chức năng retrospective tạm thời bị vô hiệu hóa');
+      retrospectiveBtn.disabled = false;
+      retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
     });
   }
 

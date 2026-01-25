@@ -1,6 +1,7 @@
 /**
  * Global Constants for ChatGPT Assistant
  * Centralized definition of all magic strings and configuration values
+ * Follows: Single Source of Truth principle
  */
 
 // ========== STORAGE KEYS ==========
@@ -14,6 +15,7 @@ export const STORAGE_KEYS = {
   RUNS: 'runs',
   CHAT_HISTORY: 'chatHistory',
   LAST_RESULT: 'lastResult',
+  LAST_RUN_ID: 'lastRunId',
 
   // Errors & Retrospective
   ERROR_LIST: 'errorList',
@@ -25,6 +27,7 @@ export const STORAGE_KEYS = {
   PROMPT_INPUT: 'promptInput',
   STOCK_EVAL_PROMPT: 'stockEvalPrompt',
   TEA_STOCK_PROMPT: 'teaStockPrompt',
+  CONTEXT_MENU_PROMPT: 'contextMenuPrompt',
 
   // Templates
   PROMPT_TEMPLATES: 'promptTemplates',
@@ -56,12 +59,21 @@ export const ALARMS = {
 };
 
 // ========== TIMEOUTS ==========
+/**
+ * Timeout values in milliseconds
+ * @const {Object}
+ */
 export const TIMEOUTS = {
-  EDITOR_FIND: 25000, // ms
-  GET_RESULT: 15 * 60 * 1000, // 15 minutes
-  SEND_TIMEOUT: 30000, // ms
-  RESPONSE_STABLE: 1500, // ms
-  API_CALL: 10000, // ms
+  /** Maximum time to wait for editor element to appear */
+  EDITOR_FIND: 25000,
+  /** Maximum time to wait for ChatGPT response (15 minutes) */
+  GET_RESULT: 15 * 60 * 1000,
+  /** Timeout for sending prompt to ChatGPT */
+  SEND_TIMEOUT: 30000,
+  /** Time to wait for response to stabilize before considering complete */
+  RESPONSE_STABLE: 1500,
+  /** Generic API call timeout */
+  API_CALL: 10000,
 };
 
 // ========== DEFAULTS ==========
@@ -119,28 +131,9 @@ export const MESSAGE_ACTIONS = {
   CLEAR_CONVERSATION: 'clear_conversation',
   ENSURE_CHATGPT_OPEN: 'ensure_chatgpt_open',
 
-  // Firebase Auth
-  FIREBASE_LOGIN: 'firebase_login',
-  FIREBASE_LOGOUT: 'firebase_logout',
-  GET_CURRENT_USER: 'get_current_user',
-
-  // Sync & Backup
-  SYNC_TO_FIRESTORE: 'sync_to_firestore',
-  SYNC_TO_DRIVE: 'sync_to_drive',
-  RESTORE_FROM_DRIVE: 'restore_from_drive',
-
   // Status callbacks
   PROMPT_SENT: 'prompt_sent',
   PROMPT_FAILED: 'prompt_failed',
-};
-
-// ========== FIREBASE PATHS ==========
-export const FIREBASE_PATHS = {
-  USERS: 'users',
-  BACKUPS: 'backups',
-  BACKUPS_LATEST: 'latest',
-  CONFIG: 'config',
-  CONFIG_LATEST_BACKUP: 'latestBackup',
 };
 
 // ========== CHROMEEXTENSION IDS ==========

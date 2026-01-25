@@ -1,22 +1,27 @@
 import { setActivePage } from './pages.js';
 import { loadSettings } from './storage.js';
+import { refreshPortfolioUI } from './portfolio.js';
 
 export function setupNavigation(dom) {
   const { 
-    notesBtn, resultsBtn, portfolioBtn, errorsBtn, templatesBtn, settingsBtn, 
-    notesPage, resultsPage, portfolioPage, errorsPage, templatesPage, settingsPage, 
-    promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput 
+    resultsBtn, portfolioBtn, errorsBtn, englishBtn, settingsBtn, 
+    resultsPage, portfolioPage, errorsPage, englishPage, settingsPage, 
+    promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput 
   } = dom;
 
-  const pages = [notesPage, portfolioPage, resultsPage, errorsPage, templatesPage, settingsPage];
-  const btns = [notesBtn, portfolioBtn, resultsBtn, errorsBtn, templatesBtn, settingsBtn];
-
-  notesBtn?.addEventListener('click', () => {
-    setActivePage({ pages, btns, page: 'notes' });
-  });
+  const pages = [portfolioPage, resultsPage, errorsPage, englishPage, settingsPage];
+  const btns = [portfolioBtn, resultsBtn, errorsBtn, englishBtn, settingsBtn];
 
   portfolioBtn?.addEventListener('click', () => {
+    console.log('[Navigation] Portfolio button clicked!');
     setActivePage({ pages, btns, page: 'portfolio' });
+    // ✅ Reload portfolio data from Supabase when switching to portfolio tab
+    console.log('[Navigation] Calling refreshPortfolioUI...');
+    refreshPortfolioUI();
+  });
+
+  resultsBtn?.addEventListener('click', () => {
+    setActivePage({ pages, btns, page: 'results' });
   });
 
   resultsBtn?.addEventListener('click', () => {
@@ -26,13 +31,13 @@ export function setupNavigation(dom) {
   errorsBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'errors' });
   });
-
-  templatesBtn?.addEventListener('click', () => {
-    setActivePage({ pages, btns, page: 'templates' });
+  
+  englishBtn?.addEventListener('click', () => {
+    setActivePage({ pages, btns, page: 'english' });
   });
 
   settingsBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'settings' });
-    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, intervalInput });
+    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
   });
 }

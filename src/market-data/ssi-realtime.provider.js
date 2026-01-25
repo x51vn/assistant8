@@ -9,6 +9,8 @@
  */
 
 import { RealtimeProvider } from './realtime.provider.js';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';
 
 class SSIRealtimeProvider extends RealtimeProvider {
   constructor(config = {}) {
@@ -31,8 +33,10 @@ class SSIRealtimeProvider extends RealtimeProvider {
   }
 
   /**
-   * Get stock information from SSI API
-   * Data structure example:
+   * Get stock information from SSI API using direct endpoint
+   * Uses optimized endpoint: GET /stock/{SYMBOL}
+   * 
+   * Data structure from API:
    * {
    *   symbol: "ACB",
    *   price: 25.30,
@@ -50,25 +54,107 @@ class SSIRealtimeProvider extends RealtimeProvider {
    * }
    */
   async getStockInfo(symbol) {
-    try {
-      // Use background service worker as proxy to bypass CORS
-      const response = await chrome.runtime.sendMessage({
-        action: 'fetch_ssi_api',
-        endpoint: `/stock/${symbol}`
-      });
+    // Check cache first
+    const cached = this.getCache(symbol);
+    if (cached) {
+      this.log(`[SSI] Cache hit for ${symbol}`);
+      return cached;
+    }
 
-      if (!response || !response.success) {
-        throw new Error(response?.error || 'API request failed');
+    try {
+      this.log(`[SSI] Fetching stock info for ${symbol}`);
+      
+      // Try direct stock endpoint first (most efficient)
+      try {
+        const response = await this.fetchFromAPI(`/stock/${symbol}`);
+        
+        if (response && response.data) {
+          const transformed = this.transformStockData(symbol, response.data);
+          this.updateCache(symbol, transformed);
+          this.log(`[SSI] Found ${symbol} via direct endpoint`);
+          return transformed;
+        }
+      } catch (directError) {
+        this.log(`[SSI] Direct endpoint failed for ${symbol}, trying groups...`, directError.message);
       }
 
-      // API returns: { code: "SUCCESS", message: "...", data: {...} }
-      // Actual stock data is in response.data.data
-      const apiData = response.data;
-      const stockData = apiData.data || apiData; // Handle both structures
+      // Fallback: Try groups if direct endpoint fails
+      // X51LABS-59: Enhanced logging to track which groups tried
+      const groups = ['VN30', 'HOSE', 'HNX', 'UPCOM', 'FUND', 'CW', 'ETF', 'VN30F1M', 'BOND'];
+      const attemptedGroups = [];
+      const failedGroups = [];
       
-      return this.transformStockData(symbol, stockData);
+      for (const group of groups) {
+        try {
+          this.log(`[SSI] Trying group ${group} for symbol ${symbol}`);
+          attemptedGroups.push(group);
+          
+          const response = await this.fetchFromAPI(`/stock/group/${group}`);
+          
+          if (!response || !response.data || !Array.isArray(response.data)) {
+            this.log(`[SSI] Group ${group} returned empty/invalid data for ${symbol}`);
+            failedGroups.push(group);
+            continue;
+          }
+          
+          // Find the specific symbol in the group data
+          const stockData = response.data.find(stock => 
+            stock.stockSymbol === symbol || stock.symbol === symbol
+          );
+          
+          if (stockData) {
+            this.log(`[SSI] ✓ Found ${symbol} in group ${group}`);
+            const transformed = this.transformStockData(symbol, stockData);
+            this.updateCache(symbol, transformed);
+            return transformed;
+          } else {
+            this.log(`[SSI] ✗ ${symbol} not found in group ${group}`);
+            failedGroups.push(group);
+          }
+        } catch (groupError) {
+          this.log(`[SSI] ✗ Error with group ${group}:`, groupError.message);
+          failedGroups.push(`${group}(error)`);
+          continue;
+        }
+      }
+      
+      // Not found in any group - provide detailed error message
+      const errorMsg = `Symbol ${symbol} not found in any available group. Tried: ${attemptedGroups.join(',')}`;
+      this.log(`[SSI] ✗ ${errorMsg}`);
+      throw new Error(errorMsg);
     } catch (error) {
-      this.log(`Error fetching stock info for ${symbol}`, error);
+      this.log(`[SSI] Error fetching stock ${symbol}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch data from SSI API using background proxy
+   * @private
+   * @param {string} endpoint - API endpoint (e.g., '/stock/ACB')
+   * @returns {Promise<Object>}
+   */
+  async fetchFromAPI(endpoint) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.CONTENT_EXTRACT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          action: 'fetch_ssi_api',
+          endpoint: endpoint
+        }
+      });
+
+      if (!response || response.type === MESSAGE_TYPES.ERROR) {
+        const errorMessage = response?.error?.message || response?.error || `Failed to fetch ${endpoint}`;
+        throw new Error(errorMessage);
+      }
+
+      return response.payload?.data ?? response.data ?? response.payload;
+    } catch (error) {
+      this.log(`[SSI] API fetch error for ${endpoint}:`, error.message);
       throw error;
     }
   }
