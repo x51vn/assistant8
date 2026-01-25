@@ -14,7 +14,8 @@ import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js'
 const logger = createLogger('Settings');
 
 /**
- * SETTINGS_GET - Get user settings
+ * SETTINGS_GET - Get user settings with normalized structure
+ * Normalizes legacy format (config.prompt) → (config.prompts.master)
  */
 registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
   const correlationId = logger.startOperation('getSettings', message.correlationId);
@@ -45,9 +46,23 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
     );
     
     logger.endOperation(correlationId, 'success');
-    // ✅ Extract only config field (not user_id or timestamps)
+    
+    // ✅ NORMALIZE: Move legacy config.prompt → config.prompts.master
+    let config = data.config || {};
+    if (config.prompt && !config.prompts?.master) {
+      config = {
+        ...config,
+        prompts: {
+          ...(config.prompts || {}),
+          master: config.prompt
+        }
+      };
+      delete config.prompt; // Remove legacy field from response
+      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master');
+    }
+    
     return createResponse(message, MESSAGE_TYPES.SETTINGS_DATA, {
-      config: data.config || {}
+      config
     });
     
   } catch (error) {
@@ -76,10 +91,11 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
 
 /**
  * SETTINGS_UPDATE - Update user settings (upsert)
+ * Accepts both legacy (config.prompt) and new (config.prompts.master) format
  */
 registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
   const correlationId = logger.startOperation('updateSettings', message.correlationId);
-  const { config } = message.data || {};
+  let { config } = message.data || {};
   
   try {
     const userId = await requireAuth(message);
@@ -92,6 +108,19 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
         ERROR_CODES.INVALID_INPUT,
         'Config không hợp lệ.'
       );
+    }
+    
+    // ✅ NORMALIZE: Convert config.prompt (legacy) → config.prompts.master
+    if (config.prompt) {
+      config = {
+        ...config,
+        prompts: {
+          ...(config.prompts || {}),
+          master: config.prompt
+        }
+      };
+      delete config.prompt; // Remove legacy field before saving
+      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master on save');
     }
     
     const data = await supabaseWithRetry(
@@ -121,7 +150,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
     );
     
     logger.endOperation(correlationId, 'success');
-    // ✅ Extract only config field (not user_id or timestamps)
+    // ✅ Return normalized config
     return createResponse(message, MESSAGE_TYPES.SETTINGS_UPDATED, {
       config: data.config || {}
     });

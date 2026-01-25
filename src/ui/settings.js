@@ -87,7 +87,6 @@ export function setupSettings(dom) {
     }
 
     const settings = {
-      prompt,
       autoRun: !!autoRunCheckbox?.checked,
       evaluatePrevious: !!evaluatePreviousCheckbox?.checked,
       reviewPrompt: !!reviewPromptCheckbox?.checked,
@@ -101,11 +100,11 @@ export function setupSettings(dom) {
     const contextMenuPrompt = (contextMenuPromptInput?.value || '').trim();
     const englishPrompt = (englishPromptInput?.value || '').trim();
     
-    // ✅ GPT-FIX: Save settings to Supabase instead of local storage
+    // ✅ GPT-FIX: Save settings to Supabase with normalized structure
     showStatus(saveStatus, 'Đang lưu...', 'info');
     
     try {
-      // Save to Supabase settings table
+      // ✅ NORMALIZED: Store master prompt in config.prompts.master (not config.prompt)
       const response = await chrome.runtime.sendMessage({
         v: 1,
         type: MESSAGE_TYPES.SETTINGS_UPDATE,
@@ -115,6 +114,7 @@ export function setupSettings(dom) {
           config: {
             ...settings,
             prompts: {
+              master: prompt,        // ← Master prompt in new structure
               portfolio: portfolioPrompt,
               stockEval: stockEvalPrompt,
               teaStock: teaStockPrompt,
@@ -129,7 +129,7 @@ export function setupSettings(dom) {
         throw new Error(response.errorMessage || 'Lưu thất bại');
       }
       
-      console.log('[Settings] All settings saved to Supabase');
+      console.log('[Settings] All settings saved to Supabase with normalized structure');
       showStatus(saveStatus, 'Lưu cấu hình thành công!', 'success');
     } catch (error) {
       console.error('[Settings] Save failed:', error);
@@ -306,15 +306,25 @@ async function loadAllSettingsAtOnce({
       interval: config.interval
     });
     
-    // ✅ Populate master prompt (MAIN PROMPT)
-    if (promptInput && config.prompt !== undefined) {
-      console.log('🔍 [Settings] Setting master prompt, length:', config.prompt?.length || 0);
-      promptInput.value = config.prompt || '';
+    // ✅ Populate master prompt (MAIN PROMPT) from normalized structure
+    if (promptInput && config.prompts?.master !== undefined) {
+      console.log('🔍 [Settings] Setting master prompt, length:', config.prompts.master?.length || 0);
+      promptInput.value = config.prompts.master || '';
       // Trigger reflow for textarea auto-height
       setTimeout(() => {
         promptInput.style.height = 'auto';
         promptInput.style.height = Math.max(200, promptInput.scrollHeight) + 'px';
         console.log('✅ [Settings] Master prompt textarea height set to:', promptInput.style.height);
+      }, 0);
+    }
+    
+    // ✅ Fallback for legacy config.prompt (backward compatibility)
+    if (promptInput && !config.prompts?.master && config.prompt !== undefined) {
+      console.log('🔍 [Settings] Found legacy config.prompt, using it (length:', config.prompt?.length || 0 + ')');
+      promptInput.value = config.prompt || '';
+      setTimeout(() => {
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.max(200, promptInput.scrollHeight) + 'px';
       }, 0);
     }
     
