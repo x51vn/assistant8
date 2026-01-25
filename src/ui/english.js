@@ -36,31 +36,73 @@ export async function initEnglish({
       generateSentenceBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Generate & Learn';
     }
   }
-  
-  generateSentenceBtn?.addEventListener('click', async () => {
-    const topic = (englishTopicInput?.value || '').trim();
-    
-    if (!topic) {
-      if (englishResultArea) {
-        englishResultArea.innerHTML = '<div class="error">⚠️ Vui lòng nhập topic!</div>';
-      }
-      return;
+
+  // When no topic provided, ask ChatGPT to choose the most popular trending topic this week
+  async function requestTopicFromChatGPT() {
+    if (englishResultArea) {
+      englishResultArea.innerHTML = '<div class="loading">⏳ Yêu cầu ChatGPT chọn topic phổ biến nhất trong tuần...</div>';
     }
-    
+
+    const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
+
+    try {
+      const sendMsg = {
+        v: 1,
+        type: MESSAGE_TYPES.SEND_PROMPT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          prompt: pickPrompt,
+          options: { createNewChat: true, focusTab: true }
+        }
+      };
+
+      const initResp = await sendRuntimeMessage(sendMsg);
+      if (!initResp || initResp.type === MESSAGE_TYPES.ERROR) {
+        return null;
+      }
+
+      // Poll for chat output (shorter timeout)
+      const maxPolls = 20;
+      for (let i = 0; i < maxPolls; i++) {
+        const outResp = await sendRuntimeMessage({
+          v: 1,
+          type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          payload: { wait: false }
+        });
+
+        const output = outResp?.output || outResp?.payload?.output;
+        if (outResp && outResp.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && output) {
+          // Extract first non-empty line and clean it
+          const firstLine = output.split('\n').map(s => s.trim()).find(Boolean) || output;
+          const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
+          return topic;
+        }
+
+        // small delay before next poll
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      return null;
+    } catch (err) {
+      console.error('[English] requestTopicFromChatGPT error:', err);
+      return null;
+    }
+  }
+
+  async function handleGenerateTopic(topic) {
+    if (!topic) return;
     if (englishResultArea) {
       englishResultArea.innerHTML = '<div class="loading">⏳ Đang gửi...</div>';
     }
     generateSentenceBtn.disabled = true;
     generateSentenceBtn.innerHTML = '⏳ Processing...';
-    
+
     try {
       const stored = await chrome.storage.local.get([ENGLISH_PROMPT_KEY]);
-      let promptTemplate = stored[ENGLISH_PROMPT_KEY] || `Teach me English about: {TOPIC}
-
-Provide:
-1. An English sentence/phrase
-2. Vietnamese translation
-3. Usage example`;
+      let promptTemplate = stored[ENGLISH_PROMPT_KEY] || `Teach me English about: {TOPIC}\n\nProvide:\n1. An English sentence/phrase\n2. Vietnamese translation\n3. Usage example`;
       
       const prompt = promptTemplate.replace(/{TOPIC}/g, topic);
       
@@ -84,7 +126,6 @@ Provide:
         if (englishResultArea) {
           englishResultArea.innerHTML = '<div class="loading">⏳ Đang chờ response...</div>';
         }
-        // X51LABS-80: Pass resetButtonState to pollForEnglishResult
         await pollForEnglishResult(englishResultArea, savedSentencesList, topic, prompt, resetButtonState);
       } else {
         if (englishResultArea) {
@@ -96,8 +137,28 @@ Provide:
         englishResultArea.innerHTML = `<div class="error">❌ ${err.message}</div>`;
       }
     } finally {
-      resetButtonState(); // X51LABS-80: Always reset button
+      resetButtonState();
     }
+  }
+
+  generateSentenceBtn?.addEventListener('click', async () => {
+    let topic = (englishTopicInput?.value || '').trim();
+    if (!topic) {
+      // Ask ChatGPT to choose the most popular topic this week
+      topic = await requestTopicFromChatGPT();
+      if (!topic) {
+        if (englishResultArea) {
+          englishResultArea.innerHTML = '<div class="error">❌ Không thể lấy topic từ ChatGPT. Vui lòng thử lại hoặc nhập topic thủ công.</div>';
+        }
+        return;
+      }
+      // Show chosen topic to user
+      if (englishResultArea) {
+        englishResultArea.innerHTML = `<div class="info">📝 ChatGPT đã chọn topic: <strong>${escapeHtml(topic)}</strong></div>`;
+      }
+    }
+
+    await handleGenerateTopic(topic);
   });
 }
 

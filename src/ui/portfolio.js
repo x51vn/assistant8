@@ -349,18 +349,28 @@ export async function initPortfolio({
     }
 
     try {
-      // Send prompt to ChatGPT via background
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          { action: "send_prompt", prompt },
-          (response) => {
-            resolve(response);
-          },
-        );
-      });
+      teaStockBtn.disabled = true;
+      teaStockBtn.innerHTML = '⏳ Processing...';
+      
+      // Send prompt to ChatGPT via background using modern message format
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.SEND_PROMPT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: {
+          prompt: prompt,
+          options: {
+            createNewChat: true,
+            focusTab: true
+          }
+        }
+      };
 
-      if (response?.status === "ok") {
-        console.log("[Portfolio] Tea stock prompt sent to ChatGPT");
+      const response = await chrome.runtime.sendMessage(message);
+
+      if (response && response.type !== MESSAGE_TYPES.ERROR) {
+        console.log("[Portfolio] Tea stock prompt sent to ChatGPT", response);
       } else {
         console.error("[Portfolio] Failed to send tea stock prompt:", response);
         alert("Lỗi gửi prompt. Vui lòng mở tab ChatGPT.");
@@ -368,6 +378,10 @@ export async function initPortfolio({
     } catch (err) {
       console.error("[Portfolio] Tea stock error:", err);
       alert("Lỗi: " + err.message);
+    } finally {
+      // Reset button state
+      teaStockBtn.disabled = false;
+      teaStockBtn.innerHTML = 'Tìm cổ phiếu trà đá';
     }
   });
 

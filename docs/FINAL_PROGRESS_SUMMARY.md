@@ -60,10 +60,10 @@
 - GPT-025: Realtime subscriptions + polling
 - GPT-027: Migration v2 (prompts + categories)
 
-### Cleanup (CRITICAL)
-- GPT-028: Remove Firebase from build
-- GPT-029: Remove Firebase handlers + message types
-- GPT-030: Remove Firebase UI flows
+### Cleanup (COMPLETED)
+- GPT-028: Remove Firebase from build ✅ REMOVED
+- GPT-029: Remove Firebase handlers + message types ✅ REMOVED
+- GPT-030: Remove Firebase UI flows ✅ REMOVED
 
 ### Polish
 - GPT-031: Manifest permissions alignment
@@ -102,7 +102,7 @@
 3. **Realtime**: Architecture defined, not implemented
 
 ### ❌ PENDING
-1. **Firebase Removal**: Still in codebase (90+ references)
+1. **Firebase Removal**: Completed (references removed)
 2. **Migration v2**: Prompts/Categories data
 3. **UI Realtime**: Not implemented
 4. **E2E Tests**: Not written
@@ -152,7 +152,7 @@
 
 ## 🔧 Technical Debt
 
-1. Firebase still in codebase (but isolated)
+1. Firebase removal completed
 2. Some UI pages still use local storage directly
 3. No realtime subscriptions yet (architecture ready)
 4. Testing coverage minimal

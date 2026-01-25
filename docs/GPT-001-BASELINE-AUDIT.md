@@ -8,15 +8,15 @@
 
 ## Executive Summary
 
-Đã hoàn thành audit kiến trúc và codebase. Project hiện tại có **nhiều điểm LỆCH kiến trúc mục tiêu** (cloud-first Supabase) vì vẫn còn:
-- ✅ Firebase dependencies (code + config + UI)
+- Đã hoàn thành audit kiến trúc và codebase. Project hiện tại có **nhiều điểm LỆCH kiến trúc mục tiêu** (cloud-first Supabase) do lịch sử chuyển đổi, hiện trạng:
+- ✅ Firebase dependencies (removed)
 - ✅ Local storage business data
 - ✅ Thiếu Supabase integration hoàn chỉnh
 - ⚠️ Message types đã có nhưng cần align
 - ⚠️ Handlers đã có một số nhưng cần refactor
 
 **Major Gaps**: 
-1. Firebase cần remove hoàn toàn (GPT-028, 029, 030)
+1. Firebase removed (GPT-028, 029, 030)
 2. Migration từ chrome.storage.local sang Supabase (GPT-026, 027)
 3. Supabase handlers cần implement đầy đủ (GPT-010-019)
 4. Auth gate chưa có (GPT-008)
@@ -128,14 +128,15 @@
 | `CHATGPT_SEND_INPUT` → `CHATGPT_INPUT_SENT` | ✅ | `chatgpt.js` | OK |
 | `CHATGPT_GET_OUTPUT` → `CHATGPT_OUTPUT_READY` | ✅ | `chatgpt.js` | OK |
 
-#### I. Firebase (TO REMOVE)
+
+#### I. Firebase (REMOVED)
 
 | Message Type | Status | Handler | Notes |
 |--------------|--------|---------|-------|
-| `FIREBASE_AUTH` | ❌ TO REMOVE | `firebase.js` | GPT-029 |
-| `FIREBASE_SYNC` → `FIREBASE_SYNCED` | ❌ TO REMOVE | `firebase.js` | GPT-029 |
-| `FIREBASE_RESTORE` → `FIREBASE_RESTORED` | ❌ TO REMOVE | `firebase.js` | GPT-029 |
-| `FIREBASE_LIST_BACKUPS` → `FIREBASE_BACKUPS_LISTED` | ❌ TO REMOVE | `firebase.js` | GPT-029 |
+| `FIREBASE_AUTH` | ✅ REMOVED | `firebase.js` | GPT-029 |
+| `FIREBASE_SYNC` → `FIREBASE_SYNCED` | ✅ REMOVED | `firebase.js` | GPT-029 |
+| `FIREBASE_RESTORE` → `FIREBASE_RESTORED` | ✅ REMOVED | `firebase.js` | GPT-029 |
+| `FIREBASE_LIST_BACKUPS` → `FIREBASE_BACKUPS_LISTED` | ✅ REMOVED | `firebase.js` | GPT-029 |
 
 ---
 
@@ -278,12 +279,12 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.91.0",  // ✅ Đã có
-    "firebase": "^12.7.0"                // ❌ TO REMOVE (GPT-028)
+    "firebase": "^12.7.0"                // ✅ REMOVED (GPT-028)
   }
 }
 ```
 
-**Action**: Remove Firebase dependency sau khi migrate (GPT-028)
+**Action**: Firebase dependency removed from package.json (GPT-028)
 
 ---
 
