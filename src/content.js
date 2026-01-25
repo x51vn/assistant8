@@ -232,12 +232,13 @@ function getSelectorStats() {
   
   // X51LABS-94: Send telemetry to background (fire-and-forget)
   chrome.runtime.sendMessage({
+    v: 1,
     type: 'TELEMETRY_REPORT',
     correlationId: `telemetry-${Date.now()}`,
-    payload: {
+    timestamp: Date.now(),
+    data: {
       stats: selectorStats,
-      version: stats.version,
-      timestamp: stats.timestamp
+      version: stats.version
     }
   }).catch(err => {
     console.warn('[Content] Telemetry send failed:', err);
@@ -541,7 +542,13 @@ async function trySendPendingPromptOnce() {
 
   try {
     const meta = getChatMeta();
-    chrome.runtime.sendMessage({ action: 'prompt_sent', runId: pending.runId || null, ...meta });
+    chrome.runtime.sendMessage({
+      v: 1,
+      type: 'CONTENT_PROMPT_SENT',
+      correlationId: `prompt-sent-${Date.now()}`,
+      timestamp: Date.now(),
+      data: { runId: pending.runId || null, ...meta }
+    });
   } catch {
     // ignore
   }
@@ -575,9 +582,14 @@ async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
     if (pending && pending.runId) {
       try {
         chrome.runtime.sendMessage({
-          action: 'prompt_failed',
-          runId: pending.runId,
-          error: 'timeout_sending_prompt',
+          v: 1,
+          type: 'CONTENT_PROMPT_FAILED',
+          correlationId: `prompt-failed-${Date.now()}`,
+          timestamp: Date.now(),
+          data: {
+            runId: pending.runId,
+            error: 'timeout_sending_prompt'
+          }
         });
       } catch {
         // ignore

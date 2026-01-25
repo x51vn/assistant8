@@ -95,7 +95,10 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, async (message) => {
     // Broadcast auth state change to all UI instances
     try {
       await chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-login-broadcast-${Date.now()}`,
+        timestamp: Date.now(),
         data: { 
           user: {
             id: user.id,
@@ -217,7 +220,10 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT, async (message) => {
     // Broadcast auth state change
     try {
       await chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-logout-broadcast-${Date.now()}`,
+        timestamp: Date.now(),
         data: { 
           user: null,
           authenticated: false
@@ -336,7 +342,10 @@ function setupAuthStateListener() {
     // Broadcast token refresh events
     if (event === 'TOKEN_REFRESHED' && session) {
       chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_TOKEN_REFRESHED,
+        correlationId: `auth-token-refreshed-${Date.now()}`,
+        timestamp: Date.now(),
         data: { 
           user: {
             id: session.user.id,
@@ -351,7 +360,10 @@ function setupAuthStateListener() {
     // Broadcast sign out events
     if (event === 'SIGNED_OUT') {
       chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-signed-out-${Date.now()}`,
+        timestamp: Date.now(),
         data: { 
           user: null,
           authenticated: false
@@ -364,7 +376,10 @@ function setupAuthStateListener() {
     // Broadcast sign in events
     if (event === 'SIGNED_IN' && session) {
       chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-signed-in-${Date.now()}`,
+        timestamp: Date.now(),
         data: { 
           user: {
             id: session.user.id,

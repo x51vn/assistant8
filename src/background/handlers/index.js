@@ -16,7 +16,7 @@ logger.info('Registering message handlers...');
 // Each module will call registerHandler() to register its handlers
 import './chatgpt.js';
 import './portfolio.js';
-// import './firebase.js'; // REMOVED GPT-028: Firebase no longer used
+
 import './content.js'; // ✅ KEPT: Used by SSI market-data provider (fetchFromAPI)
 import './alarms.js';
 import './contextMenu.js';

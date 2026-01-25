@@ -45,11 +45,17 @@ Supabase Cloud (PostgreSQL + Auth + Realtime)
 - **Message Router**: `src/background/messageRouter.js` (Command Pattern)
 - **Handlers**: `src/background/handlers/*.js` 
   - ✅ ACTIVE: `chatgpt.js`, `portfolio.js`, `chatHistory.js`, `errorTracking.js`, `supabaseAuth.js`, `settings.js`, `alarms.js`, `contextMenu.js`, `prompt.js`, `content.js`
+  - ⚠️ DEPRECATED: `sync.js` (kept as a notes-only compatibility stub in `src/ui/sync.js` for backward compatibility)
   - ❌ REMOVED: `prompts.js`, `categories.js` (UI removed), `state.js`, `health.js`, `migration.js`, `telemetry.js`, `history.js` (superseded by chatHistory)
 - **Content Script**: `src/content.js` (ChatGPT DOM automation)
 - **UI**: `src/ui/*.js` (portfolio, history, errors, settings, results, english, navigation, pages, dom, status)
   - ❌ REMOVED: `backup.js` (obsolete - data in Supabase), `prompts.js`, `categories.js` (features removed)
 - **Message Schema**: `src/shared/messageSchema.js` (Message types for all operations)
+
+> **Note**: Recent updates added content message types for content-script events: `CONTENT_PROMPT_SENT`, `CONTENT_PROMPT_FAILED`, and `TELEMETRY_REPORT`. When adding new cross-context messages, always:
+> - Add the new constant to `MESSAGE_TYPES` in `src/shared/messageSchema.js`.
+> - Use `createMessage(type, { data })` or include `v`, `type`, `correlationId`, `timestamp`, and a `data` object.
+> - Ensure background handlers and receiving UIs expect the top-level payload fields (responses spread payload directly — use direct property access like `response.items`).
 
 ### Database (Supabase PostgreSQL)
 
@@ -184,6 +190,8 @@ if (error.message.includes('Failed to fetch')) {
 - ✅ Gọi Supabase từ Background handler (middleware pattern)
 - ❌ KHÔNG lưu data vào `chrome.storage.local` (chỉ dùng cho auth token)
 - ❌ KHÔNG lưu data vào `localStorage` trong Service Worker
+- ⚠️ **Sync Module**: `src/ui/sync.js` provides local notes storage only. All user data sync must be implemented via Supabase and background handlers.
+- ✅ **Message Schema requirement**: All cross-context messages MUST include `v` (schema version), `type` (from `MESSAGE_TYPES`), `correlationId` (unique tracing id), and `timestamp`. Use `createMessage()` / `createResponse()` helpers and add new message types to `src/shared/messageSchema.js` when necessary.
 
 **Background Handlers** (`src/background/handlers/*.js`):
 - Stateless - mỗi handler là independent function

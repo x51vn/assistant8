@@ -1,66 +1,8 @@
-// Example: How to use Firestore Sync Module
-// Location: src/ui/firebaseSync.js
+# Firestore / Firebase (REMOVED)
 
-import firebaseSync from './firebaseSync.js';
+This module and all Firebase/Firestore functionality have been completely removed from the codebase.
 
-// 1. Initialize on extension startup (background.js or popup.js)
-async function setupFirebase() {
-  try {
-    // Initialize Firebase
-    await firebaseSync.initializeFirebase();
-    
-    // Authenticate anonymously
-    await firebaseSync.authenticateFirebase();
-    
-    console.log('✅ Firebase setup complete');
-    return true;
-  } catch (err) {
-    console.error('❌ Firebase setup failed:', err);
-    return false;
-  }
-}
-
-// 2. Sync data to Firestore (call when user saves settings)
-async function backupData() {
-  const result = await firebaseSync.syncToFirestore();
-  
-  if (result.success) {
-    console.log('✅ Backup successful:', result.backupId);
-    // Show success message to user
-  } else {
-    console.error('❌ Backup failed:', result.error);
-  }
-}
-
-// 3. Restore data from Firestore
-async function restoreData(backupId = null) {
-  const result = await firebaseSync.restoreFromFirestore(backupId);
-  
-  if (result.success) {
-    console.log('✅ Restore successful, items restored:', result.keysRestored);
-    // Reload UI after restore
-  } else {
-    console.error('❌ Restore failed:', result.error);
-  }
-}
-
-// 4. List all backups
-async function showBackups() {
-  try {
-    const backups = await firebaseSync.listBackups(10);
-    
-    backups.forEach(backup => {
-      console.log(`📅 ${backup.exportDate} - ${backup.itemsCount} items (ID: ${backup.id})`);
-    });
-  } catch (err) {
-    console.error('Error listing backups:', err);
-  }
-}
-
-// 5. Enable auto-sync (every 60 minutes)
-function enableAutoSync() {
-  firebaseSync.schedulePeriodicSync(60);
-  firebaseSync.handleSyncAlarm();
+For sync functionality, use Supabase background handlers instead.
   
   console.log('✅ Auto-sync enabled');
 }

@@ -208,12 +208,15 @@ supabase.auth.onAuthStateChange((event, session) => {
   // UI can listen for this and update login state
   if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.sendMessage({
+      v: 1,
       type: 'AUTH_STATE_CHANGED',
+      correlationId: `config-auth-state-${Date.now()}`,
+      timestamp: Date.now(),
       data: {
         event,
         authenticated: !!session,
-        userId: session?.user?.id,
-      },
+        userId: session?.user?.id
+      }
     }).catch(() => {
       // Ignore if no listeners (UI not open)
     });

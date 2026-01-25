@@ -93,15 +93,8 @@ export async function handleAlarm(alarm) {
 
     // Legacy alarm support (for backward compatibility)
     // These can be removed after migration to new alarm names
-      logger.info('Auto-sync alarm - Syncing to Firebase', { correlationId, alarmName: alarm.name });
-      try {
-        const result = await syncToFirebaseHandler();
-        logger.info('Auto-sync success', { correlationId, message: result.message });
-        logger.endOperation(correlationId, 'success');
-      } catch (error) {
-        logger.error('Auto-sync error', { correlationId, error });
-        logger.endOperation(correlationId, 'error', { error });
-      }
+      // Legacy auto-sync to Firebase removed. No-op to avoid calling removed handler.
+      logger.info('Auto-sync alarm - Firebase sync removed (legacy)', { correlationId, alarmName: alarm.name });
       return;
     }
 

@@ -292,7 +292,10 @@ async function restoreSessionOnStartup() {
       // Broadcast to UI
       // ✅ CRITICAL: Catch receiving end errors gracefully
       chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-restore-${Date.now()}`,
+        timestamp: Date.now(),
         data: {
           authenticated: true,
           user: {
@@ -379,7 +382,10 @@ async function restoreSessionOnServiceWorkerStart() {
       // Broadcast to UI if it's open
       // ✅ CRITICAL: Catch receiving end errors gracefully
       chrome.runtime.sendMessage({
+        v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+        correlationId: `auth-restored-${Date.now()}`,
+        timestamp: Date.now(),
         data: {
           authenticated: true,
           event: 'SESSION_RESTORED',

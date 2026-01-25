@@ -1,28 +1,15 @@
-// Firebase sync via background script messaging
-let firebaseReady = false;
-let currentUser = null;
+// Notes management module (local storage only)
+// This module provides local notes (chrome.storage.local)
 
-// Generic message sender - helper function to avoid duplication
+// Public API for notes. All business logic uses Supabase handlers.
+
+// Messaging helper
 function sendMessage(action, payload = {}) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action, ...payload }, (response) => {
-      resolve(response);
-    });
-  });
+  return Promise.resolve(null);
 }
 
-// Auth functions
-const loginWithEmail = (email, password) => sendMessage('firebase_login', { email, password });
-const logoutFirebase = () => sendMessage('firebase_logout');
-const getCurrentUser = () => sendMessage('get_current_user');
-
-// Sync functions
-const getSyncConfig = () => sendMessage('get_sync_config').then(r => r || {});
-const saveSyncConfig = (config) => sendMessage('save_sync_config', { config });
-const syncToFirestore = () => sendMessage('sync_to_firestore');
-const restoreFromFirestore = (backupId = null) => sendMessage('restore_from_firestore', { backupId });
-const listBackups = (limit = 1) => sendMessage('list_backups', { limit }).then(r => r || []);
-const deleteBackup = (backupId) => sendMessage('delete_backup', { backupId });
+// Deprecated API placeholders have been removed
+// Use Supabase handlers for all data operations
 
 // Notes functions - One note per day model
 async function getNotes() {
@@ -67,19 +54,13 @@ async function saveOrUpdateNote(text) {
 // Deprecated - keeping for backward compatibility
 const registerWithEmail = () => { throw new Error('Register not supported'); };
 
-function schedulePeriodicSync(intervalMinutes = 60) {
-  chrome.alarms.create('firebaseSync', { periodInMinutes: intervalMinutes });
-  console.log(`[Sync] Scheduled periodic sync every ${intervalMinutes} minutes`);
+// Periodic sync - not implemented
+function schedulePeriodicSync(/* intervalMinutes = 60 */) {
+  // No-op
 }
 
 function handleSyncAlarm() {
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'firebaseSync') {
-      syncToFirestore().then(result => {
-        console.log('[Sync] Alarm sync result:', result);
-      });
-    }
-  });
+  // No-op
 }
 
 export async function setupSync(dom) {
@@ -90,40 +71,18 @@ export async function setupSync(dom) {
     syncEnabledCheckbox
   } = dom;
 
-  // Setup auth listeners
-  attachAuthListeners(syncStatus);
-  
-  // Check current auth status
-  await updateAuthStatus(syncStatus, syncNowBtn);
+  // Setup UI buttons
 
-  // Sync now button
   syncNowBtn?.addEventListener('click', async () => {
     try {
-      showStatus(syncStatus, '⏳ Syncing to Firestore...', 'info');
-      const result = await syncToFirestore();
-      if (result.success) {
-        showStatus(syncStatus, `✅ ${result.message}`, 'success');
-        await loadBackupsList();
-      } else {
-        showStatus(syncStatus, `❌ Sync failed: ${result.error}`, 'error');
-      }
+      showStatus(syncStatus, '❗ Sync feature is not available', 'info');
     } catch (err) {
-      showStatus(syncStatus, `❌ Sync error: ${err.message}`, 'error');
       console.error('[Sync] Error:', err);
     }
   });
 
-  // Revoke button (clear local config)
   revokeGoogleBtn?.addEventListener('click', async () => {
-    if (confirm('Clear sync configuration? Your Firestore backups will remain.')) {
-      try {
-        await logoutFirebase();
-        showStatus(syncStatus, '✅ Đã đăng xuất', 'success');
-        await updateAuthStatus(syncStatus, syncNowBtn);
-      } catch (err) {
-        showStatus(syncStatus, `❌ Failed: ${err.message}`, 'error');
-      }
-    }
+    showStatus(syncStatus, '❗ Feature not available', 'info');
   });
 
   // Sync enabled checkbox
@@ -135,11 +94,9 @@ export async function setupSync(dom) {
     });
 
     if (e.target.checked) {
-      schedulePeriodicSync(60); // Sync every 60 minutes
-      showStatus(syncStatus, '✅ Auto-sync enabled', 'success');
+      showStatus(syncStatus, '❗ Feature not available', 'info');
     } else {
-      chrome.alarms.clear('firebaseSync');
-      showStatus(syncStatus, '✅ Auto-sync disabled', 'success');
+      showStatus(syncStatus, '✅ Disabled', 'success');
     }
   });
 
@@ -152,38 +109,23 @@ async function initializeSyncUI() {
   const authGoogleBtn = document.getElementById('authGoogleBtn');
   const syncNowBtn = document.getElementById('syncNowBtn');
   const revokeGoogleBtn = document.getElementById('revokeGoogleBtn');
+  const backupsList = document.getElementById('backupsList');
 
   try {
-    // Check auth status
-    const config = await getSyncConfig();
-
-    if (firebaseReady) {
-      // User is authenticated
-      authGoogleBtn.style.display = 'none';
+    if (authGoogleBtn) authGoogleBtn.style.display = 'none';
+    if (syncNowBtn) {
       syncNowBtn.style.display = 'inline-block';
-      revokeGoogleBtn.style.display = 'inline-block';
-      
-      // Load backups list
-      await loadBackupsList();
+      syncNowBtn.disabled = false;
+    }
+    if (revokeGoogleBtn) revokeGoogleBtn.style.display = 'none';
 
-      // Set checkbox state
-      if (syncEnabledCheckbox) {
-        syncEnabledCheckbox.checked = config.syncEnabled === true;
-      }
-    } else {
-      // Firebase not ready
-      authGoogleBtn.style.display = 'inline-block';
-      syncNowBtn.style.display = 'none';
-      revokeGoogleBtn.style.display = 'none';
-      
-      const backupsList = document.getElementById('backupsList');
-      if (backupsList) {
-        backupsList.innerHTML = '<p style="font-size: 12px; color: #666;">Connecting to Firestore...</p>';
-      }
+    if (backupsList) {
+      backupsList.innerHTML = '<p style="font-size: 12px; color: #666;">Local notes stored in this browser.</p>';
+    }
 
-      if (syncEnabledCheckbox) {
-        syncEnabledCheckbox.checked = false;
-      }
+    if (syncEnabledCheckbox) {
+      syncEnabledCheckbox.checked = false;
+      syncEnabledCheckbox.disabled = true;
     }
   } catch (err) {
     console.error('[Sync] Init error:', err);
@@ -295,54 +237,13 @@ function attachAuthListeners(syncStatus) {
   });
 
   logoutBtn?.addEventListener('click', async () => {
-    try {
-      showAuthMessage('⏳ Đang đăng xuất...', 'info');
-      await logoutFirebase();
-      showAuthMessage('✅ Đã đăng xuất', 'success');
-      await updateAuthStatus(syncStatus, document.getElementById('syncNowBtn'));
-    } catch (err) {
-      showAuthMessage(`❌ Lỗi đăng xuất: ${err.message}`, 'error');
-    }
+    // Auth/logout behaviour removed - show info message
+    showAuthMessage('❗ Auth/Sync removed from this build', 'info');
   });
 }
 
-// Update UI based on auth status
 async function updateAuthStatus(syncStatus, syncNowBtn) {
-  try {
-    const user = await getCurrentUser();
-    currentUser = user;
-    
-    const authStatusDisplay = document.getElementById('auth-status-display');
-    const authForms = document.getElementById('auth-forms');
-
-    if (user && user.email) {
-      // User is logged in
-      firebaseReady = true;
-      if (authStatusDisplay) {
-        document.getElementById('current-user-email').textContent = user.email;
-        authStatusDisplay.style.display = 'block';
-      }
-      if (authForms) authForms.style.display = 'none';
-      if (syncNowBtn) syncNowBtn.disabled = false;
-      
-      // Load backups list
-      await loadBackupsList();
-    } else {
-      // User not logged in
-      firebaseReady = false;
-      if (authStatusDisplay) authStatusDisplay.style.display = 'none';
-      if (authForms) authForms.style.display = 'block';
-      if (syncNowBtn) syncNowBtn.disabled = true;
-      
-      // Clear backups list
-      const backupsList = document.getElementById('backupsList');
-      if (backupsList) {
-        backupsList.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">Đăng nhập để xem các bản sao lưu</p>';
-      }
-    }
-  } catch (err) {
-    console.error('[Sync] Update auth status error:', err);
-  }
+  if (syncNowBtn) syncNowBtn.disabled = false;
 }
 
 function showStatus(element, message, type) {
@@ -475,12 +376,18 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Send note to ChatGPT - reuses existing send_prompt action
+// Send note to ChatGPT - reuses existing send_prompt message
 async function askChatGPT(noteText) {
   try {
-    // Use existing send_prompt action from results.js
+    // Use SEND_PROMPT message type (schema-compliant)
     const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: 'send_prompt', prompt: noteText }, (response) => {
+      chrome.runtime.sendMessage({
+        v: 1,
+        type: 'SEND_PROMPT',
+        correlationId: `send-prompt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        data: { prompt: noteText }
+      }, (response) => {
         resolve(response);
       });
     });
