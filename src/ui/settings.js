@@ -62,8 +62,14 @@ export function setupSettings(dom) {
     });
   }
 
-  // ✅ GPT-FIX: Load ALL prompts in ONE request (batch load, not 4 separate)
-  loadAllPromptsAtOnce({
+  // ✅ GPT-FIX: Load ALL settings (master prompt + sub-prompts) in ONE request
+  loadAllSettingsAtOnce({
+    promptInput,
+    autoRunCheckbox,
+    evaluatePreviousCheckbox,
+    reviewPromptCheckbox,
+    realtimeEnabledCheckbox,
+    intervalInput,
     portfolioPromptInput,
     stockEvalPromptInput,
     teaStockPromptInput,
@@ -210,6 +216,22 @@ Provide:
     });
   });
 
+  // Load ALL settings (master prompt + sub-prompts + checkboxes) on init
+  loadAllSettingsAtOnce({
+    promptInput,
+    autoRunCheckbox,
+    evaluatePreviousCheckbox,
+    reviewPromptCheckbox,
+    realtimeEnabledCheckbox,
+    intervalInput,
+    portfolioPromptInput,
+    stockEvalPromptInput,
+    teaStockPromptInput,
+    contextMenuPromptInput,
+    englishPromptInput
+  });
+}
+
 async function loadUserInfo() {
   const userEmailEl = document.getElementById('userEmail');
   if (!userEmailEl) return;
@@ -228,51 +250,20 @@ async function loadUserInfo() {
   }
 }
 
-// ✅ Load settings from Supabase on init
-async function loadSettingsFromSupabase(dom) {
-  const { promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput } = dom;
-  
-  try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SETTINGS_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
-    
-    if (response.errorCode) {
-      console.warn('[Settings] Failed to load settings:', response.errorMessage);
-      return;
-    }
-    
-    // ✅ createResponse spreads config directly
-    const config = response.config || {};
-    
-    console.log('[Settings] Loaded config from Supabase:', config);
-    
-    // Populate settings UI
-    if (promptInput && config.prompt !== undefined) promptInput.value = config.prompt;
-    if (autoRunCheckbox && config.autoRun !== undefined) autoRunCheckbox.checked = config.autoRun;
-    if (evaluatePreviousCheckbox && config.evaluatePrevious !== undefined) evaluatePreviousCheckbox.checked = config.evaluatePrevious;
-    if (reviewPromptCheckbox && config.reviewPrompt !== undefined) reviewPromptCheckbox.checked = config.reviewPrompt;
-    if (realtimeEnabledCheckbox && config.realtimeEnabled !== undefined) realtimeEnabledCheckbox.checked = config.realtimeEnabled;
-    if (intervalInput && config.interval !== undefined) intervalInput.value = config.interval;
-    
-  } catch (error) {
-    console.error('[Settings] Load settings error:', error);
-  }
-}
-
-  // Load settings when page initializes
-  loadSettingsFromSupabase(dom);
-}
-
-// ✅ GPT-FIX: Load ALL prompts in ONE Supabase request (batch load)
-async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
-  if (!portfolioPromptInput && !stockEvalPromptInput && !teaStockPromptInput && !contextMenuPromptInput && !englishPromptInput) {
-    return;
-  }
-
+// ✅ GPT-FIX: Load ALL settings (master prompt + sub-prompts + checkboxes) in ONE Supabase request
+async function loadAllSettingsAtOnce({
+  promptInput,
+  autoRunCheckbox,
+  evaluatePreviousCheckbox,
+  reviewPromptCheckbox,
+  realtimeEnabledCheckbox,
+  intervalInput,
+  portfolioPromptInput,
+  stockEvalPromptInput,
+  teaStockPromptInput,
+  contextMenuPromptInput,
+  englishPromptInput
+}) {
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
@@ -287,24 +278,47 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
     console.log('🔍 [Settings] response.config:', response.config);
     
     if (response.errorCode) {
-      console.warn('[Settings] Failed to load prompts from Supabase:', response.errorMessage);
-      setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+      console.warn('[Settings] Failed to load settings from Supabase:', response.errorMessage);
+      setDefaultValues({
+        promptInput,
+        portfolioPromptInput,
+        stockEvalPromptInput,
+        teaStockPromptInput,
+        contextMenuPromptInput,
+        englishPromptInput
+      });
       return;
     }
     
     // ✅ createResponse spreads config directly at top-level, NOT nested in .data
-    const prompts = (response.config?.prompts) || {};
+    const config = response.config || {};
+    const prompts = config.prompts || {};
     
-    console.log('[Settings] Loaded prompts from Supabase:', {
+    console.log('[Settings] Loaded config from Supabase:', {
+      hasPrompt: !!config.prompt,
+      promptLength: config.prompt?.length || 0,
       portfolioLength: prompts.portfolio?.length || 0,
       stockEvalLength: prompts.stockEval?.length || 0,
       teaStockLength: prompts.teaStock?.length || 0,
       contextMenuLength: prompts.contextMenu?.length || 0,
       englishLength: prompts.english?.length || 0,
-      hasPrompts: !!prompts.portfolio || !!prompts.stockEval || !!prompts.teaStock || !!prompts.contextMenu || !!prompts.english
+      autoRun: config.autoRun,
+      interval: config.interval
     });
     
-    // ✅ Populate all prompts from single response
+    // ✅ Populate master prompt (MAIN PROMPT)
+    if (promptInput && config.prompt !== undefined) {
+      console.log('🔍 [Settings] Setting master prompt, length:', config.prompt?.length || 0);
+      promptInput.value = config.prompt || '';
+      // Trigger reflow for textarea auto-height
+      setTimeout(() => {
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.max(200, promptInput.scrollHeight) + 'px';
+        console.log('✅ [Settings] Master prompt textarea height set to:', promptInput.style.height);
+      }, 0);
+    }
+    
+    // ✅ Populate sub-prompts
     // Portfolio prompt - handle large prompt with auto-height
     if (portfolioPromptInput) {
       const value = prompts.portfolio || '';
@@ -342,14 +356,51 @@ async function loadAllPromptsAtOnce({ portfolioPromptInput, stockEvalPromptInput
       englishPromptInput.value = value;
     }
     
+    // ✅ Populate checkboxes and other settings
+    if (autoRunCheckbox && config.autoRun !== undefined) {
+      autoRunCheckbox.checked = config.autoRun;
+      console.log('[Settings] Set autoRun to:', config.autoRun);
+    }
+    if (evaluatePreviousCheckbox && config.evaluatePrevious !== undefined) {
+      evaluatePreviousCheckbox.checked = config.evaluatePrevious;
+      console.log('[Settings] Set evaluatePrevious to:', config.evaluatePrevious);
+    }
+    if (reviewPromptCheckbox && config.reviewPrompt !== undefined) {
+      reviewPromptCheckbox.checked = config.reviewPrompt;
+      console.log('[Settings] Set reviewPrompt to:', config.reviewPrompt);
+    }
+    if (realtimeEnabledCheckbox && config.realtimeEnabled !== undefined) {
+      realtimeEnabledCheckbox.checked = config.realtimeEnabled;
+      console.log('[Settings] Set realtimeEnabled to:', config.realtimeEnabled);
+    }
+    if (intervalInput && config.interval !== undefined) {
+      intervalInput.value = config.interval;
+      console.log('[Settings] Set interval to:', config.interval);
+    }
+    
   } catch (error) {
-    console.error('[Settings] Load prompts error:', error);
-    setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput });
+    console.error('[Settings] Load all settings error:', error);
+    setDefaultValues({
+      promptInput,
+      portfolioPromptInput,
+      stockEvalPromptInput,
+      teaStockPromptInput,
+      contextMenuPromptInput,
+      englishPromptInput
+    });
   }
 }
 
 // Helper to set default values
-function setPromptDefaultValues({ portfolioPromptInput, stockEvalPromptInput, teaStockPromptInput, contextMenuPromptInput, englishPromptInput }) {
+function setDefaultValues({
+  promptInput,
+  portfolioPromptInput,
+  stockEvalPromptInput,
+  teaStockPromptInput,
+  contextMenuPromptInput,
+  englishPromptInput
+}) {
+  if (promptInput) promptInput.value = '';
   if (portfolioPromptInput) portfolioPromptInput.value = '';
   if (stockEvalPromptInput) stockEvalPromptInput.value = 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
   if (teaStockPromptInput) teaStockPromptInput.value = '';
