@@ -254,13 +254,14 @@ label input[type="checkbox"] {
 
 .button-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 20px;
 }
 
 .button-group button {
-  flex: 1 1 120px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .button-group .primary-btn,
