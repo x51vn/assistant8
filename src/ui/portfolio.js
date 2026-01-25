@@ -8,6 +8,13 @@ import { AdvancedMarketDataClient } from '../market-data/advanced-client.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 
+// ✅ Import loadAndDisplayHistory from results to reload history after HISTORY_UPDATE
+let resultsModule = null;
+export function setResultsModule(module) {
+  resultsModule = module;
+  console.log('[Portfolio] Results module set for history reload');
+}
+
 // ✅ GPT-FIX: Message-based Portfolio Operations (Supabase-backed)
 /**
  * ✅ Get portfolio from Supabase via background handler
@@ -91,6 +98,7 @@ async function addStockToSupabase(symbol, quantity, avgPrice) {
 
 /**
  * Update stock in Supabase portfolio
+ * ✅ FIX-3: Use symbol instead of id to avoid UUID type errors
  */
 async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
   try {
@@ -99,10 +107,17 @@ async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
       type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
-      data: { id, updates: { symbol: symbol.toUpperCase(), quantity: parseFloat(quantity), avg_price: parseFloat(avgPrice) } }
+      data: { 
+        symbol: symbol.toUpperCase(),  // ✅ Send symbol, not id
+        updates: { quantity: parseFloat(quantity), avg_price: parseFloat(avgPrice) } 
+      }
     });
     
     if (response.errorCode) {
+      // Handle invalid id format error
+      if (response.errorMessage && response.errorMessage.includes('ID')) {
+        throw new Error(`Lỗi định dạng: Vui lòng sử dụng mã cổ phiếu (${symbol}) để cập nhật. ${response.errorMessage}`);
+      }
       throw new Error(response.errorMessage || 'Failed to update stock');
     }
     
@@ -116,22 +131,27 @@ async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
 
 /**
  * Remove stock from Supabase portfolio
+ * ✅ FIX-3: Use symbol instead of id to avoid UUID type errors
  */
-async function removeStockFromSupabase(id) {
+async function removeStockFromSupabase(id, symbol) {
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
       type: MESSAGE_TYPES.PORTFOLIO_REMOVE,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
-      data: { id }
+      data: { symbol: symbol || id }  // ✅ Use symbol if provided, fallback to id
     });
     
     if (response.errorCode) {
+      // Handle invalid id format error
+      if (response.errorMessage && response.errorMessage.includes('ID')) {
+        throw new Error(`Lỗi định dạng: Vui lòng sử dụng mã cổ phiếu (${symbol}) để xóa. ${response.errorMessage}`);
+      }
       throw new Error(response.errorMessage || 'Failed to remove stock');
     }
     
-    // 🔧 FIX: Handler returns id at top-level (spread operator), not in response.data
+    // 🔧 FIX: Handler returns identifier at top-level (spread operator), not in response.data
     return response;
   } catch (error) {
     console.error('[Portfolio] Remove stock error:', error);
@@ -440,10 +460,13 @@ export async function loadPortfolioUI(table) {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = parseInt(e.target.closest('button').dataset.id);
+      // Get stock code from the row
+      const row = e.target.closest('tr');
+      const code = row.querySelector('td:nth-child(1)')?.textContent?.trim();
       // Close menu
       e.target.closest('.portfolio-actions-menu').classList.remove('open');
       if (confirm('Xác nhận xóa mã này?')) {
-        await deleteStock(id);
+        await deleteStock(id, code);
         await loadPortfolioUI(table);
       }
     });
@@ -646,20 +669,21 @@ export async function updateStock(id, code, entry, quantity) {
   console.log('[Portfolio] Stock updated in Supabase:', code);
 }
 
-export async function deleteStock(id) {
+export async function deleteStock(id, symbol) {
   // ✅ GPT-FIX: Use Supabase via background handler
-  await removeStockFromSupabase(id);
+  // ✅ FIX-3: Pass symbol instead of id
+  await removeStockFromSupabase(id, symbol);
   console.log('[Portfolio] Stock removed from Supabase');
 }
 
 export async function evaluatePortfolio(prompt) {
   const portfolio = await getPortfolio();
-  
-  // Build portfolio string
+
+  // Build portfolio string (same as before)
   let portfolioText = '## DANH MỤC HIỆN CÓ\n\n';
   portfolioText += '| Mã | Entry | Current | Khối lượng | P&L |\n';
   portfolioText += '|----|-------|---------|-----------|-----|\n';
-  
+
   let totalEntry = 0;
   let totalCurrent = 0;
   portfolio.forEach(stock => {
@@ -667,13 +691,13 @@ export async function evaluatePortfolio(prompt) {
     const currentValue = (stock.currentPrice || stock.entry) * stock.quantity;
     const pl = currentValue - entryValue;
     const plPercent = entryValue > 0 ? ((pl / entryValue) * 100).toFixed(2) : 0;
-    
+
     totalEntry += entryValue;
     totalCurrent += currentValue;
-    
+
     portfolioText += `| ${stock.code} | ${stock.entry} | ${stock.currentPrice || '-'} | ${stock.quantity} | ${pl.toFixed(2)} (${plPercent}%) |\n`;
   });
-  
+
   const totalPL = totalCurrent - totalEntry;
   const totalPLPercent = totalEntry > 0 ? ((totalPL / totalEntry) * 100).toFixed(2) : 0;
   portfolioText += `\n**Tổng P&L: ${totalPL.toFixed(2)} (${totalPLPercent}%)**\n\n`;
@@ -681,10 +705,164 @@ export async function evaluatePortfolio(prompt) {
   // Combine with prompt
   const fullPrompt = `${portfolioText}\n## YÊU CẦU\n${prompt}`;
 
-  console.log('[Portfolio] Evaluate request:', fullPrompt);
+  console.log('[Portfolio] Evaluate request (using SEND_PROMPT flow):', fullPrompt);
 
-  // Send with history tracking
-  return await sendPromptWithHistory(fullPrompt, 'Portfolio Evaluation', true);
+  try {
+    // Send prompt to background (same as runBtn)
+    const message = {
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: fullPrompt,
+        options: {
+          createNewChat: true,
+          focusTab: true
+        }
+      }
+    };
+
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(message, (resp) => resolve(resp));
+    });
+
+    if (chrome.runtime.lastError) {
+      console.error('[Portfolio] Send error:', chrome.runtime.lastError.message);
+      return { success: false, error: chrome.runtime.lastError.message };
+    }
+
+    if (!response || response.type === MESSAGE_TYPES.ERROR) {
+      const errorMsg = response?.errorMessage || 'Unknown error';
+      console.error('[Portfolio] Failed to send prompt:', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+    // Extract chatId/chatUrl
+    let chatIdToSave = response.chatId || null;
+    let chatUrlToSave = response.chatUrl || null;
+
+    if (!chatIdToSave && chatUrlToSave) {
+      chatIdToSave = extractChatIdFromUrl(chatUrlToSave);
+    }
+
+    // If still no chatId, attempt lightweight polling to get chatUrl via CHATGPT_GET_OUTPUT
+    if (!chatIdToSave) {
+      for (let i = 0; i < 10 && !chatIdToSave; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        const pollMsg = {
+          v: 1,
+          type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          payload: { wait: false }
+        };
+        const pollResp = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(pollMsg, (resp) => resolve(resp));
+        });
+        if (pollResp?.chatUrl) {
+          chatUrlToSave = pollResp.chatUrl;
+          chatIdToSave = pollResp.chatId || extractChatIdFromUrl(chatUrlToSave);
+          break;
+        }
+      }
+    }
+
+    // If we have a chatUrl/chatId, save to Supabase history via background
+    if (chatUrlToSave || chatIdToSave) {
+      const historyData = {
+        chat_id: chatIdToSave || null,
+        chat_url: chatUrlToSave || null,
+        prompt: fullPrompt,
+        response: '[Đang chờ ChatGPT trả lời...]',
+        timestamp: Date.now()
+      };
+
+      const historyResp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          v: 1,
+          type: MESSAGE_TYPES.HISTORY_ADD,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          data: historyData
+        }, (resp) => resolve(resp));
+      });
+
+      const historyId = historyResp?.history?.id || null;
+
+      // Start polling for response
+      const maxPolls = 60; // 2 minutes (60 * 2s)
+      let pollCount = 0;
+
+      const intervalId = setInterval(async () => {
+        pollCount++;
+        if (pollCount >= maxPolls) {
+          clearInterval(intervalId);
+          console.warn('[Portfolio] Max polls reached, stopping');
+          return;
+        }
+
+        try {
+          const outMsg = {
+            v: 1,
+            type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+            correlationId: generateCorrelationId(),
+            timestamp: Date.now(),
+            payload: {
+              chatId: chatIdToSave,
+              options: { wait: true, timeoutMs: 5000, stableMs: 2000 }
+            }
+          };
+
+          const outResp = await new Promise((resolve) => {
+            chrome.runtime.sendMessage(outMsg, (resp) => resolve(resp));
+          });
+
+          if (outResp && outResp.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY) {
+            const responseText = outResp.response || outResp.output || '';
+            if (responseText && responseText.length > 10 && responseText !== '[Đang chờ ChatGPT trả lời...]') {
+              // Save to Supabase via HISTORY_UPDATE
+              const updateData = { response: responseText, chat_url: outResp.chatUrl || chatUrlToSave };
+              if (historyId) updateData.id = historyId; else updateData.chat_id = chatIdToSave;
+
+              const updateResp = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                  v: 1,
+                  type: MESSAGE_TYPES.HISTORY_UPDATE,
+                  correlationId: generateCorrelationId(),
+                  timestamp: Date.now(),
+                  data: updateData
+                }, (resp) => resolve(resp));
+              });
+
+              console.log('[Portfolio] HISTORY_UPDATE response:', updateResp);
+
+              // ✅ Auto-reload history in Results tab (if results module is set)
+              if (resultsModule && resultsModule.loadAndDisplayHistory) {
+                try {
+                  await resultsModule.loadAndDisplayHistory();
+                  console.log('[Portfolio] Results history reloaded after HISTORY_UPDATE');
+                } catch (err) {
+                  console.warn('[Portfolio] Failed to reload results history:', err);
+                }
+              }
+
+              clearInterval(intervalId);
+            }
+          }
+        } catch (err) {
+          console.error('[Portfolio] Polling error:', err);
+        }
+      }, 2000);
+    } else {
+      console.warn('[Portfolio] Could not obtain chatId/chatUrl to save history');
+    }
+
+    return { success: true, chatId: chatIdToSave, chatUrl: chatUrlToSave };
+  } catch (err) {
+    console.error('[Portfolio] evaluatePortfolio error:', err);
+    return { success: false, error: err.message };
+  }
 }
 
 // Price update functions
@@ -816,19 +994,20 @@ async function startRealtimeUpdates(portfolioTable) {
             const portfolio = await getPortfolio();
             const stockInPortfolio = portfolio.find(s => s.code === symbol);
             
-            if (stockInPortfolio && stockInPortfolio.id) {
+            if (stockInPortfolio) {
               // Update price in memory
               stockInPortfolio.currentPrice = data.price;
               stockInPortfolio.priceUpdatedAt = new Date().toISOString();
               
               // ✅ Save to Supabase via PORTFOLIO_UPDATE handler
+              // ✅ FIX-3: Use symbol instead of id
               await chrome.runtime.sendMessage({
                 v: 1,
                 type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
                 correlationId: generateCorrelationId(),
                 timestamp: Date.now(),
                 data: {
-                  id: stockInPortfolio.id,
+                  symbol: symbol,  // ✅ Use symbol, not id
                   updates: {
                     current_price: data.price
                   }
@@ -1322,20 +1501,21 @@ async function manualRefreshPrices(portfolioTable) {
     results.forEach(result => {
       if (result.data && result.data.price) {
         const stock = portfolio.find(s => s.code === result.code);
-        if (stock && stock.id) {
-          console.log(`[Portfolio] Updating ${result.code}: price=${result.data.price}, stockId=${stock.id}`);
+        if (stock) {
+          console.log(`[Portfolio] Updating ${result.code}: price=${result.data.price}`);
           
           stock.currentPrice = result.data.price;
           stock.priceUpdatedAt = new Date().toISOString();
           
           // ✅ Save to Supabase via PORTFOLIO_UPDATE handler
+          // ✅ FIX-3: Use symbol instead of id
           const updatePromise = chrome.runtime.sendMessage({
             v: 1,
             type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
             correlationId: generateCorrelationId(),
             timestamp: Date.now(),
             data: {
-              id: stock.id,
+              symbol: result.code,  // ✅ Use symbol, not id
               updates: {
                 current_price: result.data.price
               }
@@ -1350,7 +1530,7 @@ async function manualRefreshPrices(portfolioTable) {
           updatePromises.push(updatePromise);
           updated++;
         } else {
-          console.warn(`[Portfolio] Stock ${result.code} not found in portfolio or missing ID:`, stock);
+          console.warn(`[Portfolio] Stock ${result.code} not found in portfolio:`, stock);
         }
       } else if (result.error) {
         console.warn(`[Portfolio] Failed to fetch ${result.code}:`, result.error.message);

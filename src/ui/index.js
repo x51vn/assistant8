@@ -5,7 +5,7 @@ import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { setupSettings } from './settings.js';
 import { setupErrors } from './errors.js';
-import { initPortfolio, refreshPortfolioOnLogin, refreshPortfolioUI } from './portfolio.js';
+import { initPortfolio, refreshPortfolioOnLogin, refreshPortfolioUI, setResultsModule } from './portfolio.js';
 import { initEnglish } from './english.js';
 import { checkAuthStatus, renderLoginScreen, hideLoginScreen, listenAuthStateChanges } from './auth.js';
 let authContainer = null;
@@ -157,9 +157,15 @@ function initializeApp() {
 
   setupNavigation(dom);
 
-  setupResults(dom);
+  const resultsModule = setupResults(dom);
   setupSettings(dom);
   setupErrors(dom);
+  
+  // ✅ Pass results module to portfolio for history reload after HISTORY_UPDATE
+  if (resultsModule) {
+    setResultsModule(resultsModule);
+  }
+  
   initPortfolio({
     portfolioPage: dom.portfolioPage,
     portfolioBtn: dom.portfolioBtn,

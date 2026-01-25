@@ -16,6 +16,15 @@ import { fetchStockPricesBatch } from '../utils/ssiPriceFetcher.js';
 const logger = createLogger('Handlers/Portfolio');
 
 /**
+ * Validate UUID format
+ */
+function isValidUUID(uuid) {
+  if (!uuid || typeof uuid !== 'string') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+/**
  * Validate portfolio entry data
  */
 function validatePortfolioEntry(symbol, quantity, avgPrice) {
@@ -174,7 +183,8 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_ADD, async (message) => {
 
 /**
  * Handle PORTFOLIO_UPDATE
- * Update existing portfolio item
+ * Update existing portfolio item by SYMBOL (not id)
+ * ✅ FIX-3: Use symbol instead of UUID id to avoid type errors
  */
 registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
   const correlationId = message.correlationId;
@@ -184,13 +194,24 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     // Require authentication
     const userId = await requireAuth(message);
     
-    const { id, updates } = message.data || {};
+    // Support both 'symbol' and legacy 'id' for backward compatibility
+    const { symbol, id, updates } = message.data || {};
+    const identifier = symbol || id;
     
-    if (!id) {
+    if (!identifier) {
       return createErrorResponse(
         message,
         ERROR_CODES.INVALID_INPUT,
-        'ID cổ phiếu là bắt buộc'
+        'Mã cổ phiếu (symbol) hoặc ID là bắt buộc'
+      );
+    }
+    
+    // If id is provided and looks like a number, reject it (avoid UUID type error)
+    if (id && !isValidUUID(id) && !isNaN(Number(id))) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        `ID không hợp lệ (${id}). Vui lòng sử dụng mã cổ phiếu thay vì ID số.`
       );
     }
     
@@ -205,31 +226,40 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     if (updates.current_price !== undefined) updateData.current_price = Number(updates.current_price);
     
     updateData.updated_at = new Date().toISOString();
-    updateData.timestamp = Date.now();  // ✅ FIX: Add timestamp for audit trail
+    updateData.timestamp = Date.now();
     
     // Update in Supabase
     const item = await supabaseWithRetry(
       async () => {
-        const { data, error } = await supabase
+        // If identifier is UUID format, update by id; otherwise update by symbol
+        let query = supabase
           .from('portfolio')
           .update(updateData)
-          .eq('id', id)
-          .eq('user_id', userId) // Security: only update own items
-          .select()
-          .single();
+          .eq('user_id', userId); // Security: only update own items
+        
+        if (isValidUUID(identifier)) {
+          query = query.eq('id', identifier);
+          logger.debug('Updating portfolio by UUID id', { correlationId, id: identifier });
+        } else {
+          query = query.eq('symbol', identifier.toUpperCase());
+          logger.debug('Updating portfolio by symbol', { correlationId, symbol: identifier });
+        }
+        
+        const { data, error } = await query.select().single();
         
         if (error) throw error;
-        if (!data) throw new Error('Không tìm thấy cổ phiếu');
+        if (!data) throw new Error(`Không tìm thấy cổ phiếu: ${identifier}`);
         
         return data;
       },
       {
         operationName: 'updatePortfolio',
-        correlationId
+        correlationId,
+        maxRetries: 3
       }
     );
     
-    logger.info('Portfolio item updated', { correlationId, id });
+    logger.info('Portfolio item updated', { correlationId, identifier, symbol: item.symbol });
     
     return createResponse(message, MESSAGE_TYPES.PORTFOLIO_UPDATED, {
       success: true,
@@ -241,6 +271,16 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     if (error.errorCode) return error;
     
     logger.error('Portfolio update failed', { correlationId, error: error.message });
+    
+    // Map Supabase errors to user-friendly messages
+    if (error.message.includes('invalid input syntax for type uuid')) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        'ID không hợp lệ. Vui lòng sử dụng mã cổ phiếu (ví dụ: VNM) thay vì số ID.'
+      );
+    }
+    
     return createErrorResponse(
       message,
       ERROR_CODES.SUPABASE_ERROR,
@@ -252,7 +292,8 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
 
 /**
  * Handle PORTFOLIO_REMOVE
- * Delete portfolio item
+ * Delete portfolio item by SYMBOL (not id)
+ * ✅ FIX-3: Use symbol instead of UUID id to avoid type errors
  */
 registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
   const correlationId = message.correlationId;
@@ -262,38 +303,60 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
     // Require authentication
     const userId = await requireAuth(message);
     
-    const { id } = message.data || {};
+    // Support both 'symbol' and legacy 'id' for backward compatibility
+    const { symbol, id } = message.data || {};
+    const identifier = symbol || id;
     
-    if (!id) {
+    if (!identifier) {
       return createErrorResponse(
         message,
         ERROR_CODES.INVALID_INPUT,
-        'ID cổ phiếu là bắt buộc'
+        'Mã cổ phiếu (symbol) hoặc ID là bắt buộc'
+      );
+    }
+    
+    // If id is provided and looks like a number, reject it (avoid UUID type error)
+    if (id && !isValidUUID(id) && !isNaN(Number(id))) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        `ID không hợp lệ (${id}). Vui lòng sử dụng mã cổ phiếu thay vì ID số.`
       );
     }
     
     // Delete from Supabase
     await supabaseWithRetry(
       async () => {
-        const { error } = await supabase
+        // If identifier is UUID format, delete by id; otherwise delete by symbol
+        let query = supabase
           .from('portfolio')
           .delete()
-          .eq('id', id)
           .eq('user_id', userId); // Security: only delete own items
+        
+        if (isValidUUID(identifier)) {
+          query = query.eq('id', identifier);
+          logger.debug('Deleting portfolio by UUID id', { correlationId, id: identifier });
+        } else {
+          query = query.eq('symbol', identifier.toUpperCase());
+          logger.debug('Deleting portfolio by symbol', { correlationId, symbol: identifier });
+        }
+        
+        const { error } = await query;
         
         if (error) throw error;
       },
       {
         operationName: 'removePortfolio',
-        correlationId
+        correlationId,
+        maxRetries: 3
       }
     );
     
-    logger.info('Portfolio item removed', { correlationId, id });
+    logger.info('Portfolio item removed', { correlationId, identifier });
     
     return createResponse(message, MESSAGE_TYPES.PORTFOLIO_REMOVED, {
       success: true,
-      id
+      identifier
     });
     
   } catch (error) {
@@ -301,6 +364,16 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
     if (error.errorCode) return error;
     
     logger.error('Portfolio remove failed', { correlationId, error: error.message });
+    
+    // Map Supabase errors to user-friendly messages
+    if (error.message.includes('invalid input syntax for type uuid')) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        'ID không hợp lệ. Vui lòng sử dụng mã cổ phiếu (ví dụ: VNM) thay vì số ID.'
+      );
+    }
+    
     return createErrorResponse(
       message,
       ERROR_CODES.SUPABASE_ERROR,

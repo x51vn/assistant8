@@ -151,9 +151,6 @@ export function setupResults(dom) {
     }
   }
 
-  // ✅ NEW: Auto-load history on init
-  loadAndDisplayHistory();
-
   runBtn?.addEventListener('click', async () => {
     console.log('[Results] Run button clicked');
     
@@ -169,8 +166,7 @@ export function setupResults(dom) {
     const promptStr = typeof prompt === 'string' ? prompt : String(prompt);
     console.log('[Results] Prompt to send:', promptStr.substring(0, 100) + '...');
     
-    // Show stop button, hide run button
-    if (runBtn) runBtn.style.display = 'none';
+    // Show stop button, do NOT hide run button
     if (stopBtn) stopBtn.style.display = '';
 
     const message = {
@@ -494,4 +490,10 @@ export function setupResults(dom) {
       }
     }, 2000); // Poll every 2 seconds
   }
+
+  // ✅ NEW: Auto-load history on init
+  loadAndDisplayHistory();
+
+  // ✅ EXPORT: loadAndDisplayHistory for portfolio to reload after HISTORY_UPDATE
+  return { loadAndDisplayHistory };
 }
