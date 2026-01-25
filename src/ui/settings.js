@@ -1,6 +1,5 @@
 import { setActivePage } from './pages.js';
 import { showStatus } from './status.js';
-import { loadSettings } from './storage.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { logout, checkAuthStatus } from './auth.js';

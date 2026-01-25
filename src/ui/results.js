@@ -182,7 +182,10 @@ export function setupResults(dom) {
       timestamp: Date.now(),
     });
 
-    const prompt = settingsResponse.data?.config?.prompt || "Xin chào!";
+    // ✅ NORMALIZED: Response payload is spread at top-level (not nested under .data)
+    // Get master prompt from config.prompts.master (new) or fallback to default
+    const config = settingsResponse.config || {};
+    const prompt = config.prompts?.master || config.prompt || "Xin chào!";
     const promptStr = typeof prompt === "string" ? prompt : String(prompt);
     console.log(
       "[Results] Prompt to send:",

@@ -1,5 +1,4 @@
 import { setActivePage } from './pages.js';
-import { loadSettings } from './storage.js';
 import { refreshPortfolioUI } from './portfolio.js';
 
 export function setupNavigation(dom) {
@@ -38,6 +37,7 @@ export function setupNavigation(dom) {
 
   settingsBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'settings' });
-    loadSettings({ promptInput, autoRunCheckbox, evaluatePreviousCheckbox, reviewPromptCheckbox, realtimeEnabledCheckbox, intervalInput });
+    // ✅ Unified settings loader: src/ui/settings.js::loadAllSettingsAtOnce is called on settings page init
+    // setupSettings() already calls loadAllSettingsAtOnce() on page load; no need to load again here
   });
 }
