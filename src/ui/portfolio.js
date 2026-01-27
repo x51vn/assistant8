@@ -340,50 +340,7 @@ export async function initPortfolio({
     }
   });
 
-  // Tea stock button - sends tea stock prompt to ChatGPT
-  teaStockBtn?.addEventListener("click", async () => {
-    const prompt = teaStockPromptInput?.value.trim();
-    if (!prompt) {
-      alert('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
-      return;
-    }
-
-    try {
-      teaStockBtn.disabled = true;
-      teaStockBtn.innerHTML = '⏳ Processing...';
-      
-      // Send prompt to ChatGPT via background using modern message format
-      const message = {
-        v: 1,
-        type: MESSAGE_TYPES.SEND_PROMPT,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        payload: {
-          prompt: prompt,
-          options: {
-            createNewChat: true,
-            focusTab: true
-          }
-        }
-      };
-
-      const response = await chrome.runtime.sendMessage(message);
-
-      if (response && response.type !== MESSAGE_TYPES.ERROR) {
-        console.log("[Portfolio] Tea stock prompt sent to ChatGPT", response);
-      } else {
-        console.error("[Portfolio] Failed to send tea stock prompt:", response);
-        alert("Lỗi gửi prompt. Vui lòng mở tab ChatGPT.");
-      }
-    } catch (err) {
-      console.error("[Portfolio] Tea stock error:", err);
-      alert("Lỗi: " + err.message);
-    } finally {
-      // Reset button state
-      teaStockBtn.disabled = false;
-      teaStockBtn.innerHTML = 'Tìm cổ phiếu trà đá';
-    }
-  });
+  // ✅ REMOVED: Duplicate teaStockBtn listener (kept sendPromptWithHistory version above)
 
   // Modal close buttons
   const portfolioModal = document.getElementById("portfolioModal");
