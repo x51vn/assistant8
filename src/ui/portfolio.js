@@ -423,11 +423,14 @@ export async function loadPortfolioUI(table) {
   const summaryEl = document.getElementById("portfolioSummary");
   if (summaryEl && portfolio.some((s) => s.currentPrice)) {
     summaryEl.style.display = "block";
+    
+    // Calculate NAV = Current Value of stocks + CASH
+    const cashItem = portfolio.find(s => s.code === 'CASH');
+    const cashAmount = cashItem ? cashItem.quantity : 0;
+    const totalNAV = portfolioSummary.totalCurrentValue + cashAmount;
+    
     // Use short formatting for summary values (e.g., 200000000 -> 200M)
-    // NAV = Current Value (includes stocks + CASH if any)
-    document.getElementById("totalNAV").textContent = formatShortNumber(
-      portfolioSummary.totalCurrentValue,
-    );
+    document.getElementById("totalNAV").textContent = formatShortNumber(totalNAV);
     document.getElementById("totalEntry").textContent = formatShortNumber(
       portfolioSummary.totalEntryValue,
     );
