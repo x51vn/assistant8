@@ -1,5 +1,19 @@
 /* Styles for ChatGPT Extension */
 
+/**
+ * GPT-048: CSS Scoping & Style Organization
+ * 
+ * This stylesheet maintains both legacy DOM styles and new Preact component styles.
+ * To prevent style conflicts between legacy and Preact UI:
+ * 
+ * 1. Legacy DOM pages are scoped to their #pageId selectors (#portfolioPage, #resultsPage, etc.)
+ * 2. Preact components inherit global form/button styles but override via specific selectors
+ * 3. Header (.nav-buttons) is explicitly scoped to avoid button rule conflicts
+ * 4. Both UIs can coexist during migration without visual regressions
+ * 
+ * See docs/ARCHITECTURE.md GPT-048 for full CSS migration strategy.
+ */
+
 * {
   margin: 0;
   padding: 0;

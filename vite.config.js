@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import preact from '@preact/preset-vite';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
@@ -123,6 +124,7 @@ function copyExtensionStatic() {
 
 export default defineConfig({
   plugins: [
+    preact(), // GPT-039: Preact preset for JSX support
     validateEnvPlugin(), // X51LABS-130: Validate env vars before build
     copyExtensionStatic()
   ],
@@ -136,7 +138,8 @@ export default defineConfig({
       input: {
         background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
-        ui: path.resolve(__dirname, 'src/ui/index.js'),
+        app: path.resolve(__dirname, 'src/extension/app.jsx'), // GPT-040: Preact app entry
+        auth: path.resolve(__dirname, 'src/extension/Auth.jsx'), // GPT-047: Auth gate entry
       },
       output: {
         entryFileNames: '[name].js',
