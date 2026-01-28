@@ -479,14 +479,14 @@ export async function loadPortfolioUI(table) {
     } else {
       const pl = calculateStockPL(stock);
       const plDisplay = pl
-        ? `<span class="${getPLClass(pl.pl)}">${formatCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
+        ? `<span class="${getPLClass(pl.pl)}">${formatShortNumber(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
         : "-";
 
       row.innerHTML = `
         <td>${escapeHtml(stock.code)}</td>
-        <td>${stock.entry}</td>
-        <td>${stock.currentPrice || "-"}</td>
-        <td>${stock.quantity}</td>
+        <td>${formatShortNumber(stock.entry)}</td>
+        <td>${stock.currentPrice ? formatShortNumber(stock.currentPrice) : "-"}</td>
+        <td>${formatShortNumber(stock.quantity)}</td>
         <td>${plDisplay}</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
