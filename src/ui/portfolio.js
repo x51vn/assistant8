@@ -464,7 +464,7 @@ export async function loadPortfolioUI(table) {
         <td>${escapeHtml(stock.code)}</td>
         <td>-</td>
         <td>-</td>
-        <td>${stock.quantity.toFixed(2)}</td>
+        <td>${formatShortNumber(stock.quantity)}</td>
         <td>-</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
