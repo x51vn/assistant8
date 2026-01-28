@@ -170,6 +170,12 @@ export function formatCurrency(value) {
   }).format(value);
 }
 
+// Backwards-compatible compact currency formatter can be used by UI
+import { formatCompactCurrency as _formatCompactCurrency } from '../utils/numberFormat.js';
+export function formatCompactCurrency(value, decimals = 2) {
+  return _formatCompactCurrency(value, decimals, 'vi-VN', 'VND');
+}
+
 export function formatPercent(value) {
   const sign = value >= 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;

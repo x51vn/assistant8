@@ -10,6 +10,7 @@ import {
   formatPercent,
   getPLClass,
 } from "./portfolioPL.js";
+import { formatCompactNumber, formatCompactCurrency } from "../utils/numberFormat.js";
 import { AdvancedMarketDataClient } from "../market-data/advanced-client.js";
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
@@ -461,7 +462,7 @@ export async function loadPortfolioUI(table) {
         <td>${escapeHtml(stock.code)}</td>
         <td>-</td>
         <td>-</td>
-        <td>${stock.quantity.toFixed(2)}</td>
+        <td>${formatCompactNumber(stock.quantity, 2)}</td>
         <td>-</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
@@ -476,14 +477,14 @@ export async function loadPortfolioUI(table) {
     } else {
       const pl = calculateStockPL(stock);
       const plDisplay = pl
-        ? `<span class="${getPLClass(pl.pl)}">${formatCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
+        ? `<span class="${getPLClass(pl.pl)}">${formatCompactCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
         : "-";
 
       row.innerHTML = `
         <td>${escapeHtml(stock.code)}</td>
-        <td>${stock.entry}</td>
-        <td>${stock.currentPrice || "-"}</td>
-        <td>${stock.quantity}</td>
+        <td>${formatCompactCurrency(stock.entry)}</td>
+        <td>${stock.currentPrice ? formatCompactCurrency(stock.currentPrice) : "-"}</td>
+        <td>${formatCompactNumber(stock.quantity, 2)}</td>
         <td>${plDisplay}</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
