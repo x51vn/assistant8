@@ -1,8 +1,5 @@
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
-
-const ENGLISH_PROMPT_KEY = 'englishPrompt';
-const ENGLISH_SENTENCES_KEY = 'englishSentences';
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;
 let pollInFlight = false;
@@ -26,7 +23,7 @@ export async function initEnglish({
   savedSentencesList
 }) {
   console.log('[English] Initializing');
-  
+
   await loadSavedSentences(savedSentencesList);
   
   // X51LABS-80: Cleanup function to reset button state
@@ -101,8 +98,8 @@ export async function initEnglish({
     generateSentenceBtn.innerHTML = '⏳ Processing...';
 
     try {
-      const stored = await chrome.storage.local.get([ENGLISH_PROMPT_KEY]);
-      let promptTemplate = stored[ENGLISH_PROMPT_KEY] || `Teach me English about: {TOPIC}\n\nProvide:\n1. An English sentence/phrase\n2. Vietnamese translation\n3. Usage example`;
+      const config = await getSettingsConfig();
+      const promptTemplate = config?.prompts?.english || getDefaultEnglishPrompt();
       
       const prompt = promptTemplate.replace(/{TOPIC}/g, topic);
       
@@ -240,27 +237,43 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
 }
 
 async function saveSentence(topic, response, chatId, chatUrl, originalPrompt) {
-  const stored = await chrome.storage.local.get([ENGLISH_SENTENCES_KEY]);
-  const sentences = Array.isArray(stored[ENGLISH_SENTENCES_KEY]) ? stored[ENGLISH_SENTENCES_KEY] : [];
-  
+  const config = await getSettingsConfig();
+  const englishConfig = config.english || {};
+  const sentences = Array.isArray(englishConfig.sentences)
+    ? englishConfig.sentences
+    : [];
+
   sentences.unshift({
     id: `english_${Date.now()}`,
-    topic, response, chatId, chatUrl, prompt: originalPrompt,
+    topic,
+    response,
+    chatId,
+    chatUrl,
+    prompt: originalPrompt,
     timestamp: Date.now()
   });
-  
+
   if (sentences.length > MAX_SAVED_SENTENCES) {
     sentences.splice(MAX_SAVED_SENTENCES);
   }
-  
-  await chrome.storage.local.set({ [ENGLISH_SENTENCES_KEY]: sentences });
+
+  await updateSettingsConfig({
+    ...config,
+    english: {
+      ...englishConfig,
+      sentences
+    }
+  });
 }
 
 async function loadSavedSentences(list) {
   if (!list) return;
-  
-  const stored = await chrome.storage.local.get([ENGLISH_SENTENCES_KEY]);
-  const sentences = Array.isArray(stored[ENGLISH_SENTENCES_KEY]) ? stored[ENGLISH_SENTENCES_KEY] : [];
+
+  const config = await getSettingsConfig();
+  const englishConfig = config.english || {};
+  const sentences = Array.isArray(englishConfig.sentences)
+    ? englishConfig.sentences
+    : [];
   
   const countSpan = document.getElementById('savedSentencesCount');
   if (countSpan) countSpan.textContent = sentences.length;
@@ -333,4 +346,57 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function getDefaultEnglishPrompt() {
+  return `Teach me English about: {TOPIC}
+
+Provide:
+1. An English sentence/phrase
+2. Vietnamese translation
+3. Usage example
+4. Common situations to use it`;
+}
+
+async function getSettingsConfig() {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    if (response?.errorCode) {
+      console.warn('[English] SETTINGS_GET failed:', response.errorMessage);
+      return {};
+    }
+
+    return response?.config || {};
+  } catch (error) {
+    console.error('[English] SETTINGS_GET error:', error);
+    return {};
+  }
+}
+
+async function updateSettingsConfig(config) {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_UPDATE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { config }
+    });
+
+    if (response?.errorCode) {
+      console.warn('[English] SETTINGS_UPDATE failed:', response.errorMessage);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[English] SETTINGS_UPDATE error:', error);
+    return false;
+  }
 }
