@@ -7,6 +7,7 @@ import {
   calculateStockPL,
   calculatePortfolioTotalPL,
   formatCurrency,
+  formatShortNumber,
   formatPercent,
   getPLClass,
 } from "./portfolioPL.js";
