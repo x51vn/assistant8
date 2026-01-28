@@ -23,10 +23,6 @@ export function setupNavigation(dom) {
     setActivePage({ pages, btns, page: 'results' });
   });
 
-  resultsBtn?.addEventListener('click', () => {
-    setActivePage({ pages, btns, page: 'results' });
-  });
-
   errorsBtn?.addEventListener('click', () => {
     setActivePage({ pages, btns, page: 'errors' });
   });

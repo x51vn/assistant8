@@ -215,20 +215,7 @@ Provide:
     });
   });
 
-  // Load ALL settings (master prompt + sub-prompts + checkboxes) on init
-  loadAllSettingsAtOnce({
-    promptInput,
-    autoRunCheckbox,
-    evaluatePreviousCheckbox,
-    reviewPromptCheckbox,
-    realtimeEnabledCheckbox,
-    intervalInput,
-    portfolioPromptInput,
-    stockEvalPromptInput,
-    teaStockPromptInput,
-    contextMenuPromptInput,
-    englishPromptInput
-  });
+  // ✅ Settings already loaded at top of setupSettings() - no need to load again
 }
 
 async function loadUserInfo() {

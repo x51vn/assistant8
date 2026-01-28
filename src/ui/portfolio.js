@@ -10,6 +10,7 @@ import {
   formatPercent,
   getPLClass,
 } from "./portfolioPL.js";
+import { formatCompactNumber, formatCompactCurrency } from "../utils/numberFormat.js";
 import { AdvancedMarketDataClient } from "../market-data/advanced-client.js";
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
@@ -238,17 +239,16 @@ export async function initPortfolio({
   refreshPricesBtn?.addEventListener("click", async () => {
     try {
       refreshPricesBtn.disabled = true;
-      refreshPricesBtn.innerHTML =
-        '<i class="fas fa-spinner fa-spin"></i> Đang tải...';
+      // show spinner icon only
+      refreshPricesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
       await manualRefreshPrices(portfolioTable);
       refreshPricesBtn.disabled = false;
-      refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+      // restore icon-only state
+      refreshPricesBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
     } catch (err) {
       console.error("[Portfolio] Manual refresh failed:", err);
       refreshPricesBtn.disabled = false;
-      refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+      refreshPricesBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
       alert("Lỗi khi làm mới giá: " + err.message);
     }
   });
@@ -340,50 +340,7 @@ export async function initPortfolio({
     }
   });
 
-  // Tea stock button - sends tea stock prompt to ChatGPT
-  teaStockBtn?.addEventListener("click", async () => {
-    const prompt = teaStockPromptInput?.value.trim();
-    if (!prompt) {
-      alert('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
-      return;
-    }
-
-    try {
-      teaStockBtn.disabled = true;
-      teaStockBtn.innerHTML = '⏳ Processing...';
-      
-      // Send prompt to ChatGPT via background using modern message format
-      const message = {
-        v: 1,
-        type: MESSAGE_TYPES.SEND_PROMPT,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        payload: {
-          prompt: prompt,
-          options: {
-            createNewChat: true,
-            focusTab: true
-          }
-        }
-      };
-
-      const response = await chrome.runtime.sendMessage(message);
-
-      if (response && response.type !== MESSAGE_TYPES.ERROR) {
-        console.log("[Portfolio] Tea stock prompt sent to ChatGPT", response);
-      } else {
-        console.error("[Portfolio] Failed to send tea stock prompt:", response);
-        alert("Lỗi gửi prompt. Vui lòng mở tab ChatGPT.");
-      }
-    } catch (err) {
-      console.error("[Portfolio] Tea stock error:", err);
-      alert("Lỗi: " + err.message);
-    } finally {
-      // Reset button state
-      teaStockBtn.disabled = false;
-      teaStockBtn.innerHTML = 'Tìm cổ phiếu trà đá';
-    }
-  });
+  // ✅ REMOVED: Duplicate teaStockBtn listener (kept sendPromptWithHistory version above)
 
   // Modal close buttons
   const portfolioModal = document.getElementById("portfolioModal");
@@ -505,7 +462,7 @@ export async function loadPortfolioUI(table) {
         <td>${escapeHtml(stock.code)}</td>
         <td>-</td>
         <td>-</td>
-        <td>${stock.quantity.toFixed(2)}</td>
+        <td>${formatCompactNumber(stock.quantity, 2)}</td>
         <td>-</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
@@ -520,14 +477,14 @@ export async function loadPortfolioUI(table) {
     } else {
       const pl = calculateStockPL(stock);
       const plDisplay = pl
-        ? `<span class="${getPLClass(pl.pl)}">${formatCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
+        ? `<span class="${getPLClass(pl.pl)}">${formatCompactCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
         : "-";
 
       row.innerHTML = `
         <td>${escapeHtml(stock.code)}</td>
-        <td>${stock.entry}</td>
-        <td>${stock.currentPrice || "-"}</td>
-        <td>${stock.quantity}</td>
+        <td>${formatCompactCurrency(stock.entry)}</td>
+        <td>${stock.currentPrice ? formatCompactCurrency(stock.currentPrice) : "-"}</td>
+        <td>${formatCompactNumber(stock.quantity, 2)}</td>
         <td>${plDisplay}</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
