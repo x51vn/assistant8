@@ -53,8 +53,8 @@ async function getPortfolioFromSupabase() {
     );
 
     // ✅ Transform Supabase format to UI format
-    // Supabase: { id, symbol, quantity, avg_price, current_price, ... }
-    // UI expects: { code, entry, currentPrice, quantity, ... }
+    // Supabase: { id, symbol, quantity, avg_price, current_price, updated_at, ... }
+    // UI expects: { code, entry, currentPrice, quantity, priceUpdatedAt, ... }
     const transformed = items.map((item) => {
       console.log(`[Portfolio] Transforming item:`, item);
       console.log(
@@ -69,6 +69,7 @@ async function getPortfolioFromSupabase() {
         avg_price: item.avg_price,
         currentPrice: item.current_price,
         current_price: item.current_price,
+        priceUpdatedAt: item.updated_at, // ← Map for last update time display
         notes: item.notes,
         created_at: item.created_at,
         updated_at: item.updated_at,
