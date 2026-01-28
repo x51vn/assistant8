@@ -421,14 +421,15 @@ export async function loadPortfolioUI(table) {
   const summaryEl = document.getElementById("portfolioSummary");
   if (summaryEl && portfolio.some((s) => s.currentPrice)) {
     summaryEl.style.display = "block";
-    document.getElementById("totalEntry").textContent = formatCurrency(
+    // Use short formatting for summary values (e.g., 200000000 -> 200M)
+    document.getElementById("totalEntry").textContent = formatShortNumber(
       portfolioSummary.totalEntryValue,
     );
-    document.getElementById("currentValue").textContent = formatCurrency(
+    document.getElementById("currentValue").textContent = formatShortNumber(
       portfolioSummary.totalCurrentValue,
     );
     const plEl = document.getElementById("totalPL");
-    plEl.textContent = `${formatCurrency(portfolioSummary.totalPL)} ${formatPercent(portfolioSummary.totalPLPercent)}`;
+    plEl.textContent = `${formatShortNumber(portfolioSummary.totalPL)} ${formatPercent(portfolioSummary.totalPLPercent)}`;
     plEl.className = `summary-value ${getPLClass(portfolioSummary.totalPL)}`;
   }
 
