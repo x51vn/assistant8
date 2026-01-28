@@ -424,6 +424,10 @@ export async function loadPortfolioUI(table) {
   if (summaryEl && portfolio.some((s) => s.currentPrice)) {
     summaryEl.style.display = "block";
     // Use short formatting for summary values (e.g., 200000000 -> 200M)
+    // NAV = Current Value (includes stocks + CASH if any)
+    document.getElementById("totalNAV").textContent = formatShortNumber(
+      portfolioSummary.totalCurrentValue,
+    );
     document.getElementById("totalEntry").textContent = formatShortNumber(
       portfolioSummary.totalEntryValue,
     );
