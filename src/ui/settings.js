@@ -3,6 +3,7 @@ import { showStatus } from './status.js';
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { logout, checkAuthStatus } from './auth.js';
+import { isAuthError, handleAuthError } from './authErrorHandler.js';
 
 export function setupSettings(dom) {
   const {
@@ -124,6 +125,14 @@ export function setupSettings(dom) {
         }
       });
       
+      // Check for auth errors first
+      if (isAuthError(response)) {
+        console.warn('[Settings] Auth error detected in save settings, auto-logging out...');
+        await handleAuthError(response, 'SETTINGS_UPDATE');
+        showStatus(saveStatus, 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.', 'error');
+        return;
+      }
+      
       if (response.errorCode) {
         throw new Error(response.errorMessage || 'Lưu thất bại');
       }
@@ -166,6 +175,14 @@ Provide:
         timestamp: Date.now()
       });
       
+      // Check for auth errors first
+      if (isAuthError(response)) {
+        console.warn('[Settings] Auth error detected in delete settings, auto-logging out...');
+        await handleAuthError(response, 'SETTINGS_DELETE');
+        showStatus(saveStatus, 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.', 'error');
+        return;
+      }
+      
       if (response.errorCode) {
         console.warn('[Settings] Delete failed:', response.errorMessage);
         showStatus(saveStatus, 'Reset UI thành công nhưng xóa trên server thất bại', 'warning');
@@ -202,11 +219,20 @@ Provide:
       }
     };
     
-    chrome.runtime.sendMessage(message, (response) => {
+    chrome.runtime.sendMessage(message, async (response) => {
       if (chrome.runtime.lastError) {
         showStatus(saveStatus, `Lỗi: ${chrome.runtime.lastError.message}`, 'error');
         return;
       }
+
+      // Check for auth errors first
+      if (isAuthError(response)) {
+        console.warn('[Settings] Auth error detected in send prompt, auto-logging out...');
+        await handleAuthError(response, 'SEND_PROMPT');
+        showStatus(saveStatus, 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.', 'error');
+        return;
+      }
+
       if (response && response.type !== MESSAGE_TYPES.ERROR) {
         showStatus(saveStatus, 'Prompt đã gửi!', 'success');
       } else {

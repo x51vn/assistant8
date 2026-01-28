@@ -14,6 +14,7 @@ import { formatCompactNumber, formatCompactCurrency } from "../utils/numberForma
 import { AdvancedMarketDataClient } from "../market-data/advanced-client.js";
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
+import { isAuthError, handleAuthError, withAuthErrorHandler } from "./authErrorHandler.js";
 
 // ✅ Import loadAndDisplayHistory from results to reload history after HISTORY_UPDATE
 let resultsModule = null;
@@ -40,6 +41,13 @@ async function getPortfolioFromSupabase() {
     console.log("[Portfolio] Response received:", response);
 
     if (response.errorCode) {
+      // ✅ FIX: Auto-logout on auth errors
+      if (isAuthError(response)) {
+        console.warn("[Portfolio] Auth error detected, logging out...");
+        await handleAuthError(response, 'PORTFOLIO_GET');
+        return [];
+      }
+      
       console.warn("[Portfolio] Supabase fetch error:", response.errorMessage);
       return [];
     }
@@ -101,6 +109,12 @@ async function addStockToSupabase(symbol, quantity, avgPrice) {
     });
 
     if (response.errorCode) {
+      // ✅ FIX: Auto-logout on auth errors
+      if (isAuthError(response)) {
+        console.warn("[Portfolio] Auth error during add, logging out...");
+        await handleAuthError(response, 'PORTFOLIO_ADD');
+        throw new Error(response.errorMessage || "Session expired, please login again");
+      }
       throw new Error(response.errorMessage || "Failed to add stock");
     }
 
@@ -133,6 +147,13 @@ async function updateStockInSupabase(id, symbol, quantity, avgPrice) {
     });
 
     if (response.errorCode) {
+      // ✅ FIX: Auto-logout on auth errors
+      if (isAuthError(response)) {
+        console.warn("[Portfolio] Auth error during update, logging out...");
+        await handleAuthError(response, 'PORTFOLIO_UPDATE');
+        throw new Error(response.errorMessage || "Session expired, please login again");
+      }
+      
       // Handle invalid id format error
       if (response.errorMessage && response.errorMessage.includes("ID")) {
         throw new Error(
@@ -165,6 +186,13 @@ async function removeStockFromSupabase(id, symbol) {
     });
 
     if (response.errorCode) {
+      // ✅ FIX: Auto-logout on auth errors
+      if (isAuthError(response)) {
+        console.warn("[Portfolio] Auth error during remove, logging out...");
+        await handleAuthError(response, 'PORTFOLIO_REMOVE');
+        throw new Error(response.errorMessage || "Session expired, please login again");
+      }
+      
       // Handle invalid id format error
       if (response.errorMessage && response.errorMessage.includes("ID")) {
         throw new Error(

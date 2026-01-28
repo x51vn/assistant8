@@ -5,6 +5,7 @@
 
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
+import { isAuthError, handleAuthError } from "./authErrorHandler.js";
 
 export function setupResults(dom) {
   const { runBtn, stopBtn, refreshBtn } = dom;
@@ -144,6 +145,17 @@ export function setupResults(dom) {
       console.log("[Results] History response:", response);
 
       if (response.errorCode) {
+        // ✅ FIX: Auto-logout on auth errors
+        if (isAuthError(response)) {
+          console.warn("[Results] Auth error detected, logging out...");
+          await handleAuthError(response, 'HISTORY_GET_ALL');
+          const historyList = document.getElementById("historyList");
+          if (historyList) {
+            historyList.innerHTML = `<p class="empty-state" style="color: #d32f2f;">Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.</p>`;
+          }
+          return;
+        }
+        
         console.error(
           "[Results] Error loading history:",
           response.errorMessage,

@@ -1,5 +1,6 @@
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
+import { isAuthError, handleAuthError } from './authErrorHandler.js';
 
 export function setupErrors(dom) {
   const { 
@@ -133,8 +134,21 @@ export function setupErrors(dom) {
           ...errorData
         }
       };
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_UPDATED) {
+      chrome.runtime.sendMessage(message, async (response) => {
+        if (chrome.runtime.lastError || !response) {
+          alert('Lỗi cập nhật!');
+          return;
+        }
+
+        // Check for auth errors first
+        if (isAuthError(response)) {
+          console.warn('[Errors] Auth error detected in update, auto-logging out...');
+          await handleAuthError(response, 'ERROR_UPDATE');
+          alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+          return;
+        }
+
+        if (response.type !== MESSAGE_TYPES.ERROR_UPDATED) {
           alert('Lỗi cập nhật!');
           return;
         }
@@ -150,8 +164,21 @@ export function setupErrors(dom) {
         timestamp: Date.now(),
         payload: errorData
       };
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ADDED) {
+      chrome.runtime.sendMessage(message, async (response) => {
+        if (chrome.runtime.lastError || !response) {
+          alert('Lỗi thêm mới!');
+          return;
+        }
+
+        // Check for auth errors first
+        if (isAuthError(response)) {
+          console.warn('[Errors] Auth error detected in add, auto-logging out...');
+          await handleAuthError(response, 'ERROR_ADD');
+          alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+          return;
+        }
+
+        if (response.type !== MESSAGE_TYPES.ERROR_ADDED) {
           alert('Lỗi thêm mới!');
           return;
         }
@@ -171,8 +198,21 @@ export function setupErrors(dom) {
       timestamp: Date.now(),
       payload: { errorId }
     };
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_DELETED) {
+    chrome.runtime.sendMessage(message, async (response) => {
+      if (chrome.runtime.lastError || !response) {
+        alert('Lỗi xóa!');
+        return;
+      }
+
+      // Check for auth errors first
+      if (isAuthError(response)) {
+        console.warn('[Errors] Auth error detected in delete, auto-logging out...');
+        await handleAuthError(response, 'ERROR_DELETE');
+        alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+        return;
+      }
+
+      if (response.type !== MESSAGE_TYPES.ERROR_DELETED) {
         alert('Lỗi xóa!');
         return;
       }
@@ -189,8 +229,25 @@ export function setupErrors(dom) {
       payload: {}
     };
     
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_LIST) {
+    chrome.runtime.sendMessage(message, async (response) => {
+      if (chrome.runtime.lastError || !response) {
+        if (errorList) {
+          errorList.innerHTML = '<p class="empty-state">Lỗi tải danh sách.</p>';
+        }
+        return;
+      }
+
+      // Check for auth errors first
+      if (isAuthError(response)) {
+        console.warn('[Errors] Auth error detected in loadErrors, auto-logging out...');
+        await handleAuthError(response, 'ERROR_GET_ALL');
+        if (errorList) {
+          errorList.innerHTML = '<p class="empty-state">Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.</p>';
+        }
+        return;
+      }
+
+      if (response.type !== MESSAGE_TYPES.ERROR_LIST) {
         if (errorList) {
           errorList.innerHTML = '<p class="empty-state">Lỗi tải danh sách.</p>';
         }
@@ -232,8 +289,21 @@ export function setupErrors(dom) {
         timestamp: Date.now(),
         payload: {}
       };
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
+      chrome.runtime.sendMessage(message, async (response) => {
+        if (chrome.runtime.lastError || !response) {
+          alert('Lỗi khi xóa danh sách!');
+          return;
+        }
+
+        // Check for auth errors first
+        if (isAuthError(response)) {
+          console.warn('[Errors] Auth error detected in clear, auto-logging out...');
+          await handleAuthError(response, 'ERROR_CLEAR_ALL');
+          alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+          return;
+        }
+
+        if (response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
           alert('Lỗi khi xóa danh sách!');
           return;
         }
@@ -263,10 +333,26 @@ export function setupErrors(dom) {
       retrospectiveBtn.disabled = true;
       retrospectiveBtn.innerHTML = '⏳ Đang phân tích...';
       
-      console.log('[Errors] Retrospective feature temporarily disabled - needs migration to v1 schema');
-      alert('Chức năng retrospective tạm thời bị vô hiệu hóa');
-      retrospectiveBtn.disabled = false;
-      retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
+      try {
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ action: 'run_retrospective' }, (resp) => resolve(resp || { status: 'error', error: chrome.runtime.lastError?.message || 'no_response' }));
+        });
+
+        if (!response || response.status !== 'ok') {
+          console.error('[Errors] Retrospective failed', response);
+          alert('Phân tích thất bại: ' + (response?.error || 'Không có phản hồi từ background'));
+        } else {
+          alert('Phân tích hoàn tất. RunId: ' + (response.runId || 'n/a'));
+          // Reload errors to reflect any new insights
+          loadErrors();
+        }
+      } catch (err) {
+        console.error('[Errors] Retrospective error', err);
+        alert('Lỗi khi chạy phân tích: ' + String(err));
+      } finally {
+        retrospectiveBtn.disabled = false;
+        retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
+      }
     });
   }
 
