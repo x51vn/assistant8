@@ -208,15 +208,15 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
         clearInterval(currentPollInterval);
         currentPollInterval = null;
         
-        await saveSentence(topic, output, chatId, chatUrl, originalPrompt);
+        await saveSentence(topic, chatId, chatUrl, originalPrompt);
         await loadSavedSentences(savedSentencesList);
         
         if (resultArea) {
           resultArea.innerHTML = `
             <div class="success">
               ✅ Đã lưu! (Chat: ${chatId ? chatId.substring(0, 8) : 'N/A'})<br>
-              <div style="margin-top: 12px; background: white; padding: 12px; border-radius: 6px; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">
-                ${escapeHtml(output.substring(0, 500))}${output.length > 500 ? '...' : ''}
+              <div style="margin-top: 12px; color: #666;">
+                Nhấn vào item để mở ChatGPT
               </div>
             </div>
           `;
@@ -236,7 +236,7 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
   }, 3000);
 }
 
-async function saveSentence(topic, response, chatId, chatUrl, originalPrompt) {
+async function saveSentence(topic, chatId, chatUrl, originalPrompt) {
   const config = await getSettingsConfig();
   const englishConfig = config.english || {};
   const sentences = Array.isArray(englishConfig.sentences)
@@ -246,7 +246,6 @@ async function saveSentence(topic, response, chatId, chatUrl, originalPrompt) {
   sentences.unshift({
     id: `english_${Date.now()}`,
     topic,
-    response,
     chatId,
     chatUrl,
     prompt: originalPrompt,
@@ -295,39 +294,38 @@ async function loadSavedSentences(list) {
         <strong style="color: #667eea;">${escapeHtml(s.topic)}</strong>
         <span style="font-size: 11px; color: #999;">${formatTimeAgo(s.timestamp)}</span>
       </div>
-      <div style="font-size: 12px; color: #666;">${escapeHtml(s.response.substring(0, 100))}...</div>
       <div style="font-size: 10px; color: #aaa;">Chat: ${s.chatId ? s.chatId.substring(0, 8) : 'N/A'}</div>
     `;
     
-    div.addEventListener('click', () => showDetail(s));
+    div.addEventListener('click', () => openChat(s));
     list.appendChild(div);
   });
 }
 
-function showDetail(s) {
-  const modal = document.createElement('div');
-  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;';
-  
-  const content = document.createElement('div');
-  content.style.cssText = 'background: white; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto;';
-  
-  content.innerHTML = `
-    <h3 style="margin: 0 0 16px;">📚 ${escapeHtml(s.topic)}</h3>
-    <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
-      🕐 ${new Date(s.timestamp).toLocaleString('vi-VN')}<br>
-      🔗 Chat: ${s.chatId || 'N/A'}
-    </div>
-    <div style="background: #f9f9f9; padding: 16px; border-radius: 8px; white-space: pre-wrap; margin-bottom: 16px;">
-      ${escapeHtml(s.response)}
-    </div>
-    <button id="closeModal" class="primary-btn">Đóng</button>
-  `;
-  
-  modal.appendChild(content);
-  document.body.appendChild(modal);
-  
-  document.getElementById('closeModal').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+async function openChat(s) {
+  if (!s?.chatId && !s?.chatUrl) {
+    console.warn('[English] Missing chat reference');
+    return;
+  }
+
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.CHAT_OPEN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: {
+        chatId: s.chatId,
+        chatUrl: s.chatUrl
+      }
+    });
+
+    if (response?.errorCode) {
+      console.warn('[English] CHAT_OPEN failed:', response.errorMessage);
+    }
+  } catch (error) {
+    console.error('[English] CHAT_OPEN error:', error);
+  }
 }
 
 function formatTimeAgo(ts) {
