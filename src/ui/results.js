@@ -7,7 +7,7 @@ import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
 
 export function setupResults(dom) {
-  const { runBtn, stopBtn, refreshBtn } = dom;
+  const { runBtn, stopBtn } = dom;
   let currentPollInterval = null;
 
   function extractChatIdFromUrl(url) {
@@ -111,15 +111,20 @@ export function setupResults(dom) {
           (item.response?.length > 100 ? "..." : "");
 
         return `
-        <div class="history-item" style="border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin-bottom: 12px; background: #f9f9f9;">
-          <div style="font-size: 12px; color: #999; margin-bottom: 4px;">${dateStr}</div>
-          <div style="font-weight: 500; margin-bottom: 8px; color: #333;">
-            <strong>Prompt:</strong> ${promptPreview}
+        <div class="history-item" style="border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin-bottom: 12px; background: #f9f9f9; display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="flex: 1;">
+            <div style="font-size: 12px; color: #999; margin-bottom: 4px;">${dateStr}</div>
+            <div style="font-weight: 500; margin-bottom: 8px; color: #333;">
+              <strong>Prompt:</strong> ${promptPreview}
+            </div>
+            <div style="font-size: 13px; color: #666; margin-bottom: 8px;">
+              <strong>Response:</strong> ${responsePreview}
+            </div>
+            ${item.chat_url ? `<div style="font-size: 11px;"><a href="${item.chat_url}" target="_blank" style="color: #0066cc; text-decoration: none;">🔗 Xem ChatGPT</a></div>` : ""}
           </div>
-          <div style="font-size: 13px; color: #666; margin-bottom: 8px;">
-            <strong>Response:</strong> ${responsePreview}
-          </div>
-          ${item.chat_url ? `<div style="font-size: 11px;"><a href="${item.chat_url}" target="_blank" style="color: #0066cc; text-decoration: none;">🔗 Xem ChatGPT</a></div>` : ""}
+          <button class="history-delete-btn" data-id="${item.id}" style="background: #ff6b6b; color: white; border: none; border-radius: 4px; padding: 6px 8px; cursor: pointer; font-size: 12px; margin-left: 8px; white-space: nowrap;">
+            ✕ Xóa
+          </button>
         </div>
       `;
       })
@@ -127,6 +132,15 @@ export function setupResults(dom) {
 
     historyList.innerHTML = html;
     console.log(`[Results] ✅ Rendered ${sorted.length} history items`);
+
+    // Attach delete button handlers
+    historyList.querySelectorAll(".history-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-id");
+        await deleteHistoryItem(id);
+      });
+    });
   }
 
   // ✅ NEW: Load and display history
@@ -316,11 +330,6 @@ export function setupResults(dom) {
   stopBtn?.addEventListener("click", () => {
     console.log("[Results] Stop button clicked");
     stopPolling();
-  });
-
-  refreshBtn?.addEventListener("click", async () => {
-    console.log("[Results] Refresh button clicked");
-    await loadAndDisplayHistory();
   });
 
   function createProgressSpinner() {
@@ -554,6 +563,36 @@ export function setupResults(dom) {
         // Don't stop polling on errors, might be transient
       }
     }, 2000); // Poll every 2 seconds
+  }
+
+  /**
+   * Delete history item by ID
+   */
+  async function deleteHistoryItem(id) {
+    if (!confirm("Xác nhận xóa mục lịch sử này?")) return;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.HISTORY_DELETE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        data: { id }
+      });
+
+      if (response?.errorCode) {
+        console.error("[Results] Error deleting history:", response.errorMessage);
+        alert("Lỗi: " + response.errorMessage);
+        return;
+      }
+
+      console.log("[Results] ✅ Deleted history item:", id);
+      // Reload list
+      await loadAndDisplayHistory();
+    } catch (error) {
+      console.error("[Results] deleteHistoryItem error:", error);
+      alert("Lỗi khi xóa: " + error.message);
+    }
   }
 
   // ✅ NEW: Auto-load history on init
