@@ -254,15 +254,15 @@ label input[type="checkbox"] {
 
 .button-group {
   display: flex;
-  /* Allow wrapping so buttons can respond on narrow screens */
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 20px;
 }
 
-/* Make buttons fill width responsively: they will distribute evenly on wide screens and wrap into rows on smaller screens */
 .button-group button {
-  flex: 1 1 150px; /* prefer 150px but grow/shrink as needed */
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 .button-group .primary-btn,
 .button-group .secondary-btn {
