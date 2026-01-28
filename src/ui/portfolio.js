@@ -239,16 +239,16 @@ export async function initPortfolio({
     try {
       refreshPricesBtn.disabled = true;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-spinner fa-spin"></i> Đang tải...';
+        '<i class="fas fa-spinner fa-spin"></i>';
       await manualRefreshPrices(portfolioTable);
       refreshPricesBtn.disabled = false;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+        '<i class="fas fa-sync-alt"></i>';
     } catch (err) {
       console.error("[Portfolio] Manual refresh failed:", err);
       refreshPricesBtn.disabled = false;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+        '<i class="fas fa-sync-alt"></i>';
       alert("Lỗi khi làm mới giá: " + err.message);
     }
   });
