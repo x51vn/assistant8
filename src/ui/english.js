@@ -1,9 +1,20 @@
+/**
+ * English Learning Module
+ * ✅ Supabase-backed: persists to `english` table
+ * Displays like Results page - list of English learning records
+ */
+
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
+
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;
 let pollInFlight = false;
+let currentEnglishList = [];
 
+/**
+ * Send runtime message to background handler
+ */
 function sendRuntimeMessage(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -16,14 +27,18 @@ function sendRuntimeMessage(message) {
   });
 }
 
+/**
+ * Initialize English learning module
+ */
 export async function initEnglish({
   englishTopicInput,
   generateSentenceBtn,
   englishResultArea,
   savedSentencesList
 }) {
-  console.log('[English] Initializing');
+  console.log('[English] Initializing with Supabase table');
 
+  // Load initial list
   await loadSavedSentences(savedSentencesList);
   
   // X51LABS-80: Cleanup function to reset button state
@@ -98,9 +113,7 @@ export async function initEnglish({
     generateSentenceBtn.innerHTML = '⏳ Processing...';
 
     try {
-      const config = await getSettingsConfig();
-      const promptTemplate = config?.prompts?.english || getDefaultEnglishPrompt();
-      
+      const promptTemplate = getDefaultEnglishPrompt();
       const prompt = promptTemplate.replace(/{TOPIC}/g, topic);
       
       const message = {
@@ -208,7 +221,10 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
         clearInterval(currentPollInterval);
         currentPollInterval = null;
         
+        // Save to Supabase `english` table
         await saveSentence(topic, chatId, chatUrl, originalPrompt);
+        
+        // Refresh list
         await loadSavedSentences(savedSentencesList);
         
         if (resultArea) {
@@ -236,96 +252,206 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
   }, 3000);
 }
 
-async function saveSentence(topic, chatId, chatUrl, originalPrompt) {
-  const config = await getSettingsConfig();
-  const englishConfig = config.english || {};
-  const sentences = Array.isArray(englishConfig.sentences)
-    ? englishConfig.sentences
-    : [];
+/**
+ * Save English sentence to Supabase `english` table
+ */
+async function saveSentence(topic, chatId, chatUrl, prompt) {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_ADD,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: {
+        chat_id: chatId,
+        topic,
+        prompt
+      }
+    });
 
-  sentences.unshift({
-    id: `english_${Date.now()}`,
-    topic,
-    chatId,
-    chatUrl,
-    prompt: originalPrompt,
-    timestamp: Date.now()
-  });
-
-  if (sentences.length > MAX_SAVED_SENTENCES) {
-    sentences.splice(MAX_SAVED_SENTENCES);
-  }
-
-  await updateSettingsConfig({
-    ...config,
-    english: {
-      ...englishConfig,
-      sentences
+    if (response?.errorCode) {
+      console.error('[English] saveSentence error:', response.errorMessage);
+      throw new Error(response.errorMessage);
     }
-  });
+
+    console.log('[English] Saved to Supabase:', response);
+  } catch (err) {
+    console.error('[English] saveSentence failed:', err);
+    throw err;
+  }
 }
 
+/**
+ * Load saved sentences from Supabase `english` table
+ */
 async function loadSavedSentences(list) {
   if (!list) return;
 
-  const config = await getSettingsConfig();
-  const englishConfig = config.english || {};
-  const sentences = Array.isArray(englishConfig.sentences)
-    ? englishConfig.sentences
-    : [];
-  
-  const countSpan = document.getElementById('savedSentencesCount');
-  if (countSpan) countSpan.textContent = sentences.length;
-  
-  if (sentences.length === 0) {
-    list.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_GET_ALL,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    if (response?.errorCode) {
+      console.error('[English] loadSavedSentences error:', response.errorMessage);
+      list.innerHTML = '<div class="empty-state">Lỗi tải dữ liệu</div>';
+      return;
+    }
+
+    currentEnglishList = response?.items || [];
+    const countSpan = document.getElementById('savedSentencesCount');
+    if (countSpan) countSpan.textContent = currentEnglishList.length;
+    
+    if (currentEnglishList.length === 0) {
+      list.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
+      return;
+    }
+    
+    // Render like Results page
+    renderEnglishList(list, currentEnglishList);
+  } catch (err) {
+    console.error('[English] loadSavedSentences failed:', err);
+    list.innerHTML = '<div class="empty-state">Lỗi khi tải dữ liệu</div>';
+  }
+}
+
+/**
+ * Render English list similar to Results page
+ */
+function renderEnglishList(container, items) {
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
     return;
   }
-  
-  list.innerHTML = '';
-  
-  sentences.forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'saved-sentence-item';
-    div.style.cssText = 'padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer;';
-    
-    div.innerHTML = `
-      <div style="display: flex; justify-content: space-between;">
-        <strong style="color: #667eea;">${escapeHtml(s.topic)}</strong>
-        <span style="font-size: 11px; color: #999;">${formatTimeAgo(s.timestamp)}</span>
-      </div>
-      <div style="font-size: 10px; color: #aaa;">Chat: ${s.chatId ? s.chatId.substring(0, 8) : 'N/A'}</div>
-    `;
-    
-    div.addEventListener('click', () => openChat(s));
-    list.appendChild(div);
+
+  // Sort by created_at descending
+  const sorted = [...items].sort((a, b) => {
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    return timeB - timeA;
+  });
+
+  const html = sorted
+    .map((item) => {
+      const date = new Date(item.created_at);
+      const dateStr = date.toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        month: '2-digit',
+        day: '2-digit'
+      });
+
+      return `
+        <div class="result-item english-item" style="padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #667eea; margin-bottom: 4px;">📚 ${escapeHtml(item.topic)}</div>
+              <div style="font-size: 12px; color: #666; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                ${escapeHtml(item.prompt)}
+              </div>
+              <div style="font-size: 11px; color: #999;">
+                Chat: <strong>${item.chat_id.substring(0, 8)}</strong> | ${dateStr}
+              </div>
+            </div>
+            <button class="english-delete-btn" data-id="${item.id}" style="background: #ff6b6b; color: white; border: none; border-radius: 4px; padding: 6px 8px; cursor: pointer; font-size: 11px; margin-left: 8px;">
+              ✕ Xóa
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = html;
+
+  // Attach click handlers
+  container.querySelectorAll('.english-item').forEach((elem) => {
+    elem.addEventListener('click', async (e) => {
+      // Don't trigger if clicking delete button
+      if (e.target.closest('.english-delete-btn')) return;
+      
+      const topic = elem.querySelector('div').textContent;
+      const index = sorted.findIndex(item => item.topic === topic);
+      if (index !== -1) {
+        await openChat(sorted[index]);
+      }
+    });
+  });
+
+  // Attach delete handlers
+  container.querySelectorAll('.english-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      await deleteEnglishItem(id, container);
+    });
   });
 }
 
-async function openChat(s) {
-  if (!s?.chatId && !s?.chatUrl) {
-    console.warn('[English] Missing chat reference');
-    return;
-  }
+/**
+ * Delete English item from Supabase
+ */
+async function deleteEnglishItem(id, container) {
+  if (!confirm('Xác nhận xóa?')) return;
 
   try {
     const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_DELETE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { id }
+    });
+
+    if (response?.errorCode) {
+      alert('Lỗi: ' + response.errorMessage);
+      return;
+    }
+
+    // Refresh list
+    await loadSavedSentences(container);
+  } catch (err) {
+    console.error('[English] deleteEnglishItem error:', err);
+    alert('Lỗi khi xóa: ' + err.message);
+  }
+}
+
+/**
+ * Open ChatGPT with the saved chat_id
+ */
+async function openChat(item) {
+  try {
+    await sendRuntimeMessage({
       v: 1,
       type: MESSAGE_TYPES.CHAT_OPEN,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
       data: {
-        chatId: s.chatId,
-        chatUrl: s.chatUrl
+        chatId: item.chat_id,
+        chatUrl: `https://chatgpt.com/c/${item.chat_id}`
       }
     });
-
-    if (response?.errorCode) {
-      console.warn('[English] CHAT_OPEN failed:', response.errorMessage);
-    }
-  } catch (error) {
-    console.error('[English] CHAT_OPEN error:', error);
+  } catch (err) {
+    console.error('[English] openChat error:', err);
+    alert('Không thể mở ChatGPT: ' + err.message);
   }
+}
+
+/**
+ * Default English prompt template
+ */
+function getDefaultEnglishPrompt() {
+  return `Create a meaningful English learning exercise about "{TOPIC}". Format your response as follows:
+1. A sentence or phrase in English with some vocabulary to learn
+2. Vietnamese translation
+3. 2-3 example uses or variations
+4. A brief explanation of why this is useful to learn
+
+Make it engaging and practical for English learners.`;
 }
 
 function formatTimeAgo(ts) {
@@ -344,16 +470,6 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-function getDefaultEnglishPrompt() {
-  return `Teach me English about: {TOPIC}
-
-Provide:
-1. An English sentence/phrase
-2. Vietnamese translation
-3. Usage example
-4. Common situations to use it`;
 }
 
 async function getSettingsConfig() {

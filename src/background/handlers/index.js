@@ -27,6 +27,7 @@ import './prompt.js'; // GPT-012: Core prompt sending (KEEP - used by SEND_PROMP
 import './chatHistory.js'; // GPT-014: Chat History CRUD handlers
 import './errorTracking.js'; // GPT-016: Error tracking CRUD handlers
 import './settings.js'; // ✅ GPT-FIX: Settings handlers (Supabase-backed)
+import './english.js'; // ✅ English learning handlers (Supabase table: english)
 import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
 
 logger.info('All message handlers registered');
