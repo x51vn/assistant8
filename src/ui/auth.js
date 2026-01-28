@@ -164,7 +164,7 @@ export function renderLoginScreen(container, onLoginSuccess) {
         </form>
         
         <div class="auth-footer">
-          <p class="auth-note">made by x51.vn</p>
+          <p class="auth-note"><i class="fas fa-info-circle"></i> made by x51.vn</p>
         </div>
       </div>
     </div>
