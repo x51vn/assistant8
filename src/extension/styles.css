@@ -86,6 +86,32 @@ header {
   color: #667eea;
 }
 
+/* Header-specific overrides to avoid style bleed from global button rules */
+header {
+  padding: 8px 10px;
+}
+
+header .nav-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Keep header nav buttons compact and rounded (do not stretch)
+   These rules are specific to header to avoid affecting other button-groups */
+header .nav-btn {
+  flex: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 0;
+  min-width: auto;
+}
+
+header .nav-btn.active {
+  background: white;
+  color: #667eea;
+}
+
 .page {
   display: none;
   flex: 1;
@@ -275,9 +301,15 @@ label input[type="checkbox"] {
 
 /* Icon-only buttons: responsive fill-wide */
 .button-group .primary-btn {
+  /* Scoped by default, but portfolio needs compact icon-only buttons.
+     Keep a generic fallback here but portfolio-specific rules are below. */
+  padding: 8px 12px;
+}
+
+/* Portfolio-only: make action buttons icon-only and fill available space inside portfolio area */
+#portfolioPage .button-group .primary-btn {
   flex: 1 1 auto;
   min-height: 40px;
-  padding: 8px 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

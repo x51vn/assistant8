@@ -135,10 +135,7 @@ ${r}`;console.log("[Portfolio] Evaluate request (using SEND_PROMPT flow):",i);tr
         </form>
         
         <div class="auth-footer">
-          <p class="auth-note">
-            <i class="fas fa-info-circle"></i>
-            Sử dụng tài khoản Supabase để đăng nhập
-          </p>
+          <p class="auth-note"><i class="fas fa-info-circle"></i> made by x51.vn</p>
         </div>
       </div>
     </div>
