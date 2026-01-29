@@ -706,14 +706,25 @@ async function waitForStableAssistantResponse({ timeoutMs = 15 * 60 * 1000, stab
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let responded = false;
+  let responseTimeout = null;
+  
   const safeSendResponse = (payload) => {
     if (responded) return;
     responded = true;
+    if (responseTimeout) clearTimeout(responseTimeout);
     try {
       sendResponse(payload);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[Content] sendResponse failed (channel closed):', err);
     }
+  };
+
+  // Set timeout to ensure response is sent (Chrome closes channel after ~1 min)
+  const setResponseTimeout = (delayMs = 60000) => {
+    if (responseTimeout) clearTimeout(responseTimeout);
+    responseTimeout = setTimeout(() => {
+      safeSendResponse({ status: 'timeout', error: 'Response timeout' });
+    }, delayMs);
   };
 
   if (!request || typeof request.action !== 'string') {
@@ -764,6 +775,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // New modular actions
   if (request.action === 'create_new_session') {
     console.log('[Content] Received create_new_session action');
+    setResponseTimeout(10000); // 10s timeout
     (async () => {
       try {
         const success = await ensureNewChatSession();
@@ -780,6 +792,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'send_input') {
     console.log('[Content] Received send_input action, prompt length:', request.prompt?.length, 'reviewOnly:', request.reviewOnly);
+    setResponseTimeout(35000); // 35s timeout (30s for input + 5s buffer)
     (async () => {
       try {
         const prompt = typeof request.prompt === 'string' ? request.prompt : '';
@@ -836,10 +849,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'get_output') {
-    console.log('[Content] Received get_output action, wait:', request.wait);
+    const timeoutMs = Number.isFinite(request.timeoutMs) ? request.timeoutMs : 15 * 60 * 1000;
+    setResponseTimeout(timeoutMs + 5000); // Add 5s buffer to timeoutMs
     (async () => {
       try {
-        const wait = request.wait !== false;
+        const wait = request.wait !== false
         const timeoutMs = Number.isFinite(request.timeoutMs) ? request.timeoutMs : 15 * 60 * 1000;
         const stableMs = Number.isFinite(request.stableMs) ? request.stableMs : 1500;
 

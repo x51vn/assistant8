@@ -1,5 +1,7 @@
 const TEMPLATES_KEY = 'promptTemplates';
 
+import { showError, showWarning, showSuccess } from "./notification.js";
+
 const DEFAULT_TEMPLATES = [
   {
     id: 'template_1',
@@ -191,7 +193,7 @@ export function setupTemplates(dom) {
     const content = templateContentInput.value.trim();
 
     if (!name || !content) {
-      alert('Name and Content are required!');
+      showError('Name and Content are required!');
       return;
     }
 

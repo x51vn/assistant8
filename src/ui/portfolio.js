@@ -14,6 +14,8 @@ import {
 import { AdvancedMarketDataClient } from "../market-data/advanced-client.js";
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
+import { showConfirm } from "./confirmDialog.js";
+import { showError, showWarning, showSuccess } from "./notification.js";
 
 // ✅ Import loadAndDisplayHistory from results to reload history after HISTORY_UPDATE
 let resultsModule = null;
@@ -251,7 +253,8 @@ export async function initPortfolio({
       refreshPricesBtn.disabled = false;
       refreshPricesBtn.innerHTML =
         '<i class="fas fa-sync-alt"></i>';
-      alert("Lỗi khi làm mới giá: " + err.message);
+      // Show error dialog instead of alert
+      await showConfirm(`❌ Lỗi khi làm mới giá:\n\n${err.message}\n\nVui lòng kiểm tra kết nối internet và thử lại.`);
     }
   });
 
@@ -261,7 +264,7 @@ export async function initPortfolio({
   evaluateBtn?.addEventListener("click", async () => {
     const prompt = promptInput?.value.trim();
     if (!prompt) {
-      alert('Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
+      await showConfirm('⚠️ Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
       return;
     }
 
@@ -285,7 +288,7 @@ export async function initPortfolio({
           "[Portfolio] Failed to evaluate portfolio:",
           result.error,
         );
-        alert("Lỗi gửi prompt: " + (result.error || "Unknown error"));
+        await showConfirm(`❌ Lỗi gửi prompt:\n\n${result.error || "Unknown error"}`);
       } else {
         console.log(
           "[Portfolio] Evaluation sent successfully, chatId:",
@@ -296,7 +299,7 @@ export async function initPortfolio({
       console.error("[Portfolio] Evaluate error:", err);
       evaluateBtn.disabled = false;
       evaluateBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i>';
-      alert("Lỗi: " + err.message);
+      await showConfirm(`❌ Lỗi:\n\n${err.message}`);
     }
   });
 
@@ -421,7 +424,7 @@ export async function loadPortfolioUI(table) {
 
   // Display summary
   const summaryEl = document.getElementById("portfolioSummary");
-  if (summaryEl && portfolio.some((s) => s.currentPrice)) {
+  if (summaryEl && portfolio.length > 0) {
     summaryEl.style.display = "block";
     
     // Calculate NAV = Current Value of stocks + CASH
@@ -1250,13 +1253,13 @@ async function evaluateStock(stockCode) {
     );
 
     if (!result.success) {
-      alert("Không thể gửi đánh giá: " + (result.error || "Unknown error"));
+      await showConfirm(`❌ Không thể gửi đánh giá:\n\n${result.error || "Unknown error"}`);
     } else {
       console.log("[Portfolio] Stock evaluation sent, chatId:", result.chatId);
     }
   } catch (err) {
     console.error("[Portfolio] Error evaluating stock:", err);
-    alert("Lỗi khi đánh giá mã: " + err.message);
+    await showConfirm(`❌ Lỗi khi đánh giá mã:\n\n${err.message}`);
   }
 }
 
@@ -1711,6 +1714,12 @@ async function manualRefreshPrices(portfolioTable) {
 
     const results = await Promise.all(pricePromises);
     console.log("[Portfolio] All SSI fetch results:", results);
+
+    // Check if any prices were fetched successfully
+    const successfulFetches = results.filter(r => r.data && r.data.price).length;
+    if (successfulFetches === 0) {
+      throw new Error("Không lấy được giá từ SSI API. Vui lòng kiểm tra kết nối internet.");
+    }
 
     // Update portfolio with new prices and save to Supabase
     let updated = 0;

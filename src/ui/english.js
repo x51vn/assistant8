@@ -5,7 +5,9 @@
  */
 
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
-import { generateCorrelationId } from '../logger.js';import { showConfirm } from "./confirmDialog.js";
+import { generateCorrelationId } from '../logger.js';
+import { showConfirm } from "./confirmDialog.js";
+import { showError, showWarning, showSuccess } from "./notification.js";
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;
 let pollInFlight = false;
@@ -407,7 +409,7 @@ async function deleteEnglishItem(id, container) {
     });
 
     if (response?.errorCode) {
-      alert('Lỗi: ' + response.errorMessage);
+      showError('Lỗi: ' + response.errorMessage);
       return;
     }
 
@@ -415,7 +417,7 @@ async function deleteEnglishItem(id, container) {
     await loadSavedSentences(container);
   } catch (err) {
     console.error('[English] deleteEnglishItem error:', err);
-    alert('Lỗi khi xóa: ' + err.message);
+    showError('Lỗi khi xóa: ' + err.message);
   }
 }
 

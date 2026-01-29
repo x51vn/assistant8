@@ -1,6 +1,7 @@
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
 import { showConfirm } from './confirmDialog.js';
+import { showError, showWarning, showSuccess } from "./notification.js";
 
 export function setupErrors(dom) {
   const { 
@@ -116,7 +117,7 @@ export function setupErrors(dom) {
     const severity = errorSeverityInput?.value || 'medium';
 
     if (!title) {
-      alert('Vui lòng nhập tiêu đề lỗi');
+      showError('Vui lòng nhập tiêu đề lỗi');
       return;
     }
 
@@ -136,7 +137,7 @@ export function setupErrors(dom) {
       };
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_UPDATED) {
-          alert('Lỗi cập nhật!');
+          showError('Lỗi cập nhật!');
           return;
         }
         closeModal();
@@ -153,7 +154,7 @@ export function setupErrors(dom) {
       };
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ADDED) {
-          alert('Lỗi thêm mới!');
+          showError('Lỗi thêm mới!');
           return;
         }
         closeModal();
@@ -180,7 +181,7 @@ export function setupErrors(dom) {
       };
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_DELETED) {
-          alert('Lỗi xóa!');
+          showError('Lỗi xóa!');
           return;
         }
         loadErrors();
@@ -248,7 +249,7 @@ export function setupErrors(dom) {
         };
         chrome.runtime.sendMessage(message, (response) => {
           if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
-            alert('Lỗi khi xóa danh sách!');
+            showError('Lỗi khi xóa danh sách!');
             return;
           }
           loadErrors();
@@ -269,7 +270,7 @@ export function setupErrors(dom) {
         retrospectivePollInterval = null;
         retrospectiveBtn.disabled = false;
         retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
-        alert('Đã dừng phân tích.');
+        showError('Đã dừng phân tích.');
         return;
       }
 
@@ -279,7 +280,7 @@ export function setupErrors(dom) {
       retrospectiveBtn.innerHTML = '⏳ Đang phân tích...';
       
       console.log('[Errors] Retrospective feature temporarily disabled - needs migration to v1 schema');
-      alert('Chức năng retrospective tạm thời bị vô hiệu hóa');
+      showError('Chức năng retrospective tạm thời bị vô hiệu hóa');
       retrospectiveBtn.disabled = false;
       retrospectiveBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Retrospective';
     });

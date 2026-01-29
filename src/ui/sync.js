@@ -3,6 +3,8 @@
 
 // Public API for notes. All business logic uses Supabase handlers.
 
+import { showError, showWarning, showSuccess } from "./notification.js";
+
 // Messaging helper
 function sendMessage(action, payload = {}) {
   return Promise.resolve(null);
@@ -284,7 +286,7 @@ export async function setupNotes() {
   saveNoteBtn?.addEventListener('click', async () => {
     const text = noteInput.value.trim();
     if (!text) {
-      alert('Please enter some notes');
+      showError('Please enter some notes');
       return;
     }
     
@@ -406,10 +408,10 @@ async function askChatGPT(noteText) {
       }
     } else {
       console.error('[Notes] Failed to send to ChatGPT:', response);
-      alert('Failed to send to ChatGPT. Make sure ChatGPT tab is open.');
+      showError('Failed to send to ChatGPT. Make sure ChatGPT tab is open.');
     }
   } catch (err) {
     console.error('[Notes] Error asking ChatGPT:', err);
-    alert('Error: ' + err.message);
+    showError('Error: ' + err.message);
   }
 }

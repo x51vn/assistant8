@@ -6,6 +6,7 @@
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
 import { showConfirm } from "./confirmDialog.js";
+import { showError, showWarning, showSuccess } from "./notification.js";
 
 export function setupResults(dom) {
   const { runBtn, stopBtn } = dom;
@@ -584,7 +585,7 @@ export function setupResults(dom) {
 
       if (response?.errorCode) {
         console.error("[Results] Error deleting history:", response.errorMessage);
-        alert("Lỗi: " + response.errorMessage);
+        showError("Lỗi: " + response.errorMessage);
         return;
       }
 
@@ -593,7 +594,7 @@ export function setupResults(dom) {
       await loadAndDisplayHistory();
     } catch (error) {
       console.error("[Results] deleteHistoryItem error:", error);
-      alert("Lỗi khi xóa: " + error.message);
+      showError("Lỗi khi xóa: " + error.message);
     }
   }
 
