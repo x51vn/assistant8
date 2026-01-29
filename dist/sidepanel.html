@@ -29,13 +29,11 @@
           </div>
         </div>
         
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button id="refreshPricesBtn" class="secondary-btn" style="flex: 1;" title="Làm mới giá thủ công">
-            <i class="fas fa-sync-alt"></i> Làm mới giá
-          </button>
-        </div>
-        
         <div id="portfolioSummary" class="portfolio-summary" style="display: none;">
+          <div class="summary-row">
+            <span>NAV:</span>
+            <span id="totalNAV" class="summary-value">-</span>
+          </div>
           <div class="summary-row">
             <span>Total Entry:</span>
             <span id="totalEntry" class="summary-value">-</span>
@@ -53,8 +51,8 @@
           <thead>
             <tr>
               <th>Symbol</th>
-              <th>Entry</th>
-              <th>Current</th>
+              <th>Cost</th>
+              <th>Price</th>
               <th>Qty</th>
               <th>P&L</th>
               <th>Action</th>
@@ -66,6 +64,7 @@
         </table>
 
         <div class="button-group" style="margin-top: 16px;">
+          <button id="refreshPricesBtn" class="primary-btn" title="Làm mới giá thủ công"><i class="fas fa-sync-alt"></i></button>
           <button id="addStockBtn" class="primary-btn" title="Thêm hoặc sửa mã"><i class="fas fa-plus"></i></button>
           <button id="evaluateBtn" class="primary-btn" title="Đánh giá danh mục"><i class="fas fa-magnifying-glass"></i></button>
           <button id="runBtn" class="primary-btn" title="Chạy prompt ngay"><i class="fas fa-play"></i></button>
@@ -80,10 +79,6 @@
         <div class="history-section" style="border-top: 1px solid #eee; margin-top: 16px; padding-top: 16px;">
           <div class="page-header">
             <h3 style="margin: 0;">Lịch sử Chat</h3>
-            <div>
-              <button id="refreshHistoryBtn" class="icon-btn" title="Làm mởi lịch sử"><i class="fas fa-rotate-right"></i></button>
-              <button id="clearHistoryBtn" class="icon-btn" title="Xóa tất cả lịch sử"><i class="fas fa-trash"></i></button>
-            </div>
           </div>
           <div id="historyList" class="history-list">
             <p class="empty-state">Chưa có lịch sử. Chạy prompt để bắt đầu.</p>
@@ -370,12 +365,27 @@ Sử dụng {TOPIC} để thay thế chủ đề"
         </div>
         <div class="form-group">
           <label for="stockQuantityInput">Khối lượng:</label>
-          <input type="number" id="stockQuantityInput" class="text-input" placeholder="100" step="1" min="0" />
+          <input type="number" id="stockQuantityInput" class="text-input" placeholder="100" step="100" min="0" />
         </div>
       </div>
       <div class="modal-footer">
         <button id="saveStockBtn" class="primary-btn">Lưu</button>
         <button id="cancelPortfolioBtn" class="secondary-btn">Hủy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 320px;">
+      <div class="modal-body" style="padding: 20px;">
+        <div style="font-size: 14px; margin-bottom: 20px; color: #333;">
+          <p id="confirmMessage" style="margin: 0;">Xác nhận hành động này?</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="confirmBtn" class="primary-btn" style="flex: 1;">Xác nhận</button>
+        <button id="cancelConfirmBtn" class="secondary-btn" style="flex: 1;">Hủy</button>
       </div>
     </div>
   </div>

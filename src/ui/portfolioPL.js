@@ -170,6 +170,33 @@ export function formatCurrency(value) {
   }).format(value);
 }
 
+// Short number formatting: 1_000 -> 1K, 1_000_000 -> 1M, 1_000_000_000 -> 1B
+export function formatShortNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-';
+  const num = Math.abs(Number(value));
+  const sign = Number(value) < 0 ? '-' : '';
+
+  const thresholds = [
+    { value: 1e12, suffix: 'T' },
+    { value: 1e9, suffix: 'B' },
+    { value: 1e6, suffix: 'M' },
+    { value: 1e3, suffix: 'K' }
+  ];
+
+  for (const t of thresholds) {
+    if (num >= t.value) {
+      const v = num / t.value;
+      // Show no decimals for integer-like, else one decimal
+      const formatted = v % 1 === 0 ? String(Math.round(v)) : v.toFixed(1).replace(/\.0$/, '');
+      return `${sign}${formatted}${t.suffix}`;
+    }
+  }
+
+  // For small numbers, show without suffix, no decimals if integer, else two decimals
+  if (Number(value) % 1 === 0) return `${sign}${Math.round(num)}`;
+  return `${sign}${num.toFixed(2)}`;
+}
+
 export function formatPercent(value) {
   const sign = value >= 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;

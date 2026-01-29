@@ -386,3 +386,65 @@ registerHandler(MESSAGE_TYPES.HISTORY_CLEAR, async (message) => {
     );
   }
 });
+
+/**
+ * HISTORY_DELETE - Delete single history item by ID
+ */
+registerHandler(MESSAGE_TYPES.HISTORY_DELETE, async (message) => {
+  const correlationId = logger.startOperation('deleteHistory', message.correlationId);
+  const { id } = message.data || {};
+  
+  try {
+    const userId = await requireAuth(message);
+    
+    if (!id) {
+      logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
+      return createErrorResponse(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        'ID lịch sử không hợp lệ.'
+      );
+    }
+    
+    await supabaseWithRetry(
+      async () => {
+        const { error } = await supabase
+          .from('chat_history')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+        
+        if (error) throw error;
+      },
+      {
+        operationName: 'deleteHistory',
+        correlationId
+      }
+    );
+    
+    logger.endOperation(correlationId, 'success', { deletedId: id });
+    return createResponse(message, MESSAGE_TYPES.HISTORY_DELETED, { id });
+    
+  } catch (error) {
+    logger.endOperation(correlationId, 'error', { error: error.message });
+    
+    if (error.errorCode) {
+      return error;
+    }
+    
+    if (error.message?.includes('Failed to fetch')) {
+      return createErrorResponse(
+        message,
+        ERROR_CODES.NETWORK_ERROR,
+        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
+      );
+    }
+    
+    return createErrorResponse(
+      message,
+      ERROR_CODES.SUPABASE_ERROR,
+      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
+      { technicalError: error.message }
+    );
+  }
+});

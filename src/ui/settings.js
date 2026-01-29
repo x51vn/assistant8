@@ -215,6 +215,50 @@ Provide:
     });
   });
 
+  // Reload settings when user opens the Settings tab (ensure fresh data)
+  settingsBtn?.addEventListener('click', () => {
+    try {
+      loadAllSettingsAtOnce({
+        promptInput,
+        autoRunCheckbox,
+        evaluatePreviousCheckbox,
+        reviewPromptCheckbox,
+        realtimeEnabledCheckbox,
+        intervalInput,
+        portfolioPromptInput,
+        stockEvalPromptInput,
+        teaStockPromptInput,
+        contextMenuPromptInput,
+        englishPromptInput
+      });
+    } catch (err) {
+      console.warn('[Settings] Failed to reload settings on tab open', err);
+    }
+  });
+
+  // Listen for auth state changes broadcast from background and reload settings
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === MESSAGE_TYPES.AUTH_STATE_CHANGED && message.data?.user) {
+      try {
+        loadAllSettingsAtOnce({
+          promptInput,
+          autoRunCheckbox,
+          evaluatePreviousCheckbox,
+          reviewPromptCheckbox,
+          realtimeEnabledCheckbox,
+          intervalInput,
+          portfolioPromptInput,
+          stockEvalPromptInput,
+          teaStockPromptInput,
+          contextMenuPromptInput,
+          englishPromptInput
+        });
+      } catch (err) {
+        console.warn('[Settings] Failed to reload settings after auth change', err);
+      }
+    }
+  });
+
   // ✅ Settings already loaded at top of setupSettings() - no need to load again
 }
 

@@ -1,12 +1,19 @@
-import { MESSAGE_TYPES } from '../shared/messageSchema.js';
-import { generateCorrelationId } from '../logger.js';
+/**
+ * English Learning Module
+ * ✅ Supabase-backed: persists to `english` table
+ * Displays like Results page - list of English learning records
+ */
 
-const ENGLISH_PROMPT_KEY = 'englishPrompt';
-const ENGLISH_SENTENCES_KEY = 'englishSentences';
+import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { generateCorrelationId } from '../logger.js';import { showConfirm } from "./confirmDialog.js";
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;
 let pollInFlight = false;
+let currentEnglishList = [];
 
+/**
+ * Send runtime message to background handler
+ */
 function sendRuntimeMessage(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -19,14 +26,18 @@ function sendRuntimeMessage(message) {
   });
 }
 
+/**
+ * Initialize English learning module
+ */
 export async function initEnglish({
   englishTopicInput,
   generateSentenceBtn,
   englishResultArea,
   savedSentencesList
 }) {
-  console.log('[English] Initializing');
-  
+  console.log('[English] Initializing with Supabase table');
+
+  // Load initial list
   await loadSavedSentences(savedSentencesList);
   
   // X51LABS-80: Cleanup function to reset button state
@@ -101,9 +112,7 @@ export async function initEnglish({
     generateSentenceBtn.innerHTML = '⏳ Processing...';
 
     try {
-      const stored = await chrome.storage.local.get([ENGLISH_PROMPT_KEY]);
-      let promptTemplate = stored[ENGLISH_PROMPT_KEY] || `Teach me English about: {TOPIC}\n\nProvide:\n1. An English sentence/phrase\n2. Vietnamese translation\n3. Usage example`;
-      
+      const promptTemplate = getDefaultEnglishPrompt();
       const prompt = promptTemplate.replace(/{TOPIC}/g, topic);
       
       const message = {
@@ -211,15 +220,18 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
         clearInterval(currentPollInterval);
         currentPollInterval = null;
         
-        await saveSentence(topic, output, chatId, chatUrl, originalPrompt);
+        // Save to Supabase `english` table
+        await saveSentence(topic, chatId, chatUrl, originalPrompt);
+        
+        // Refresh list
         await loadSavedSentences(savedSentencesList);
         
         if (resultArea) {
           resultArea.innerHTML = `
             <div class="success">
               ✅ Đã lưu! (Chat: ${chatId ? chatId.substring(0, 8) : 'N/A'})<br>
-              <div style="margin-top: 12px; background: white; padding: 12px; border-radius: 6px; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">
-                ${escapeHtml(output.substring(0, 500))}${output.length > 500 ? '...' : ''}
+              <div style="margin-top: 12px; color: #666;">
+                Nhấn vào item để mở ChatGPT
               </div>
             </div>
           `;
@@ -239,82 +251,210 @@ async function pollForEnglishResult(resultArea, savedSentencesList, topic, origi
   }, 3000);
 }
 
-async function saveSentence(topic, response, chatId, chatUrl, originalPrompt) {
-  const stored = await chrome.storage.local.get([ENGLISH_SENTENCES_KEY]);
-  const sentences = Array.isArray(stored[ENGLISH_SENTENCES_KEY]) ? stored[ENGLISH_SENTENCES_KEY] : [];
-  
-  sentences.unshift({
-    id: `english_${Date.now()}`,
-    topic, response, chatId, chatUrl, prompt: originalPrompt,
-    timestamp: Date.now()
-  });
-  
-  if (sentences.length > MAX_SAVED_SENTENCES) {
-    sentences.splice(MAX_SAVED_SENTENCES);
+/**
+ * Save English sentence to Supabase `english` table
+ */
+async function saveSentence(topic, chatId, chatUrl, prompt) {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_ADD,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: {
+        chat_id: chatId,
+        topic
+      }
+    });
+
+    if (response?.errorCode) {
+      console.error('[English] saveSentence error:', response.errorMessage);
+      throw new Error(response.errorMessage);
+    }
+
+    console.log('[English] Saved to Supabase:', response);
+  } catch (err) {
+    console.error('[English] saveSentence failed:', err);
+    throw err;
   }
-  
-  await chrome.storage.local.set({ [ENGLISH_SENTENCES_KEY]: sentences });
 }
 
+/**
+ * Load saved sentences from Supabase `english` table
+ */
 async function loadSavedSentences(list) {
   if (!list) return;
-  
-  const stored = await chrome.storage.local.get([ENGLISH_SENTENCES_KEY]);
-  const sentences = Array.isArray(stored[ENGLISH_SENTENCES_KEY]) ? stored[ENGLISH_SENTENCES_KEY] : [];
-  
-  const countSpan = document.getElementById('savedSentencesCount');
-  if (countSpan) countSpan.textContent = sentences.length;
-  
-  if (sentences.length === 0) {
-    list.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
+
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_GET_ALL,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    if (response?.errorCode) {
+      console.error('[English] loadSavedSentences error:', response.errorMessage);
+      list.innerHTML = '<div class="empty-state">Lỗi tải dữ liệu</div>';
+      return;
+    }
+
+    currentEnglishList = response?.items || [];
+    const countSpan = document.getElementById('savedSentencesCount');
+    if (countSpan) countSpan.textContent = currentEnglishList.length;
+    
+    if (currentEnglishList.length === 0) {
+      list.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
+      return;
+    }
+    
+    // Render like Results page
+    renderEnglishList(list, currentEnglishList);
+  } catch (err) {
+    console.error('[English] loadSavedSentences failed:', err);
+    list.innerHTML = '<div class="empty-state">Lỗi khi tải dữ liệu</div>';
+  }
+}
+
+/**
+ * Render English list similar to Results page
+ */
+function renderEnglishList(container, items) {
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div class="empty-state">Chưa có câu nào</div>';
     return;
   }
-  
-  list.innerHTML = '';
-  
-  sentences.forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'saved-sentence-item';
-    div.style.cssText = 'padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer;';
-    
-    div.innerHTML = `
-      <div style="display: flex; justify-content: space-between;">
-        <strong style="color: #667eea;">${escapeHtml(s.topic)}</strong>
-        <span style="font-size: 11px; color: #999;">${formatTimeAgo(s.timestamp)}</span>
-      </div>
-      <div style="font-size: 12px; color: #666;">${escapeHtml(s.response.substring(0, 100))}...</div>
-      <div style="font-size: 10px; color: #aaa;">Chat: ${s.chatId ? s.chatId.substring(0, 8) : 'N/A'}</div>
-    `;
-    
-    div.addEventListener('click', () => showDetail(s));
-    list.appendChild(div);
+
+  // Sort by created_at descending
+  const sorted = [...items].sort((a, b) => {
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    return timeB - timeA;
+  });
+
+  const html = sorted
+    .map((item) => {
+      const date = new Date(item.created_at);
+      const dateStr = date.toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        month: '2-digit',
+        day: '2-digit'
+      });
+
+      return `
+        <div class="result-item english-item" style="padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; overflow: hidden;">
+          <div style="flex: 1; min-width: 0; overflow: hidden;">
+            <div style="font-weight: 600; color: #667eea; font-size: 14px; margin-bottom: 3px; word-break: break-word;">📚 ${escapeHtml(item.topic)}</div>
+            <div style="font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              Chat: <strong>${item.chat_id.substring(0, 8)}</strong> • ${dateStr}
+            </div>
+          </div>
+          <button class="english-delete-btn" data-id="${item.id}" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 16px; padding: 4px 8px; display: flex; align-items: center; justify-content: center; margin-left: 12px; flex-shrink: 0; transition: all 0.2s;" title="Xóa">
+            ✕
+          </button>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = html;
+
+  // Attach click handlers
+  container.querySelectorAll('.english-item').forEach((elem, idx) => {
+    elem.addEventListener('click', async (e) => {
+      // Don't trigger if clicking delete button
+      if (e.target.closest('.english-delete-btn')) return;
+      
+      // Use index directly from DOM order
+      if (idx < sorted.length) {
+        await openChat(sorted[idx]);
+      }
+    });
+  });
+
+  // Attach delete handlers
+  container.querySelectorAll('.english-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      await deleteEnglishItem(id, container);
+    });
   });
 }
 
-function showDetail(s) {
-  const modal = document.createElement('div');
-  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;';
-  
-  const content = document.createElement('div');
-  content.style.cssText = 'background: white; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto;';
-  
-  content.innerHTML = `
-    <h3 style="margin: 0 0 16px;">📚 ${escapeHtml(s.topic)}</h3>
-    <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
-      🕐 ${new Date(s.timestamp).toLocaleString('vi-VN')}<br>
-      🔗 Chat: ${s.chatId || 'N/A'}
-    </div>
-    <div style="background: #f9f9f9; padding: 16px; border-radius: 8px; white-space: pre-wrap; margin-bottom: 16px;">
-      ${escapeHtml(s.response)}
-    </div>
-    <button id="closeModal" class="primary-btn">Đóng</button>
-  `;
-  
-  modal.appendChild(content);
-  document.body.appendChild(modal);
-  
-  document.getElementById('closeModal').addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+/**
+ * Delete English item from Supabase
+ */
+async function deleteEnglishItem(id, container) {
+  const confirmed = await showConfirm({
+    title: 'Xóa câu học?',
+    message: 'Bạn có chắc chắn muốn xóa câu này?',
+    confirmText: 'Xóa',
+    cancelText: 'Hủy'
+  });
+
+  if (!confirmed) return;
+
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENGLISH_DELETE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { id }
+    });
+
+    if (response?.errorCode) {
+      alert('Lỗi: ' + response.errorMessage);
+      return;
+    }
+
+    // Refresh list
+    await loadSavedSentences(container);
+  } catch (err) {
+    console.error('[English] deleteEnglishItem error:', err);
+    alert('Lỗi khi xóa: ' + err.message);
+  }
+}
+
+/**
+ * Open ChatGPT with the saved chat_id
+ */
+async function openChat(item) {
+  try {
+    // First ensure ChatGPT is open
+    await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ENSURE_CHATGPT_OPEN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+    
+    // Then navigate to the specific chat
+    chrome.tabs.query({ url: 'https://chatgpt.com/*' }, (tabs) => {
+      if (tabs.length > 0) {
+        const chatUrl = `https://chatgpt.com/c/${item.chat_id}`;
+        chrome.tabs.update(tabs[0].id, { url: chatUrl });
+      }
+    });
+  } catch (err) {
+    console.error('[English] openChat error:', err);
+  }
+}
+
+/**
+ * Default English prompt template
+ */
+function getDefaultEnglishPrompt() {
+  return `Create a meaningful English learning exercise about "{TOPIC}". Format your response as follows:
+1. A sentence or phrase in English with some vocabulary to learn
+2. Vietnamese translation
+3. 2-3 example uses or variations
+4. A brief explanation of why this is useful to learn
+
+Make it engaging and practical for English learners.`;
 }
 
 function formatTimeAgo(ts) {
@@ -333,4 +473,47 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+async function getSettingsConfig() {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_GET,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    if (response?.errorCode) {
+      console.warn('[English] SETTINGS_GET failed:', response.errorMessage);
+      return {};
+    }
+
+    return response?.config || {};
+  } catch (error) {
+    console.error('[English] SETTINGS_GET error:', error);
+    return {};
+  }
+}
+
+async function updateSettingsConfig(config) {
+  try {
+    const response = await sendRuntimeMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SETTINGS_UPDATE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { config }
+    });
+
+    if (response?.errorCode) {
+      console.warn('[English] SETTINGS_UPDATE failed:', response.errorMessage);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[English] SETTINGS_UPDATE error:', error);
+    return false;
+  }
 }

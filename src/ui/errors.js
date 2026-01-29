@@ -1,5 +1,6 @@
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { generateCorrelationId } from '../logger.js';
+import { showConfirm } from './confirmDialog.js';
 
 export function setupErrors(dom) {
   const { 
@@ -162,21 +163,28 @@ export function setupErrors(dom) {
   }
 
   function deleteError(errorId) {
-    if (!confirm('Bạn có chắc muốn xóa lỗi này?')) return;
+    showConfirm({
+      title: 'Xóa lỗi?',
+      message: 'Bạn có chắc chắn muốn xóa lỗi này?',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy'
+    }).then(confirmed => {
+      if (!confirmed) return;
 
-    const message = {
-      v: 1,
-      type: MESSAGE_TYPES.ERROR_DELETE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      payload: { errorId }
-    };
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_DELETED) {
-        alert('Lỗi xóa!');
-        return;
-      }
-      loadErrors();
+      const message = {
+        v: 1,
+        type: MESSAGE_TYPES.ERROR_DELETE,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: { errorId }
+      };
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_DELETED) {
+          alert('Lỗi xóa!');
+          return;
+        }
+        loadErrors();
+      });
     });
   }
 
@@ -222,22 +230,29 @@ export function setupErrors(dom) {
   const clearErrorsBtn = document.getElementById('clearErrorsBtn');
   if (clearErrorsBtn) {
     clearErrorsBtn.addEventListener('click', () => {
-      if (!confirm('Bạn có chắc muốn xóa toàn bộ danh sách lỗi?')) return;
+      showConfirm({
+        title: 'Xóa tất cả lỗi?',
+        message: 'Hành động này không thể được hoàn tác. Bạn có chắc chắn?',
+        confirmText: 'Xóa',
+        cancelText: 'Hủy'
+      }).then(confirmed => {
+        if (!confirmed) return;
       
-      console.log('[Errors] Clearing all errors...');
-      const message = {
-        v: 1,
-        type: MESSAGE_TYPES.ERROR_CLEAR_ALL,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        payload: {}
-      };
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
-          alert('Lỗi khi xóa danh sách!');
-          return;
-        }
-        loadErrors();
+        console.log('[Errors] Clearing all errors...');
+        const message = {
+          v: 1,
+          type: MESSAGE_TYPES.ERROR_CLEAR_ALL,
+          correlationId: generateCorrelationId(),
+          timestamp: Date.now(),
+          payload: {}
+        };
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError || !response || response.type !== MESSAGE_TYPES.ERROR_ALL_CLEARED) {
+            alert('Lỗi khi xóa danh sách!');
+            return;
+          }
+          loadErrors();
+        });
       });
     });
   }

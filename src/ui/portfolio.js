@@ -7,6 +7,7 @@ import {
   calculateStockPL,
   calculatePortfolioTotalPL,
   formatCurrency,
+  formatShortNumber,
   formatPercent,
   getPLClass,
 } from "./portfolioPL.js";
@@ -52,8 +53,8 @@ async function getPortfolioFromSupabase() {
     );
 
     // ✅ Transform Supabase format to UI format
-    // Supabase: { id, symbol, quantity, avg_price, current_price, ... }
-    // UI expects: { code, entry, currentPrice, quantity, ... }
+    // Supabase: { id, symbol, quantity, avg_price, current_price, updated_at, ... }
+    // UI expects: { code, entry, currentPrice, quantity, priceUpdatedAt, ... }
     const transformed = items.map((item) => {
       console.log(`[Portfolio] Transforming item:`, item);
       console.log(
@@ -68,6 +69,7 @@ async function getPortfolioFromSupabase() {
         avg_price: item.avg_price,
         currentPrice: item.current_price,
         current_price: item.current_price,
+        priceUpdatedAt: item.updated_at, // ← Map for last update time display
         notes: item.notes,
         created_at: item.created_at,
         updated_at: item.updated_at,
@@ -239,16 +241,16 @@ export async function initPortfolio({
     try {
       refreshPricesBtn.disabled = true;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-spinner fa-spin"></i> Đang tải...';
+        '<i class="fas fa-spinner fa-spin"></i>';
       await manualRefreshPrices(portfolioTable);
       refreshPricesBtn.disabled = false;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+        '<i class="fas fa-sync-alt"></i>';
     } catch (err) {
       console.error("[Portfolio] Manual refresh failed:", err);
       refreshPricesBtn.disabled = false;
       refreshPricesBtn.innerHTML =
-        '<i class="fas fa-sync-alt"></i> Làm mới giá';
+        '<i class="fas fa-sync-alt"></i>';
       alert("Lỗi khi làm mới giá: " + err.message);
     }
   });
@@ -421,14 +423,22 @@ export async function loadPortfolioUI(table) {
   const summaryEl = document.getElementById("portfolioSummary");
   if (summaryEl && portfolio.some((s) => s.currentPrice)) {
     summaryEl.style.display = "block";
-    document.getElementById("totalEntry").textContent = formatCurrency(
+    
+    // Calculate NAV = Current Value of stocks + CASH
+    const cashItem = portfolio.find(s => s.code === 'CASH');
+    const cashAmount = cashItem ? cashItem.quantity : 0;
+    const totalNAV = portfolioSummary.totalCurrentValue + cashAmount;
+    
+    // Use short formatting for summary values (e.g., 200000000 -> 200M)
+    document.getElementById("totalNAV").textContent = formatShortNumber(totalNAV);
+    document.getElementById("totalEntry").textContent = formatShortNumber(
       portfolioSummary.totalEntryValue,
     );
-    document.getElementById("currentValue").textContent = formatCurrency(
+    document.getElementById("currentValue").textContent = formatShortNumber(
       portfolioSummary.totalCurrentValue,
     );
     const plEl = document.getElementById("totalPL");
-    plEl.textContent = `${formatCurrency(portfolioSummary.totalPL)} ${formatPercent(portfolioSummary.totalPLPercent)}`;
+    plEl.textContent = `${formatShortNumber(portfolioSummary.totalPL)} ${formatPercent(portfolioSummary.totalPLPercent)}`;
     plEl.className = `summary-value ${getPLClass(portfolioSummary.totalPL)}`;
   }
 
@@ -462,7 +472,7 @@ export async function loadPortfolioUI(table) {
         <td>${escapeHtml(stock.code)}</td>
         <td>-</td>
         <td>-</td>
-        <td>${stock.quantity.toFixed(2)}</td>
+        <td>${formatShortNumber(stock.quantity)}</td>
         <td>-</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
@@ -477,14 +487,14 @@ export async function loadPortfolioUI(table) {
     } else {
       const pl = calculateStockPL(stock);
       const plDisplay = pl
-        ? `<span class="${getPLClass(pl.pl)}">${formatCurrency(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
+        ? `<span class="${getPLClass(pl.pl)}">${formatShortNumber(pl.pl)} ${formatPercent(pl.plPercent)}</span>`
         : "-";
 
       row.innerHTML = `
         <td>${escapeHtml(stock.code)}</td>
-        <td>${stock.entry}</td>
-        <td>${stock.currentPrice || "-"}</td>
-        <td>${stock.quantity}</td>
+        <td>${formatShortNumber(stock.entry)}</td>
+        <td>${stock.currentPrice ? formatShortNumber(stock.currentPrice) : "-"}</td>
+        <td>${formatShortNumber(stock.quantity)}</td>
         <td>${plDisplay}</td>
         <td style="text-align: center;">
           <div class="portfolio-actions-dropdown">
