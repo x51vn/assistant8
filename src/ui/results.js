@@ -5,6 +5,7 @@
 
 import { MESSAGE_TYPES } from "../shared/messageSchema.js";
 import { generateCorrelationId } from "../logger.js";
+import { showConfirm } from "./confirmDialog.js";
 
 export function setupResults(dom) {
   const { runBtn, stopBtn } = dom;
@@ -122,8 +123,8 @@ export function setupResults(dom) {
             </div>
             ${item.chat_url ? `<div style="font-size: 11px;"><a href="${item.chat_url}" target="_blank" style="color: #0066cc; text-decoration: none;">🔗 Xem ChatGPT</a></div>` : ""}
           </div>
-          <button class="history-delete-btn" data-id="${item.id}" style="background: #ff6b6b; color: white; border: none; border-radius: 4px; padding: 6px 8px; cursor: pointer; font-size: 12px; margin-left: 8px; white-space: nowrap;">
-            ✕ Xóa
+          <button class="history-delete-btn" data-id="${item.id}" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 18px; padding: 4px 8px; margin-left: 8px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;" title="Xóa mục này">
+            <i class="fas fa-trash"></i>
           </button>
         </div>
       `;
@@ -569,7 +570,8 @@ export function setupResults(dom) {
    * Delete history item by ID
    */
   async function deleteHistoryItem(id) {
-    if (!confirm("Xác nhận xóa mục lịch sử này?")) return;
+    const confirmed = await showConfirm("Xác nhận xóa mục lịch sử này?");
+    if (!confirmed) return;
 
     try {
       const response = await chrome.runtime.sendMessage({

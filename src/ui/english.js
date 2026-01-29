@@ -5,8 +5,7 @@
  */
 
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
-import { generateCorrelationId } from '../logger.js';
-
+import { generateCorrelationId } from '../logger.js';import { showConfirm } from "./confirmDialog.js";
 const MAX_SAVED_SENTENCES = 50;
 let currentPollInterval = null;
 let pollInFlight = false;
@@ -264,8 +263,7 @@ async function saveSentence(topic, chatId, chatUrl, prompt) {
       timestamp: Date.now(),
       data: {
         chat_id: chatId,
-        topic,
-        prompt
+        topic
       }
     });
 
@@ -346,21 +344,16 @@ function renderEnglishList(container, items) {
       });
 
       return `
-        <div class="result-item english-item" style="padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;">
-          <div style="display: flex; justify-content: space-between; align-items: start;">
-            <div style="flex: 1;">
-              <div style="font-weight: 600; color: #667eea; margin-bottom: 4px;">📚 ${escapeHtml(item.topic)}</div>
-              <div style="font-size: 12px; color: #666; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${escapeHtml(item.prompt)}
-              </div>
-              <div style="font-size: 11px; color: #999;">
-                Chat: <strong>${item.chat_id.substring(0, 8)}</strong> | ${dateStr}
-              </div>
+        <div class="result-item english-item" style="padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; overflow: hidden;">
+          <div style="flex: 1; min-width: 0; overflow: hidden;">
+            <div style="font-weight: 600; color: #667eea; font-size: 14px; margin-bottom: 3px; word-break: break-word;">📚 ${escapeHtml(item.topic)}</div>
+            <div style="font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              Chat: <strong>${item.chat_id.substring(0, 8)}</strong> • ${dateStr}
             </div>
-            <button class="english-delete-btn" data-id="${item.id}" style="background: #ff6b6b; color: white; border: none; border-radius: 4px; padding: 6px 8px; cursor: pointer; font-size: 11px; margin-left: 8px;">
-              ✕ Xóa
-            </button>
           </div>
+          <button class="english-delete-btn" data-id="${item.id}" style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 16px; padding: 4px 8px; display: flex; align-items: center; justify-content: center; margin-left: 12px; flex-shrink: 0; transition: all 0.2s;" title="Xóa">
+            ✕
+          </button>
         </div>
       `;
     })
@@ -369,15 +362,14 @@ function renderEnglishList(container, items) {
   container.innerHTML = html;
 
   // Attach click handlers
-  container.querySelectorAll('.english-item').forEach((elem) => {
+  container.querySelectorAll('.english-item').forEach((elem, idx) => {
     elem.addEventListener('click', async (e) => {
       // Don't trigger if clicking delete button
       if (e.target.closest('.english-delete-btn')) return;
       
-      const topic = elem.querySelector('div').textContent;
-      const index = sorted.findIndex(item => item.topic === topic);
-      if (index !== -1) {
-        await openChat(sorted[index]);
+      // Use index directly from DOM order
+      if (idx < sorted.length) {
+        await openChat(sorted[idx]);
       }
     });
   });
@@ -396,7 +388,14 @@ function renderEnglishList(container, items) {
  * Delete English item from Supabase
  */
 async function deleteEnglishItem(id, container) {
-  if (!confirm('Xác nhận xóa?')) return;
+  const confirmed = await showConfirm({
+    title: 'Xóa câu học?',
+    message: 'Bạn có chắc chắn muốn xóa câu này?',
+    confirmText: 'Xóa',
+    cancelText: 'Hủy'
+  });
+
+  if (!confirmed) return;
 
   try {
     const response = await sendRuntimeMessage({
@@ -425,19 +424,23 @@ async function deleteEnglishItem(id, container) {
  */
 async function openChat(item) {
   try {
+    // First ensure ChatGPT is open
     await sendRuntimeMessage({
       v: 1,
-      type: MESSAGE_TYPES.CHAT_OPEN,
+      type: MESSAGE_TYPES.ENSURE_CHATGPT_OPEN,
       correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      data: {
-        chatId: item.chat_id,
-        chatUrl: `https://chatgpt.com/c/${item.chat_id}`
+      timestamp: Date.now()
+    });
+    
+    // Then navigate to the specific chat
+    chrome.tabs.query({ url: 'https://chatgpt.com/*' }, (tabs) => {
+      if (tabs.length > 0) {
+        const chatUrl = `https://chatgpt.com/c/${item.chat_id}`;
+        chrome.tabs.update(tabs[0].id, { url: chatUrl });
       }
     });
   } catch (err) {
     console.error('[English] openChat error:', err);
-    alert('Không thể mở ChatGPT: ' + err.message);
   }
 }
 
