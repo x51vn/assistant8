@@ -7,9 +7,10 @@ import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { SettingsForm } from './SettingsForm.jsx';
 import { StatusMessage } from '../components/StatusMessage.jsx';
+import { ConfirmationDialog } from '../components/ConfirmationDialog.jsx';
 import { UserSection } from '../components/UserSection.jsx';
 import { loadSettings, saveSettings } from '../api/settingsApi.js';
-import { isLoading, isSaving, resetAllFields, showStatus } from '../state/settingsState.js';
+import { isLoading, isSaving, resetAllFields, showStatus, showConfirm } from '../state/settingsState.js';
 
 export function SettingsPage() {
   // Load settings on mount
@@ -47,16 +48,17 @@ export function SettingsPage() {
   
   // Handle reset
   const handleReset = () => {
-    const confirmed = confirm(
-      'Are you sure you want to reset all settings to defaults?\n\n' +
-      'This will clear all prompts and reset checkboxes. This action cannot be undone.'
-    );
-    
-    if (confirmed) {
-      resetAllFields();
-      console.log('[SettingsPage] Settings reset to defaults');
-      showStatus('Đã reset cài đặt về mặc định', 'info');
-    }
+    showConfirm({
+      title: 'Xác nhận reset',
+      message: 'Bạn có chắc muốn reset tất cả cài đặt về mặc định?\n\nThao tác này không thể hoàn tác.',
+      confirmText: 'Reset',
+      cancelText: 'Hủy',
+      onConfirm: () => {
+        resetAllFields();
+        console.log('[SettingsPage] Settings reset to defaults');
+        showStatus('Đã reset cài đặt về mặc định', 'info');
+      }
+    });
   };
   
   // Show loading spinner
@@ -75,6 +77,7 @@ export function SettingsPage() {
   return (
     <div class="settings-page">
       <StatusMessage />
+      <ConfirmationDialog />
       <UserSection />
       <SettingsForm onSave={handleSave} onReset={handleReset} />
     </div>

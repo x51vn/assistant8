@@ -70,6 +70,53 @@ export function hideStatus() {
   statusMessage.value = '';
 }
 
+// ===== CONFIRMATION DIALOG SIGNALS =====
+export const confirmVisible = signal(false);
+export const confirmTitle = signal('Xác nhận');
+export const confirmMessage = signal('');
+export const confirmConfirmText = signal('Xác nhận');
+export const confirmCancelText = signal('Hủy');
+export const confirmOnConfirm = signal(null);
+export const confirmOnCancel = signal(null);
+
+/**
+ * Show confirmation dialog
+ * @param {Object} options
+ * @param {string} options.message
+ * @param {string} [options.title]
+ * @param {string} [options.confirmText]
+ * @param {string} [options.cancelText]
+ * @param {Function} [options.onConfirm]
+ * @param {Function} [options.onCancel]
+ */
+export function showConfirm({
+  message,
+  title = 'Xác nhận',
+  confirmText = 'Xác nhận',
+  cancelText = 'Hủy',
+  onConfirm,
+  onCancel
+}) {
+  if (!message) return;
+  confirmTitle.value = title;
+  confirmMessage.value = message;
+  confirmConfirmText.value = confirmText;
+  confirmCancelText.value = cancelText;
+  confirmOnConfirm.value = typeof onConfirm === 'function' ? onConfirm : null;
+  confirmOnCancel.value = typeof onCancel === 'function' ? onCancel : null;
+  confirmVisible.value = true;
+}
+
+/**
+ * Hide confirmation dialog and clear callbacks
+ */
+export function hideConfirm() {
+  confirmVisible.value = false;
+  confirmMessage.value = '';
+  confirmOnConfirm.value = null;
+  confirmOnCancel.value = null;
+}
+
 // ===== USER INFO SIGNALS =====
 export const userEmail = signal('');
 export const userName = signal('');

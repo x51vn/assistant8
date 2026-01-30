@@ -7,7 +7,7 @@ import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { checkAuthStatus, logout } from '../api/authApi.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { showStatus, userEmail, userName, isAuthLoading, isSaving } from '../state/settingsState.js';
+import { showStatus, showConfirm, userEmail, userName, isAuthLoading, isSaving } from '../state/settingsState.js';
 
 const MAX_EMAIL_LENGTH = 30;
 
@@ -61,29 +61,34 @@ export function UserSection() {
     };
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (isSaving.value) {
       showStatus('Đang lưu cài đặt. Vui lòng thử lại sau.', 'info');
       return;
     }
 
-    const confirmed = confirm('Bạn có chắc muốn đăng xuất?');
-    if (!confirmed) return;
-
-    isAuthLoading.value = true;
-    try {
-      const result = await logout();
-      if (result.success) {
-        showStatus('Đăng xuất thành công', 'success');
-      } else {
-        showStatus(result.error || 'Đăng xuất thất bại', 'error');
+    showConfirm({
+      title: 'Xác nhận đăng xuất',
+      message: 'Bạn có chắc muốn đăng xuất?',
+      confirmText: 'Đăng xuất',
+      cancelText: 'Hủy',
+      onConfirm: async () => {
+        isAuthLoading.value = true;
+        try {
+          const result = await logout();
+          if (result.success) {
+            showStatus('Đăng xuất thành công', 'success');
+          } else {
+            showStatus(result.error || 'Đăng xuất thất bại', 'error');
+          }
+        } catch (error) {
+          console.error('[UserSection] Logout failed:', error);
+          showStatus('Không thể đăng xuất. Vui lòng thử lại.', 'error');
+        } finally {
+          isAuthLoading.value = false;
+        }
       }
-    } catch (error) {
-      console.error('[UserSection] Logout failed:', error);
-      showStatus('Không thể đăng xuất. Vui lòng thử lại.', 'error');
-    } finally {
-      isAuthLoading.value = false;
-    }
+    });
   };
 
   const maskedEmail = maskEmail(userEmail.value);
