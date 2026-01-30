@@ -29,7 +29,7 @@ export function TextareaField({ label, value, rows = 4, placeholder, id }) {
         onInput={handleInput}
         rows={rows}
         placeholder={placeholder}
-        class="prompt-input"
+        class="textarea-input"
       />
     </div>
   );

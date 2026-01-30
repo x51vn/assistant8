@@ -35,6 +35,7 @@ export function NumberField({ label, value, min, max, step = 1, id }) {
         min={min}
         max={max}
         step={step}
+        class="number-input"
       />
     </div>
   );

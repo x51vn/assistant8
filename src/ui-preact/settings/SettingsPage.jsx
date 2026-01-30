@@ -6,8 +6,10 @@
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { SettingsForm } from './SettingsForm.jsx';
+import { StatusMessage } from '../components/StatusMessage.jsx';
+import { UserSection } from '../components/UserSection.jsx';
 import { loadSettings, saveSettings } from '../api/settingsApi.js';
-import { isLoading, isSaving, resetAllFields } from '../state/settingsState.js';
+import { isLoading, isSaving, resetAllFields, showStatus } from '../state/settingsState.js';
 
 export function SettingsPage() {
   // Load settings on mount
@@ -19,7 +21,7 @@ export function SettingsPage() {
         console.log('[SettingsPage] Settings loaded successfully');
       } catch (error) {
         console.error('[SettingsPage] Failed to load settings:', error);
-        alert('Failed to load settings: ' + error.message);
+        showStatus(`Không thể tải cài đặt: ${error.message}`, 'error');
       } finally {
         isLoading.value = false;
       }
@@ -34,10 +36,10 @@ export function SettingsPage() {
     try {
       await saveSettings();
       console.log('[SettingsPage] Settings saved successfully');
-      alert('✅ Settings saved successfully!');
+      showStatus('Đã lưu cài đặt thành công!', 'success');
     } catch (error) {
       console.error('[SettingsPage] Failed to save settings:', error);
-      alert('❌ Failed to save settings: ' + error.message);
+      showStatus(`Lưu thất bại: ${error.message}`, 'error');
     } finally {
       isSaving.value = false;
     }
@@ -53,7 +55,7 @@ export function SettingsPage() {
     if (confirmed) {
       resetAllFields();
       console.log('[SettingsPage] Settings reset to defaults');
-      alert('✅ Settings reset to defaults');
+      showStatus('Đã reset cài đặt về mặc định', 'info');
     }
   };
   
@@ -72,6 +74,8 @@ export function SettingsPage() {
   // Render form
   return (
     <div class="settings-page">
+      <StatusMessage />
+      <UserSection />
       <SettingsForm onSave={handleSave} onReset={handleReset} />
     </div>
   );

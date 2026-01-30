@@ -147,7 +147,7 @@ export function SettingsForm({ onSave, onReset }) {
       <div class="button-group">
         <button
           type="submit"
-          class="btn btn-primary"
+          class="primary-btn"
           disabled={!isFormValid.value || isSaving.value}
         >
           {isSaving.value ? (
@@ -163,7 +163,7 @@ export function SettingsForm({ onSave, onReset }) {
         
         <button
           type="button"
-          class="btn btn-secondary"
+          class="secondary-btn"
           onClick={onReset}
           disabled={isSaving.value}
         >

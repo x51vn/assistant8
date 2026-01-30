@@ -28,6 +28,53 @@ export const interval = signal(5); // Default 5 minutes
 export const isLoading = signal(false);
 export const isSaving = signal(false);
 
+// ===== STATUS MESSAGE SIGNALS =====
+export const statusMessage = signal('');
+export const statusType = signal('info');
+export const statusVisible = signal(false);
+
+let statusTimeoutId = null;
+
+/**
+ * Show status message with optional auto-hide duration
+ * @param {string} message
+ * @param {'success'|'error'|'info'|'warning'} [type='info']
+ * @param {number} [duration=3000] - Auto-hide duration in ms (0 = no auto-hide)
+ */
+export function showStatus(message, type = 'info', duration = 3000) {
+  if (!message) return;
+  if (statusTimeoutId) {
+    clearTimeout(statusTimeoutId);
+    statusTimeoutId = null;
+  }
+  statusMessage.value = message;
+  statusType.value = type;
+  statusVisible.value = true;
+  
+  if (duration > 0) {
+    statusTimeoutId = setTimeout(() => {
+      hideStatus();
+    }, duration);
+  }
+}
+
+/**
+ * Hide status message and clear any pending timeout
+ */
+export function hideStatus() {
+  if (statusTimeoutId) {
+    clearTimeout(statusTimeoutId);
+    statusTimeoutId = null;
+  }
+  statusVisible.value = false;
+  statusMessage.value = '';
+}
+
+// ===== USER INFO SIGNALS =====
+export const userEmail = signal('');
+export const userName = signal('');
+export const isAuthLoading = signal(false);
+
 // ===== COMPUTED SIGNALS =====
 /**
  * Form is valid if master prompt is not empty

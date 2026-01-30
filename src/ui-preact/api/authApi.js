@@ -1,34 +1,62 @@
 /**
- * Auth API - Stub implementation for X51LABS-151
- * Will be fully implemented in Task 3 (User Section)
- * 
- * X51LABS-150: Create stubs for future use
+ * Auth API - Background communication layer
+ * X51LABS-151: User Section authentication integration
  */
+
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { generateCorrelationId } from '../../logger.js';
 
 /**
  * Check authentication status
- * @returns {Promise<{authenticated: boolean, user: Object|null}>}
+ * @returns {Promise<{authenticated: boolean, user: Object|null, error?: string}>}
  */
 export async function checkAuthStatus() {
-  // TODO X51LABS-151: Implement actual auth check via MESSAGE_TYPES.SUPABASE_AUTH_CHECK
-  console.warn('[AuthAPI] checkAuthStatus() is a stub - implement in X51LABS-151');
-  
-  return {
-    authenticated: true, // Mock authenticated
-    user: {
-      email: 'stub@example.com',
-      id: 'stub-user-id'
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_CHECK,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    const loadError = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || loadError) {
+      console.error('[AuthAPI] Auth check failed:', loadError);
+      return { authenticated: false, user: null, error: loadError };
     }
-  };
+
+    return {
+      authenticated: response.authenticated || false,
+      user: response.user || null
+    };
+  } catch (error) {
+    console.error('[AuthAPI] Failed to check auth status:', error);
+    return { authenticated: false, user: null, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
 }
 
 /**
  * Logout user
- * @returns {Promise<{success: boolean}>}
+ * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function logout() {
-  // TODO X51LABS-151: Implement actual logout via MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT
-  console.warn('[AuthAPI] logout() is a stub - implement in X51LABS-151');
-  
-  return { success: true };
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    const logoutError = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || logoutError) {
+      console.error('[AuthAPI] Logout failed:', logoutError);
+      return { success: false, error: logoutError || 'Đăng xuất thất bại' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AuthAPI] Logout request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
 }

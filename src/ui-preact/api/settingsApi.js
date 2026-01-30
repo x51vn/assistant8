@@ -38,8 +38,9 @@ export async function loadSettings() {
   
   console.log('[SettingsAPI] SETTINGS_GET response:', response);
   
-  if (response.errorCode) {
-    throw new Error(response.errorMessage || 'Failed to load settings');
+  const loadError = response.error?.message || response.errorMessage;
+  if (response.error || response.errorCode || loadError) {
+    throw new Error(loadError || 'Failed to load settings');
   }
   
   // ⚠️ CRITICAL: createResponse spreads payload directly (not nested in .data)
@@ -133,8 +134,9 @@ export async function saveSettings() {
   
   console.log('[SettingsAPI] SETTINGS_UPDATE response:', response);
   
-  if (response.errorCode) {
-    throw new Error(response.errorMessage || 'Failed to save settings');
+  const saveError = response.error?.message || response.errorMessage;
+  if (response.error || response.errorCode || saveError) {
+    throw new Error(saveError || 'Failed to save settings');
   }
   
   console.log('[SettingsAPI] Settings saved successfully');
