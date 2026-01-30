@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import preact from '@preact/preset-vite';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
@@ -107,6 +108,7 @@ function copyExtensionStatic() {
 
       await copyFile(path.resolve(staticDir, 'manifest.json'), path.resolve(outDir, 'manifest.json'));
       await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
+      await copyFile(path.resolve(staticDir, 'sidepanel-preact.html'), path.resolve(outDir, 'sidepanel-preact.html'));
       await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
       await copyFile(path.resolve(staticDir, 'styles.css'), path.resolve(outDir, 'styles.css'));
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
@@ -123,9 +125,16 @@ function copyExtensionStatic() {
 
 export default defineConfig({
   plugins: [
+    preact(),
     validateEnvPlugin(), // X51LABS-130: Validate env vars before build
     copyExtensionStatic()
   ],
+  resolve: {
+    alias: {
+      'react': 'preact/compat',
+      'react-dom': 'preact/compat'
+    }
+  },
   // X51LABS-79: TODO - Add build size validation plugin (requires CJS or external script)
   build: {
     outDir: 'dist',
@@ -137,6 +146,7 @@ export default defineConfig({
         background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
         ui: path.resolve(__dirname, 'src/ui/index.js'),
+        'settings-preact': path.resolve(__dirname, 'src/ui-preact/settings/index.jsx'),
       },
       output: {
         entryFileNames: '[name].js',
