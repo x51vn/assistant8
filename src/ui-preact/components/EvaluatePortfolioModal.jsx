@@ -179,7 +179,7 @@ export default function EvaluatePortfolioModal() {
       <div class="modal modal--evaluate">
         <div class="modal__header">
           <h2>Evaluate Portfolio</h2>
-          <button class="modal__close-btn" onClick={handleClose}>✕</button>
+          <button class="modal__close-btn" onClick={handleClose}><i class="fas fa-times"></i></button>
         </div>
 
         <div class="modal__body">
@@ -237,7 +237,7 @@ export default function EvaluatePortfolioModal() {
             <div class="response-display">
               <div class="response-header">
                 <h3>ChatGPT Analysis</h3>
-                {isSaved.value && <span class="badge badge--success">✓ Saved to History</span>}
+                {isSaved.value && <span class="badge badge--success"><i class="fas fa-check"></i> Saved to History</span>}
               </div>
               <div class="response-content">
                 {chatResponse.value}
@@ -261,7 +261,7 @@ export default function EvaluatePortfolioModal() {
                 onClick={handleSendPrompt}
                 disabled={isLoading.value}
               >
-                {isLoading.value ? '⏳ Analyzing...' : '📊 Send to ChatGPT'}
+                {isLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Analyzing...</> : <><i class="fas fa-paper-plane"></i> Send to ChatGPT</>}
               </button>
             </>
           ) : (

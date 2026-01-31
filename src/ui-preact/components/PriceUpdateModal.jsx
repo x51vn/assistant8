@@ -125,7 +125,7 @@ export default function PriceUpdateModal() {
       <div class="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
         <div class="modal-header">
           <h2>Cập nhật giá cổ phiếu</h2>
-          <button class="modal-close" onClick={handleClose}>✕</button>
+          <button class="modal-close" onClick={handleClose}><i class="fas fa-times"></i></button>
         </div>
 
         {stocksToUpdate.length === 0 ? (

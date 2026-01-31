@@ -106,7 +106,8 @@ export async function addEnglish(chatId, topic, prompt) {
 
     return {
       success: true,
-      data: {
+      // ✅ CONSISTENCY FIX: Now handler returns { item: data }
+      data: response.item || {
         id: response.id,
         chat_id: response.chat_id,
         topic: response.topic,

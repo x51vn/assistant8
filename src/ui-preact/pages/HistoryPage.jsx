@@ -57,7 +57,7 @@ function HistoryItem({ item, onDelete, onOpenChat }) {
               title="Mở ChatGPT"
               onClick={() => onOpenChat(item.chat_url)}
             >
-              🔗
+              <i class="fas fa-external-link-alt"></i>
             </button>
           )}
           <button
@@ -65,7 +65,7 @@ function HistoryItem({ item, onDelete, onOpenChat }) {
             title="Xóa"
             onClick={() => setConfirmDelete(true)}
           >
-            🗑️
+            <i class="fas fa-trash"></i>
           </button>
         </div>
       </div>
@@ -191,7 +191,7 @@ export function HistoryPage() {
             title="Làm mới"
             onClick={loadHistory}
           >
-            🔄
+            <i class="fas fa-sync-alt"></i>
           </button>
           {historyItems.length > 0 && (
             <button
@@ -215,7 +215,7 @@ export function HistoryPage() {
       {/* Error State */}
       {error && (
         <div class="error-banner">
-          <span class="error-icon">⚠️</span>
+          <span class="error-icon"><i class="fas fa-exclamation-triangle"></i></span>
           <span class="error-message">{error}</span>
           <button class="btn-retry" onClick={loadHistory}>Thử lại</button>
         </div>
@@ -224,7 +224,7 @@ export function HistoryPage() {
       {/* Empty State */}
       {!error && historyItems.length === 0 && (
         <div class="empty-state">
-          <div class="empty-icon">📜</div>
+          <i class="fas fa-scroll empty-icon"></i>
           <h3>Chưa có lịch sử</h3>
           <p>Các cuộc hội thoại với ChatGPT sẽ được hiển thị ở đây</p>
         </div>

@@ -107,13 +107,11 @@ function copyExtensionStatic() {
       const staticDir = path.resolve(root, 'src', 'extension');
 
       await copyFile(path.resolve(staticDir, 'manifest.json'), path.resolve(outDir, 'manifest.json'));
-      await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
+      // ✅ CLEANUP: Removed legacy sidepanel.html, popup.html
       await copyFile(path.resolve(staticDir, 'sidepanel-preact.html'), path.resolve(outDir, 'sidepanel-preact.html'));
-      await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
       
-      // Copy split CSS files (X51LABS: Phase 1 - Legacy/Preact separation)
+      // ✅ CLEANUP: Only copy active CSS files (removed styles-legacy.css, styles.css)
       await copyFile(path.resolve(staticDir, 'styles-shared.css'), path.resolve(outDir, 'styles-shared.css'));
-      await copyFile(path.resolve(staticDir, 'styles-legacy.css'), path.resolve(outDir, 'styles-legacy.css'));
       await copyFile(path.resolve(staticDir, 'styles-preact.css'), path.resolve(outDir, 'styles-preact.css'));
       
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
@@ -150,7 +148,7 @@ export default defineConfig({
       input: {
         background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
-        ui: path.resolve(__dirname, 'src/ui/index.js'),
+        // ✅ CLEANUP: Removed legacy 'ui' entry point
         'settings-preact': path.resolve(__dirname, 'src/ui-preact/settings/index.jsx'),
       },
       output: {

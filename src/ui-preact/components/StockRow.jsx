@@ -13,7 +13,7 @@
 import { h } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 
-export default function StockRow({ stock, onEdit, onDelete }) {
+export default function StockRow({ stock, onEdit, onDelete, onEvaluate }) {
   const isCash = stock.symbol === 'CASH';
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -49,17 +49,23 @@ export default function StockRow({ stock, onEdit, onDelete }) {
     else if (plValue < 0) plColorClass = 'pl-loss';
   }
 
-  // Format number with thousand separators
-  const formatNumber = (num) => {
-    return Number(num || 0).toLocaleString('vi-VN');
+  // Format number shortened (100k, 1.2M, etc.)
+  const formatShort = (num) => {
+    const absNum = Math.abs(num || 0);
+    if (absNum >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (absNum >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (absNum >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(num));
   };
 
-  // Format currency (VND typically no decimals)
+  // Format number with thousand separators (for quantity)
+  const formatNumber = (num) => {
+    return formatShort(num);
+  };
+
+  // Format currency shortened
   const formatCurrency = (num) => {
-    return Number(Math.round(num || 0)).toLocaleString('vi-VN', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    });
+    return formatShort(num);
   };
 
   return (
@@ -78,13 +84,13 @@ export default function StockRow({ stock, onEdit, onDelete }) {
 
       {/* Average Price - Right aligned */}
       <td class="col-avg-price" align="right">
-        ₫{formatCurrency(stock.avg_price)}
+        {formatCurrency(stock.avg_price)}
       </td>
 
       {/* Current Price - Right aligned, grayed if undefined */}
       <td class="col-current-price" align="right">
         {stock.current_price !== undefined ? (
-          <span>₫{formatCurrency(stock.current_price)}</span>
+          <span>{formatCurrency(stock.current_price)}</span>
         ) : (
           <span class="price-unavailable">-</span>
         )}
@@ -92,17 +98,16 @@ export default function StockRow({ stock, onEdit, onDelete }) {
 
       {/* Current Value - Right aligned */}
       <td class="col-value" align="right">
-        ₫{formatCurrency(currentValue)}
+        {formatCurrency(currentValue)}
       </td>
 
       {/* P&L Value - Right aligned, colored, hidden for CASH */}
       <td class={`col-pl ${plColorClass}`} align="right">
         {isCash ? (
-          <span class="cash-pl-label">Tiền mặt</span>
+          <span class="cash-pl-label">Cash</span>
         ) : (
           <span class={`pl-value ${plColorClass}`}>
-            {plValue >= 0 ? '+' : ''}
-            ₫{formatCurrency(plValue)}
+            {plValue >= 0 ? '+' : ''}{formatCurrency(plValue)}
           </span>
         )}
       </td>
@@ -146,6 +151,20 @@ export default function StockRow({ stock, onEdit, onDelete }) {
               >
                 <i class="fas fa-edit"></i> Chỉnh sửa
               </button>
+              {/* Evaluate Stock - only for non-CASH */}
+              {!isCash && onEvaluate && (
+                <button
+                  class="dropdown-item evaluate-item"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    onEvaluate();
+                  }}
+                  title="Đánh giá"
+                >
+                  <i class="fas fa-magnifying-glass"></i> Đánh giá
+                </button>
+              )}
               <button
                 class="dropdown-item delete-item"
                 onClick={(e) => {

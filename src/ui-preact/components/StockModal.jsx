@@ -164,7 +164,7 @@ export default function StockModal() {
       <div class="modal-content" onClick={(e) => e.stopPropagation()}>
         <div class="modal-header">
           <h2>{isEditMode ? 'Sửa cổ phiếu' : 'Thêm cổ phiếu'}</h2>
-          <button class="modal-close" onClick={handleClose}>✕</button>
+          <button class="modal-close" onClick={handleClose}><i class="fas fa-times"></i></button>
         </div>
 
         <form onSubmit={handleSubmit} class="stock-form">
@@ -234,7 +234,7 @@ export default function StockModal() {
           {/* CASH Note */}
           {isCash && (
             <div class="form-note">
-              📝 Tiền mặt - Giá nhập được đặt thành 1
+              <i class="fas fa-info-circle"></i> Tiền mặt - Giá nhập được đặt thành 1
             </div>
           )}
 

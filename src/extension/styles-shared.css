@@ -16,6 +16,7 @@
   --input-bg: #fbfbfd;
   --input-border: #d8dce7;
   --input-focus: #667eea;
+  --input-text: #2c3e50;
   --toast-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
   --dialog-overlay: rgba(0, 0, 0, 0.4);
   --success-bg: #d4edda;
@@ -30,6 +31,23 @@
   --warning-bg: #fff3cd;
   --warning-text: #856404;
   --warning-border: #ffeeba;
+  /* Additional theme tokens */
+  --primary-color: #667eea;
+  --primary-hover: #5568d3;
+  --primary-shadow: rgba(102, 126, 234, 0.3);
+  --secondary-bg: #e8e8e8;
+  --secondary-text: #333;
+  --secondary-border: #d0d0d0;
+  --accent-color: #2ecc71;
+  --accent-hover: #27ae60;
+  --table-header-bg: #f8f9ff;
+  --table-row-hover: #f8f9ff;
+  --scrollbar-track: #f1f1f1;
+  --scrollbar-thumb: #ccc;
+  --scrollbar-thumb-hover: #999;
+  --card-gradient: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+  --card-positive-gradient: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  --card-negative-gradient: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
 }
 
 
@@ -49,6 +67,7 @@
     --input-bg: #0f172a;
     --input-border: #243146;
     --input-focus: #93a4ff;
+    --input-text: #e5e7eb;
     --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
     --dialog-overlay: rgba(2, 6, 23, 0.7);
     --success-bg: #1f3a2d;
@@ -63,6 +82,23 @@
     --warning-bg: #3a2f10;
     --warning-text: #f5da8b;
     --warning-border: #5a481a;
+    /* Additional dark theme tokens */
+    --primary-color: #818cf8;
+    --primary-hover: #6366f1;
+    --primary-shadow: rgba(129, 140, 248, 0.3);
+    --secondary-bg: #374151;
+    --secondary-text: #e5e7eb;
+    --secondary-border: #4b5563;
+    --accent-color: #34d399;
+    --accent-hover: #10b981;
+    --table-header-bg: #1f2937;
+    --table-row-hover: #1e293b;
+    --scrollbar-track: #1f2937;
+    --scrollbar-thumb: #4b5563;
+    --scrollbar-thumb-hover: #6b7280;
+    --card-gradient: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    --card-positive-gradient: linear-gradient(135deg, #14532d 0%, #111827 100%);
+    --card-negative-gradient: linear-gradient(135deg, #450a0a 0%, #111827 100%);
   }
 }
 
@@ -82,6 +118,7 @@ body.dark {
   --input-bg: #0f172a;
   --input-border: #243146;
   --input-focus: #93a4ff;
+  --input-text: #e5e7eb;
   --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
   --dialog-overlay: rgba(2, 6, 23, 0.7);
   --success-bg: #1f3a2d;
@@ -96,8 +133,32 @@ body.dark {
   --warning-bg: #3a2f10;
   --warning-text: #f5da8b;
   --warning-border: #5a481a;
+  /* Additional dark theme tokens */
+  --primary-color: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-shadow: rgba(129, 140, 248, 0.3);
+  --secondary-bg: #374151;
+  --secondary-text: #e5e7eb;
+  --secondary-border: #4b5563;
+  --accent-color: #34d399;
+  --accent-hover: #10b981;
+  --table-header-bg: #1f2937;
+  --table-row-hover: #1e293b;
+  --scrollbar-track: #1f2937;
+  --scrollbar-thumb: #4b5563;
+  --scrollbar-thumb-hover: #6b7280;
+  --card-gradient: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  --card-positive-gradient: linear-gradient(135deg, #14532d 0%, #111827 100%);
+  --card-negative-gradient: linear-gradient(135deg, #450a0a 0%, #111827 100%);
   background: var(--app-bg);
   color: var(--app-text);
+}
+
+/* Layout: Prevent body scroll, only page content scrolls */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* Body doesn't scroll */
 }
 
 body.sidepanel .content {
@@ -105,8 +166,8 @@ body.sidepanel .content {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 6px;
-  overflow-y: auto;
+  padding: 0;
+  overflow: hidden; /* Content container doesn't scroll either */
 }
 
 header {
@@ -265,16 +326,16 @@ h2 {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track, #f1f1f1);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: var(--scrollbar-thumb, #ccc);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  background: var(--scrollbar-thumb-hover, #999);
 }
 
 /* Dark Theme Support - REMOVED: Using CSS variables from :root instead (lines 45-75, 80-150) */
@@ -292,12 +353,12 @@ h2 {
 }
 
 .page-wrapper::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: var(--scrollbar-thumb, #ccc);
   border-radius: 3px;
 }
 
 .page-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  background: var(--scrollbar-thumb-hover, #999);
 }
 
 

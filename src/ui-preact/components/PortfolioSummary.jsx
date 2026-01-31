@@ -47,7 +47,7 @@ export default function PortfolioSummary() {
     <div class="portfolio-summary-container">
       {error.value && (
         <div class="summary-error" role="alert">
-          ⚠️ {error.value}
+          <i class="fas fa-exclamation-triangle"></i> {error.value}
         </div>
       )}
 

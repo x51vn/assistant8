@@ -47,21 +47,9 @@ export function App() {
       
       {/* ✅ SINGLE global loading overlay - NO DUPLICATE */}
       {globalLoading.value && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(255, 255, 255, 0.95)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000
-        }}>
-          <i class="fas fa-spinner fa-spin" style={{ fontSize: '48px', color: '#4CAF50' }}></i>
-          <p style={{ marginTop: '20px', color: '#666' }}>{loadingMessage.value}</p>
+        <div class="global-loading-overlay">
+          <i class="fas fa-spinner fa-spin loading-spinner"></i>
+          <p class="loading-message">{loadingMessage.value}</p>
         </div>
       )}
     </>

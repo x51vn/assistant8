@@ -3,6 +3,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { fetchPortfolio, addPortfolio, updatePortfolio, deletePortfolio } from '../api/portfolioApi.js';
 import { startPricePolling, stopPricePolling, updatePricesNow, isUpdatingPrices } from '../api/portfolioPriceUpdater.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
+import {
+  masterPrompt as masterPromptSignal,
+  portfolioPrompt as portfolioPromptSignal,
+  stockEvalPrompt as stockEvalPromptSignal,
+  teaStockPrompt as teaStockPromptSignal
+} from '../state/settingsState.js';
 import { 
   portfolioItems, 
   setPortfolioItems, 
@@ -14,17 +20,11 @@ import {
   isAddModalOpen,
   isEditModalOpen,
   isPriceUpdateModalOpen,
-  isEvaluateModalOpen,
-  isTeaStockModalOpen,
   closeAddModal,
   closeEditModal,
   closePriceUpdateModal,
-  closeEvaluateModal,
-  closeTeaStockModal,
   openPriceUpdateModal,
-  openAddModal as openAddModalState,
-  openEvaluateModal as openEvaluateModalState,
-  openTeaStockModal as openTeaStockModalState
+  openAddModal as openAddModalState
 } from '../state/portfolioState.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
@@ -160,26 +160,10 @@ async function sendPromptWithHistory(prompt, title, createNewChat = true) {
   }
 }
 
-/**
- * Helper: Get settings from background
- */
-async function getSettings() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SETTINGS_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('[Portfolio] Settings error:', chrome.runtime.lastError);
-        resolve({});
-        return;
-      }
-      resolve(response?.data?.config || {});
-    });
-  });
-}
+// NOTE: getSettings() function REMOVED - now using settings signals directly:
+// - portfolioPromptSignal (from settingsState.js)
+// - stockEvalPromptSignal (from settingsState.js)
+// - teaStockPromptSignal (from settingsState.js)
 
 /**
  * PortfolioPage - Main Container Component
@@ -188,7 +172,7 @@ async function getSettings() {
  * 
  * Purpose:
  * - Top-level component managing entire portfolio feature
- * - Orchestrates 8 sub-components: Actions, Summary, Table, StockModal, PriceUpdateModal, EvaluatePortfolioModal, TeaStockModal, and stub components
+ * - Orchestrates sub-components: Actions, Summary, Table, StockModal, PriceUpdateModal
  * - Manages complex state machine for exclusive modals (only one modal open at a time)
  * - Handles data lifecycle: fetch on mount, polling, cleanup on unmount
  * 
@@ -259,14 +243,13 @@ export default function PortfolioPage() {
   const [pageError, setPageError] = useState(null);
   const [showSuccessToast, setShowSuccessToast] = useState(null);
   const [showErrorToast, setShowErrorToast] = useState(null);
+  const [isRunningPrompt, setIsRunningPrompt] = useState(false);
 
   // Derived state: Any modal open?
   const anyModalOpen = computed(() =>
     isAddModalOpen.value ||
     isEditModalOpen.value ||
-    isPriceUpdateModalOpen.value ||
-    isEvaluateModalOpen.value ||
-    isTeaStockModalOpen.value
+    isPriceUpdateModalOpen.value
   );
 
   /**
@@ -276,8 +259,6 @@ export default function PortfolioPage() {
     closeAddModal();
     closeEditModal();
     closePriceUpdateModal();
-    closeEvaluateModal();
-    closeTeaStockModal();
   };
 
   /**
@@ -303,22 +284,6 @@ export default function PortfolioPage() {
   const openPriceModal = () => {
     closeAllModals();
     openPriceUpdateModal();
-  };
-
-  /**
-   * Open Evaluate Portfolio modal
-   */
-  const openEvaluateModal = () => {
-    closeAllModals();
-    openEvaluateModalState();
-  };
-
-  /**
-   * Open Tea Stock modal
-   */
-  const openTeaStockModal = () => {
-    closeAllModals();
-    openTeaStockModalState();
   };
 
   /**
@@ -368,18 +333,61 @@ export default function PortfolioPage() {
   };
 
   /**
-   * Handle evaluate portfolio
+   * Handle run prompt (runs saved master prompt immediately)
+   * Button: "Chạy Prompt ngay" - reads masterPrompt from settings signal
+   * Matches legacy runBtn functionality - sends master prompt ONLY, no portfolio data
    */
-  const handleEvaluatePortfolio = async (prompt) => {
+  const handleRunPrompt = async () => {
+    try {
+      setIsRunningPrompt(true);
+      
+      // Read MASTER prompt from settings signal (NOT portfolioPrompt)
+      const prompt = masterPromptSignal.value;
+      
+      if (!prompt || !prompt.trim()) {
+        setShowErrorToast('Vui lòng nhập Master Prompt trong tab "Cấu hình"');
+        setTimeout(() => { setShowErrorToast(null); }, 3000);
+        setIsRunningPrompt(false);
+        return;
+      }
+      
+      // Legacy runBtn sends master prompt directly WITHOUT portfolio data
+      console.log('[Portfolio] Running master prompt immediately');
+
+      const result = await sendPromptWithHistory(prompt, 'Master Prompt', true);
+
+      setIsRunningPrompt(false);
+
+      if (!result.success) {
+        setShowErrorToast(`Lỗi gửi prompt: ${result.error}`);
+        setTimeout(() => { setShowErrorToast(null); }, 3000);
+      } else {
+        setShowSuccessToast('Đã gửi master prompt!');
+        setTimeout(() => { setShowSuccessToast(null); }, 3000);
+      }
+    } catch (error) {
+      console.error('[Portfolio] Run prompt error:', error);
+      setIsRunningPrompt(false);
+      setShowErrorToast(`Lỗi: ${error.message}`);
+      setTimeout(() => { setShowErrorToast(null); }, 3000);
+    }
+  };
+
+  /**
+   * Handle evaluate portfolio - reads prompt from settings signal
+   * Button: "Đánh giá danh mục" - combines portfolio data with portfolioPrompt
+   */
+  const handleEvaluatePortfolio = async () => {
+    // Read prompt from settings signal (NOT from modal input)
+    const prompt = portfolioPromptSignal.value;
+    
     if (!prompt || !prompt.trim()) {
-      setShowErrorToast('Please enter evaluation prompt');
+      setShowErrorToast('Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
       setTimeout(() => { setShowErrorToast(null); }, 3000);
       return;
     }
 
     try {
-      closeAllModals();
-      
       // Build portfolio summary - use correct field names from Supabase schema
       const portfolio = portfolioItems.value;
       let portfolioText = '## DANH MỤC HIỆN CÓ\n\n';
@@ -415,33 +423,33 @@ export default function PortfolioPage() {
       const result = await sendPromptWithHistory(fullPrompt, 'Portfolio Evaluation', true);
 
       if (!result.success) {
-        setShowErrorToast(`Failed to send: ${result.error}`);
+        setShowErrorToast(`Lỗi gửi: ${result.error}`);
         setTimeout(() => { setShowErrorToast(null); }, 3000);
       } else {
-        setShowSuccessToast('Portfolio evaluation sent to ChatGPT!');
+        setShowSuccessToast('Đã gửi đánh giá danh mục lên ChatGPT!');
         setTimeout(() => { setShowSuccessToast(null); }, 3000);
       }
     } catch (error) {
       console.error('[Portfolio] Evaluate error:', error);
-      setShowErrorToast(`Error: ${error.message}`);
+      setShowErrorToast(`Lỗi: ${error.message}`);
       setTimeout(() => { setShowErrorToast(null); }, 3000);
     }
   };
 
   /**
-   * Handle evaluate stock
+   * Handle evaluate stock (individual stock evaluation from dropdown)
+   * Reads stockEvalPrompt from settings signal
    */
-  const handleEvaluateStock = async (stockId) => {
+  const handleEvaluateStock = async (stock) => {
     try {
-      const stock = portfolioItems.value.find(s => s.id === stockId);
       if (!stock) {
-        setShowErrorToast('Stock not found');
+        setShowErrorToast('Không tìm thấy cổ phiếu');
         setTimeout(() => { setShowErrorToast(null); }, 3000);
         return;
       }
 
-      const settings = await getSettings();
-      const evalPrompt = settings.stockEvalPrompt || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+      // Read prompt from settings signal (NOT from API call)
+      const evalPrompt = stockEvalPromptSignal.value || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
       
       // Use correct field names: symbol, avg_price, current_price
       const prompt = evalPrompt.replace('{SYMBOL}', stock.symbol);
@@ -456,43 +464,46 @@ export default function PortfolioPage() {
       const result = await sendPromptWithHistory(fullPrompt, `Stock Evaluation: ${stock.symbol}`, true);
 
       if (!result.success) {
-        setShowErrorToast(`Failed to send: ${result.error}`);
+        setShowErrorToast(`Lỗi gửi: ${result.error}`);
         setTimeout(() => { setShowErrorToast(null); }, 3000);
       } else {
-        setShowSuccessToast(`Stock ${stock.symbol} evaluation sent!`);
+        setShowSuccessToast(`Đã gửi đánh giá ${stock.symbol}!`);
         setTimeout(() => { setShowSuccessToast(null); }, 3000);
       }
     } catch (error) {
       console.error('[Portfolio] Evaluate stock error:', error);
-      setShowErrorToast(`Error: ${error.message}`);
+      setShowErrorToast(`Lỗi: ${error.message}`);
       setTimeout(() => { setShowErrorToast(null); }, 3000);
     }
   };
 
   /**
-   * Handle tea stock search
+   * Handle tea stock search - reads prompt from settings signal
+   * Button: "Tìm cổ phiếu trà đá" - sends teaStockPrompt to ChatGPT
    */
-  const handleTeaStockSearch = async (prompt) => {
+  const handleTeaStockSearch = async () => {
+    // Read prompt from settings signal (NOT from modal input)
+    const prompt = teaStockPromptSignal.value;
+    
     if (!prompt || !prompt.trim()) {
-      setShowErrorToast('Please enter tea stock search prompt');
+      setShowErrorToast('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
       setTimeout(() => { setShowErrorToast(null); }, 3000);
       return;
     }
 
     try {
-      closeAllModals();
       const result = await sendPromptWithHistory(prompt, 'Tea Stock Search', true);
 
       if (!result.success) {
-        setShowErrorToast(`Failed to send: ${result.error}`);
+        setShowErrorToast(`Lỗi gửi: ${result.error}`);
         setTimeout(() => { setShowErrorToast(null); }, 3000);
       } else {
-        setShowSuccessToast('Tea stock search sent to ChatGPT!');
+        setShowSuccessToast('Đã gửi tìm kiếm cổ phiếu trà đá!');
         setTimeout(() => { setShowSuccessToast(null); }, 3000);
       }
     } catch (error) {
       console.error('[Portfolio] Tea stock search error:', error);
-      setShowErrorToast(`Error: ${error.message}`);
+      setShowErrorToast(`Lỗi: ${error.message}`);
       setTimeout(() => { setShowErrorToast(null); }, 3000);
     }
   };
@@ -586,9 +597,11 @@ export default function PortfolioPage() {
           <PortfolioActions
             onAddStock={openAddModal}
             onRefresh={handleRefreshPrices}
-            onEvaluate={openEvaluateModal}
-            onTeaStock={openTeaStockModal}
+            onEvaluate={handleEvaluatePortfolio}
+            onRunPrompt={handleRunPrompt}
+            onTeaStock={handleTeaStockSearch}
             isRefreshing={isUpdatingPrices.value}
+            isRunningPrompt={isRunningPrompt}
             anyModalOpen={anyModalOpen.value}
           />
 
@@ -600,6 +613,7 @@ export default function PortfolioPage() {
             onEdit={handleEditStock}
             onDelete={handleStockDeleted}
             onUpdatePrice={openPriceModal}
+            onEvaluateStock={handleEvaluateStock}
           />
 
           {/* Add Stock Modal */}
@@ -626,212 +640,17 @@ export default function PortfolioPage() {
               onClose={closeAllModals}
             />
           )}
-
-          {/* Evaluate Portfolio Modal */}
-          {isEvaluateModalOpen.value && (
-            <EvaluatePortfolioModal
-              onEvaluate={handleEvaluatePortfolio}
-              onClose={closeAllModals}
-            />
-          )}
-
-          {/* Tea Stock Modal */}
-          {isTeaStockModalOpen.value && (
-            <TeaStockModal
-              onSearch={handleTeaStockSearch}
-              onClose={closeAllModals}
-            />
-          )}
         </>
       )}
     </div>
   );
 }
 
-/**
- * EvaluatePortfolioModal - Modal for portfolio evaluation
- */
-function EvaluatePortfolioModal({ onEvaluate, onClose }) {
-  const prompt = signal('');
-  const isLoading = signal(false);
-  const error = signal('');
-
-  const handleSubmit = async () => {
-    error.value = '';
-    
-    if (!prompt.value.trim()) {
-      error.value = 'Please enter evaluation prompt';
-      setTimeout(() => { error.value = ''; }, 3000);
-      return;
-    }
-
-    isLoading.value = true;
-    try {
-      await onEvaluate(prompt.value);
-    } finally {
-      isLoading.value = false;
-      onClose();
-    }
-  };
-
-  return (
-    <div class="modal" onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div class="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', maxWidth: '500px', width: '90%' }}>
-        <h2>Evaluate Portfolio</h2>
-        <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px' }}>
-          Enter your evaluation prompt. Your portfolio data will be automatically included.
-        </p>
-        
-        {error.value && (
-          <div style={{ backgroundColor: '#fee', border: '1px solid #fcc', color: '#c33', padding: '12px', borderRadius: '4px', marginBottom: '16px', fontSize: '14px' }}>
-            {error.value}
-          </div>
-        )}
-        
-        <textarea
-          value={prompt.value}
-          onInput={(e) => { prompt.value = e.target.value; }}
-          placeholder="e.g., Provide investment recommendations based on current market conditions"
-          style={{
-            width: '100%',
-            minHeight: '120px',
-            padding: '8px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            marginBottom: '16px',
-            boxSizing: 'border-box'
-          }}
-        />
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            disabled={isLoading.value}
-            style={{
-              padding: '8px 16px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: '#f5f5f5',
-              cursor: isLoading.value ? 'not-allowed' : 'pointer',
-              opacity: isLoading.value ? 0.6 : 1
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading.value}
-            style={{
-              padding: '8px 16px',
-              border: 'none',
-              borderRadius: '4px',
-              backgroundColor: '#667eea',
-              color: 'white',
-              cursor: isLoading.value ? 'not-allowed' : 'pointer',
-              opacity: isLoading.value ? 0.6 : 1
-            }}
-          >
-            {isLoading.value ? 'Sending...' : 'Evaluate'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * TeaStockModal - Modal for tea stock search
- */
-function TeaStockModal({ onSearch, onClose }) {
-  const prompt = signal('');
-  const isLoading = signal(false);
-  const error = signal('');
-
-  const handleSubmit = async () => {
-    error.value = '';
-    
-    if (!prompt.value.trim()) {
-      error.value = 'Please enter search prompt';
-      setTimeout(() => { error.value = ''; }, 3000);
-      return;
-    }
-
-    isLoading.value = true;
-    try {
-      await onSearch(prompt.value);
-    } finally {
-      isLoading.value = false;
-      onClose();
-    }
-  };
-
-  return (
-    <div class="modal" onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div class="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', maxWidth: '500px', width: '90%' }}>
-        <h2>🍵 Tea Stock Search</h2>
-        <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px' }}>
-          Find potential stocks that match your criteria
-        </p>
-        
-        {error.value && (
-          <div style={{ backgroundColor: '#fee', border: '1px solid #fcc', color: '#c33', padding: '12px', borderRadius: '4px', marginBottom: '16px', fontSize: '14px' }}>
-            {error.value}
-          </div>
-        )}
-        
-        <textarea
-          value={prompt.value}
-          onInput={(e) => { prompt.value = e.target.value; }}
-          placeholder="e.g., Find Vietnamese stocks with dividend yield > 5% and market cap > 1 trillion VND"
-          style={{
-            width: '100%',
-            minHeight: '120px',
-            padding: '8px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            marginBottom: '16px',
-            boxSizing: 'border-box'
-          }}
-        />
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            disabled={isLoading.value}
-            style={{
-              padding: '8px 16px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: '#f5f5f5',
-              cursor: isLoading.value ? 'not-allowed' : 'pointer',
-              opacity: isLoading.value ? 0.6 : 1
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading.value}
-            style={{
-              padding: '8px 16px',
-              border: 'none',
-              borderRadius: '4px',
-              backgroundColor: '#2ecc71',
-              color: 'white',
-              cursor: isLoading.value ? 'not-allowed' : 'pointer',
-              opacity: isLoading.value ? 0.6 : 1
-            }}
-          >
-            {isLoading.value ? 'Searching...' : 'Search'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// NOTE: EvaluatePortfolioModal and TeaStockModal REMOVED
+// These buttons now read prompts directly from settings signals and execute immediately
+// - handleEvaluatePortfolio: reads portfolioPromptSignal + builds portfolio data table
+// - handleTeaStockSearch: reads teaStockPromptSignal (no portfolio data)
+// - handleRunPrompt: reads masterPromptSignal (no portfolio data) - legacy runBtn behavior
+// - handleEvaluateStock: reads stockEvalPromptSignal + stock details
 
 export { PortfolioPage };

@@ -10,6 +10,7 @@
 import { createContext } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { checkAuthStatus, login, logout, listenAuthStateChanges } from '../api/authApi.js';
+import { loadSettings } from '../api/settingsApi.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 
 /**
@@ -42,6 +43,7 @@ export function AuthProvider({ children }) {
 
   // Check initial auth status on mount
   // This runs ONCE on mount to check if user is already logged in
+  // ✅ Also loads settings if already authenticated
   useEffect(() => {
     const checkInitialAuth = async () => {
       setGlobalLoading(true, 'Đang kiểm tra đăng nhập...');
@@ -53,6 +55,17 @@ export function AuthProvider({ children }) {
         setUser(result.user);
         setError(result.error || null);
         setInitialCheckDone(true);
+        
+        // ✅ Load settings immediately if already logged in
+        if (result.authenticated) {
+          try {
+            console.log('[AuthContext] User already authenticated, loading settings...');
+            await loadSettings();
+            console.log('[AuthContext] Settings loaded successfully');
+          } catch (err) {
+            console.error('[AuthContext] Failed to load settings:', err);
+          }
+        }
       }
       
       hideLoading();
@@ -63,13 +76,25 @@ export function AuthProvider({ children }) {
 
   // Listen for auth state changes from background
   // This handles: login, logout, token refresh, session restore
+  // ✅ Also loads settings when user becomes authenticated
   useEffect(() => {
-    const cleanup = listenAuthStateChanges(({ authenticated, user }) => {
-      console.log('[AuthContext] Auth state changed via listener:', { authenticated, hasUser: !!user });
-      setAuthenticated(authenticated);
-      setUser(user);
+    const cleanup = listenAuthStateChanges(async ({ authenticated: isAuth, user: authUser }) => {
+      console.log('[AuthContext] Auth state changed via listener:', { authenticated: isAuth, hasUser: !!authUser });
+      setAuthenticated(isAuth);
+      setUser(authUser);
       setError(null);
       setInitialCheckDone(true); // Mark as done so initial check won't override
+      
+      // ✅ Load settings when user logs in (auth state changes to authenticated)
+      if (isAuth && authUser) {
+        try {
+          console.log('[AuthContext] User authenticated, loading settings...');
+          await loadSettings();
+          console.log('[AuthContext] Settings loaded successfully after auth change');
+        } catch (err) {
+          console.error('[AuthContext] Failed to load settings after auth change:', err);
+        }
+      }
     });
 
     return cleanup;

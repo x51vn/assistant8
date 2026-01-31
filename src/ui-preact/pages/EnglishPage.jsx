@@ -61,7 +61,7 @@ function EnglishItem({ item, onDelete, onOpen }) {
   return (
     <div class="result-item english-item" onClick={handleClick}>
       <div class="english-content">
-        <div class="english-topic">📚 {item.topic}</div>
+        <div class="english-topic"><i class="fas fa-book"></i> {item.topic}</div>
         <div class="english-meta">
           Chat: <strong>{item.chat_id.substring(0, 8)}</strong> • {formatDate(item.created_at)}
         </div>
@@ -74,7 +74,7 @@ function EnglishItem({ item, onDelete, onOpen }) {
           setConfirmDelete(true);
         }}
       >
-        ✕
+        <i class="fas fa-times"></i>
       </button>
 
       {/* Confirm Delete Dialog */}
@@ -193,7 +193,7 @@ export function EnglishPage() {
       
       setResultMessage({
         type: 'loading',
-        text: `⏳ Đang chờ response... (${pollCount * 3}s)`
+        text: `Đang chờ response... (${pollCount * 3}s)`
       });
       
       const result = await getChatGPTOutput();
@@ -211,12 +211,12 @@ export function EnglishPage() {
         if (saveResult.error) {
           setResultMessage({
             type: 'error',
-            text: `❌ Lỗi lưu: ${saveResult.error.message}`
+            text: `Lỗi lưu: ${saveResult.error.message}`
           });
         } else {
           setResultMessage({
             type: 'success',
-            text: `✅ Đã lưu! (Chat: ${result.chatId.substring(0, 8)})\n\nNhấn vào item để mở ChatGPT`
+            text: `Đã lưu! (Chat: ${result.chatId.substring(0, 8)})\n\nNhấn vào item để mở ChatGPT`
           });
           
           // Refresh list
@@ -238,7 +238,7 @@ export function EnglishPage() {
       setGenerating(true);
       setResultMessage({
         type: 'loading',
-        text: '⏳ Yêu cầu ChatGPT chọn topic phổ biến nhất trong tuần...'
+        text: 'Yêu cầu ChatGPT chọn topic phổ biến nhất trong tuần...'
       });
       
       const topicResult = await autoSelectTopic();
@@ -246,7 +246,7 @@ export function EnglishPage() {
       if (topicResult.error) {
         setResultMessage({
           type: 'error',
-          text: `❌ ${topicResult.error.message}`
+          text: `Lỗi: ${topicResult.error.message}`
         });
         setGenerating(false);
         return;
@@ -256,7 +256,7 @@ export function EnglishPage() {
       setTopic(finalTopic);
       setResultMessage({
         type: 'info',
-        text: `📝 ChatGPT đã chọn topic: ${finalTopic}`
+        text: `ChatGPT đã chọn topic: ${finalTopic}`
       });
       
       // Small delay to show selected topic
@@ -267,7 +267,7 @@ export function EnglishPage() {
     setGenerating(true);
     setResultMessage({
       type: 'loading',
-      text: '⏳ Đang gửi prompt...'
+      text: 'Đang gửi prompt...'
     });
     
     const prompt = getEnglishPromptTemplate(finalTopic);
@@ -279,7 +279,7 @@ export function EnglishPage() {
     if (sendResult.error) {
       setResultMessage({
         type: 'error',
-        text: `❌ Lỗi: ${sendResult.error.message}`
+        text: `Lỗi: ${sendResult.error.message}`
       });
       setGenerating(false);
       return;
@@ -288,7 +288,7 @@ export function EnglishPage() {
     // Start polling for response
     setResultMessage({
       type: 'loading',
-      text: '⏳ Đang chờ response...'
+      text: 'Đang chờ response...'
     });
     
     pollForResponse();
@@ -324,9 +324,9 @@ export function EnglishPage() {
           disabled={generating}
         >
           {generating ? (
-            <>⏳ Processing...</>
+            <><i class="fas fa-spinner fa-spin"></i> Processing...</>
           ) : (
-            <>🚀 Generate & Learn</>
+            <><i class="fas fa-rocket"></i> Generate & Learn</>
           )}
         </button>
 
@@ -351,7 +351,7 @@ export function EnglishPage() {
             title="Làm mới"
             onClick={loadEnglishList}
           >
-            🔄
+            <i class="fas fa-sync-alt"></i>
           </button>
         </div>
 

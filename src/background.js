@@ -569,7 +569,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     if (!chrome.sidePanel) return;
 
     if (chrome.sidePanel.setOptions) {
-      await chrome.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel.html', enabled: true });
+      // ✅ MIGRATION: Use Preact sidepanel
+      await chrome.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel-preact.html', enabled: true });
     }
     if (chrome.sidePanel.open) {
       await chrome.sidePanel.open({ tabId: tab.id });

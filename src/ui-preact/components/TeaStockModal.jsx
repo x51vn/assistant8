@@ -191,8 +191,8 @@ export default function TeaStockModal() {
     <div class="modal-overlay">
       <div class="modal modal--teaslock">
         <div class="modal__header">
-          <h2>🔍 Tea Stock Search</h2>
-          <button class="modal__close-btn" onClick={handleClose}>✕</button>
+          <h2><i class="fas fa-search"></i> Tea Stock Search</h2>
+          <button class="modal__close-btn" onClick={handleClose}><i class="fas fa-times"></i></button>
         </div>
 
         <div class="modal__body">
@@ -248,15 +248,15 @@ export default function TeaStockModal() {
                               onClick={() => handleAddStock(stock.symbol)}
                               disabled={addingStockId.value === stock.symbol}
                             >
-                              {addingStockId.value === stock.symbol ? '⏳' : '➕'} Add
+                              {addingStockId.value === stock.symbol ? <i class="fas fa-spinner fa-spin"></i> : <i class="fas fa-plus"></i>} Add
                             </button>
                           )}
                           {stock.status === 'added' && (
-                            <span class="badge badge--success">✓ Added</span>
+                            <span class="badge badge--success"><i class="fas fa-check"></i> Added</span>
                           )}
                           {stock.status === 'error' && (
                             <span class="badge badge--error" title={stock.error}>
-                              ✗ Error
+                              <i class="fas fa-times"></i> Error
                             </span>
                           )}
                         </div>
@@ -284,7 +284,7 @@ export default function TeaStockModal() {
                 onClick={handleSearch}
                 disabled={isLoading.value}
               >
-                {isLoading.value ? '⏳ Searching...' : '🔍 Search'}
+                {isLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Searching...</> : <><i class="fas fa-search"></i> Search</>}
               </button>
             </>
           ) : (

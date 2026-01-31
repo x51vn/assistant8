@@ -21,7 +21,7 @@ import {
 import { deletePortfolio } from '../api/portfolioApi.js';
 import StockRow from './StockRow.jsx';
 
-export default function PortfolioTable({ onEdit, onDelete }) {
+export default function PortfolioTable({ onEdit, onDelete, onEvaluateStock }) {
   // Sort items: stocks A-Z, then CASH
   const sortedItems = useComputed(() => {
     const items = portfolioItems.value;
@@ -73,7 +73,7 @@ export default function PortfolioTable({ onEdit, onDelete }) {
     <div class="portfolio-table-container">
       {error.value && (
         <div class="error-banner" role="alert">
-          <span class="error-icon">⚠️</span>
+          <span class="error-icon"><i class="fas fa-exclamation-triangle"></i></span>
           <span class="error-message">{error.value}</span>
         </div>
       )}
@@ -87,7 +87,7 @@ export default function PortfolioTable({ onEdit, onDelete }) {
 
       {!loading.value && sortedItems.value.length === 0 ? (
         <div class="empty-state">
-          <div class="empty-icon">📊</div>
+          <i class="fas fa-chart-pie empty-icon"></i>
           <h3>Danh sách rỗng</h3>
           <p>Chưa có cổ phiếu nào. Hãy thêm cổ phiếu đầu tiên của bạn.</p>
         </div>
@@ -96,28 +96,14 @@ export default function PortfolioTable({ onEdit, onDelete }) {
           <table class="portfolio-table">
             <thead>
               <tr>
-                <th class="col-symbol">Mã CP</th>
-                <th class="col-quantity" align="right">
-                  Số lượng
-                </th>
-                <th class="col-avg-price" align="right">
-                  Giá TB
-                </th>
-                <th class="col-current-price" align="right">
-                  Giá Hiện
-                </th>
-                <th class="col-value" align="right">
-                  Giá Trị
-                </th>
-                <th class="col-pl" align="right">
-                  P&L
-                </th>
-                <th class="col-pl-pct" align="right">
-                  P&L %
-                </th>
-                <th class="col-actions" align="center">
-                  Hành động
-                </th>
+                <th class="col-symbol">Sym</th>
+                <th class="col-quantity" align="right">Qty</th>
+                <th class="col-avg-price" align="right">Avg</th>
+                <th class="col-current-price" align="right">Cur</th>
+                <th class="col-value" align="right">Val</th>
+                <th class="col-pl" align="right">P&L</th>
+                <th class="col-pl-pct" align="right">%</th>
+                <th class="col-actions" align="center"></th>
               </tr>
             </thead>
             <tbody>
@@ -127,6 +113,7 @@ export default function PortfolioTable({ onEdit, onDelete }) {
                   stock={stock}
                   onEdit={() => handleEdit(stock)}
                   onDelete={() => handleDelete(stock)}
+                  onEvaluate={onEvaluateStock ? () => onEvaluateStock(stock) : null}
                 />
               ))}
             </tbody>

@@ -16,7 +16,8 @@ const logger = createLogger('PromptHandler');
  */
 registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
   const correlationId = logger.startOperation('sendPrompt', message.correlationId);
-  const { prompt, options } = message.payload || {};
+  // ✅ CONSISTENCY FIX: Support both payload and data for backward compatibility
+  const { prompt, options } = message.payload || message.data || {};
   
   try {
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
