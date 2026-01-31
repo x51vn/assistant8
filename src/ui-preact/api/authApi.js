@@ -36,6 +36,38 @@ export async function checkAuthStatus() {
 }
 
 /**
+ * Login user with email and password
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<{authenticated: boolean, user: Object|null, error?: string}>}
+ */
+export async function login(email, password) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_LOGIN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { email, password }
+    });
+
+    const loginError = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || loginError) {
+      console.error('[AuthAPI] Login failed:', loginError);
+      return { authenticated: false, user: null, error: loginError };
+    }
+
+    return {
+      authenticated: response.authenticated || false,
+      user: response.user || null
+    };
+  } catch (error) {
+    console.error('[AuthAPI] Login request failed:', error);
+    return { authenticated: false, user: null, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+/**
  * Logout user
  * @returns {Promise<{success: boolean, error?: string}>}
  */
@@ -59,4 +91,26 @@ export async function logout() {
     console.error('[AuthAPI] Logout request failed:', error);
     return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
   }
+}
+
+/**
+ * Listen for authentication state changes from background
+ * @param {Function} callback - Callback function receiving auth state updates
+ * @returns {Function} Cleanup function to remove listener
+ */
+export function listenAuthStateChanges(callback) {
+  const handleAuthChange = (message) => {
+    if (message?.type === MESSAGE_TYPES.AUTH_STATE_CHANGED) {
+      const user = message.data?.user || null;
+      const authenticated = !!user;
+      callback({ authenticated, user });
+    }
+  };
+
+  chrome.runtime.onMessage.addListener(handleAuthChange);
+
+  // Return cleanup function
+  return () => {
+    chrome.runtime.onMessage.removeListener(handleAuthChange);
+  };
 }
