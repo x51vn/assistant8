@@ -78,8 +78,10 @@ export function SettingsPage() {
     <div class="settings-page">
       <StatusMessage />
       <ConfirmationDialog />
-      <UserSection />
-      <SettingsForm onSave={handleSave} onReset={handleReset} />
+      <div class="settings-layout">
+        <SettingsForm onSave={handleSave} onReset={handleReset} />
+        <UserSection />
+      </div>
     </div>
   );
 }

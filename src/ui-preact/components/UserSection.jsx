@@ -78,6 +78,9 @@ export function UserSection() {
           const result = await logout();
           if (result.success) {
             showStatus('Đăng xuất thành công', 'success');
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
           } else {
             showStatus(result.error || 'Đăng xuất thất bại', 'error');
           }
