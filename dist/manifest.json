@@ -17,6 +17,7 @@
     "https://chatgpt.com/*",
     "https://iboard-query.ssi.com.vn/*",
     "https://iboard.ssi.com.vn/*",
+    "https://bgapidatafeed.vps.com.vn/*",
     "https://*.supabase.co/*"
   ],
   "action": {

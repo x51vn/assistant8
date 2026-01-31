@@ -378,19 +378,19 @@ export function ErrorsPage() {
             <i class="fas fa-sync-alt"></i>
           </button>
           <button
-            class="primary-btn btn-add"
+            class="btn-icon btn-add"
             title="Thêm lỗi"
             onClick={handleAdd}
           >
-            <i class="fas fa-plus"></i> Thêm
+            <i class="fas fa-plus"></i>
           </button>
           {errors.length > 0 && (
             <button
-              class="btn-danger-small"
+              class="btn-icon btn-delete"
               title="Xóa tất cả"
               onClick={handleClearAll}
             >
-              <i class="fas fa-trash"></i> Xóa tất cả
+              <i class="fas fa-trash"></i>
             </button>
           )}
         </div>

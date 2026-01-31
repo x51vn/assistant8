@@ -1,197 +1,187 @@
 ---
 name: jira-ticket-workflow
-description: Implement a Jira ticket end-to-end (read ticket/spec → codebase impact → safe changes → security+ops readiness gates → PR → comment back) with strong traceability.
-argument-hint: "ticket=ABC-123 base=main confluenceRef='url|pageId|spaceKey+title' mcpRequired='auto|on|off' "
+description: Implement Jira ticket end-to-end with traceability. Adapts complexity based on ticket size.
+argument-hint: "ticket=XST-123 base=main"
 agent: "agent"
 ---
 
-You are executing a Jira-driven engineering workflow with strong traceability and enterprise gates.
-Primary objective: deliver the ticket outcome with verifiable evidence (AC + DoD pass/fail), minimal risk, and auditable links.
+# Jira Ticket Workflow (Adaptive)
 
-## Inputs (ask if missing AND blocking)
+**Objective**: Deliver ticket outcome with verifiable evidence, minimal risk, auditable links.
+
+## Inputs
 - ticket: ${input:ticket:Jira issue key (required)}
 - base: ${input:base:base branch (default main)}
-- confluenceRef: ${input:confluenceRef:Confluence URL/pageId/spec page ref (optional)}
-- mcpRequired: ${input:mcpRequired:auto|on|off (default auto)}
 
-## Tooling assumptions
-- If an Atlassian MCP server/tool is available, you MUST use it to:
-  - fetch Jira issue + metadata + linked issues/attachments
-  - read Confluence spec (if linked or confluenceRef provided)
-  - comment back on Jira (and optionally transition status)
-- If MCP is not available (or mcpRequired=off), ask the user to paste:
-  - Jira Summary + Description + Acceptance Criteria + DoD + links/attachments content.
+## Core Rules (Non-negotiable)
+1. **Evidence-first**: Cite file:line or Jira/Confluence source for every FACT
+2. **Reuse over create**: Search existing patterns before creating new code
+3. **Minimal change**: Backward compatible unless ticket explicitly allows breaking
+4. **Security-by-design**: Least privilege, no secrets in code, safe failure
 
-## Non-negotiable rules (enterprise)
-- Evidence-first: No fabricated facts. Any FACT must cite:
-  - Repo evidence: file path + symbol (and line numbers if visible), OR
-  - Atlassian evidence via MCP: Jira key / Confluence page title+id.
-- DoD must be pass/fail and specific. “Works” is invalid.
-- Reuse over create: Do NOT create new file/function/class if an equivalent exists—reuse/refactor instead.
-- Keep changes minimal and backward compatible unless the ticket explicitly allows breaking changes.
-- Security-by-design: apply least privilege, defense-in-depth, secure defaults; avoid leaking secrets/PII; prefer safe failure.
+## MCP Usage
+- **MUST use** Atlassian MCP tools when available for Jira/Confluence operations
+- Fallback: Ask user to paste ticket content only if MCP unavailable
 
 ---
 
-# Step 0 — Readiness & guardrails
-1) Repo sanity:
-   - git rev-parse --show-toplevel
-   - git status --porcelain
-   - git branch --show-current
-   STOP if not a git repo.
+# Phase 0 — Triage & Size (30 seconds)
 
-2) Atlassian connectivity:
-   - If MCP available (or mcpRequired=on): proceed with MCP calls.
-   - Else: request pasted ticket content (minimal).
+Fetch ticket via \`mcp_atlassian_jira_get_issue\`, then classify:
 
-Deliverable:
-- “Run context”: repo root, current branch, whether MCP is available.
+| Size | Criteria | Workflow |
+|------|----------|----------|
+| **S** (Small) | Bug fix, typo, config change, <50 LOC | Skip to Phase 2 → 4 → 5 |
+| **M** (Medium) | Single feature, clear scope, <200 LOC | Full workflow, light gates |
+| **L** (Large) | Multi-file feature, new module, >200 LOC | Full workflow, strict gates |
+
+Output: \`[SIZE: S/M/L] [TYPE: bug/feature/refactor/chore]\`
 
 ---
 
-# Step 1 — Pull ticket/spec + define “DONE” (Ticket Brief)
-1) Fetch Jira issue via MCP:
-   - summary, description, AC, priority, components, labels
-   - linked issues/epic, attachments, comments history
-2) Fetch Confluence spec via MCP (if linked or confluenceRef provided):
-   - extract explicit requirements + constraints + non-goals
-3) Restate ticket in your own words (no guessing).
+# Phase 1 — Ticket Brief (Size M/L only)
 
-4) Produce the **Ticket Brief** (single source of truth):
-   - GOAL: what must be achieved (feature/bug/perf) + measurable target if given
-   - SCOPE: what will be done (3–7 bullets)
-   - NON-GOALS: what will NOT be done (2–6 bullets)
-   - CONSTRAINTS: explicit constraints (API/backward, no deps, perf/SLA, security/privacy, logging/audit, rollout)
-     - If not stated: mark ASSUMPTION
-   - CONTEXT: evidence anchors
-     - Jira: key fields + links
-     - Confluence: page title/id + key sections
-     - Repo: likely modules (FACT later after Step 2)
+Extract from Jira + Confluence (if linked):
 
-5) Convert AC into a **testable checklist**:
-   - For each AC, rewrite as pass/fail (prefer Given/When/Then where useful).
+\`\`\`markdown
+## Ticket Brief: {TICKET_KEY}
+**GOAL**: {one sentence, measurable if possible}
+**SCOPE**: {3-5 bullets of what WILL be done}
+**NON-GOALS**: {what will NOT be done}
+**CONSTRAINTS**: {API compat, deps, perf targets, security requirements}
+\`\`\`
 
-STOP conditions (ask targeted questions, max 3):
-- Missing AC/DoD or unclear success metrics (especially perf/SLA).
-- Ambiguous scope/owner module or missing environment/repro steps for bugs.
+**AC Checklist** (convert each AC to pass/fail):
+- [ ] AC-1: Given X, When Y, Then Z
+- [ ] AC-2: ...
 
-Deliverables:
-- Ticket Brief (GOAL/SCOPE/NON-GOALS/CONSTRAINTS/CONTEXT)
-- AC checklist (pass/fail)
+⚠️ **STOP only if**: Missing AC entirely OR ambiguous scope (ask max 2 questions)
 
 ---
 
-# Step 2 — Deep understanding of codebase (Impact Map)
-1) Identify entry points:
-   - APIs/routes/controllers, UI pages/components, jobs/workers, configs, schemas, feature flags
-2) Search for existing implementations/patterns (reuse first):
-   - locate similar features/handlers/tests
-3) Map dependencies & data flow:
-   - what calls what, where state is stored, boundaries (trust/data)
+# Phase 2 — Impact Analysis (Focused)
 
-Deliverable: **Impact Map** (FACT only)
-- File/module list with why it matters:
-  - <path> — <role> — <symbol>
-- Conventions/tooling detected:
-  - runtime versions, build system, test framework, lint/format rules (cite paths)
-- Existing test locations + how to run (if discoverable)
+Search codebase for relevant files ONLY. Output:
 
-STOP if:
-- No clear entry point found → ask for moduleHint or PR/branch pointer.
+\`\`\`markdown
+## Impact Map
+| File | Role | Change Type |
+|------|------|-------------|
+| path/to/file.js | handler | MODIFY |
+| path/to/new.js | component | CREATE |
 
----
+**Patterns to follow**: {cite existing similar code}
+**Test location**: {where tests should go}
+\`\`\`
 
-# Step 3 — Proposed change set (before editing) + MECE check
-1) List concrete changes by file (MECE: no overlap, no gaps):
-   - File: what will change / why / expected behavior change
-2) Compatibility analysis:
-   - public API contracts
-   - config schema
-   - DB schema / migrations
-   - backward compatibility requirements
-3) Mitigation plan (pick only what’s needed):
-   - feature flag strategy
-   - rollout phases
-   - migration steps
-   - rollback plan
-4) Build **AC → Verification Map** (traceability matrix):
-   - AC-1 → tests/commands/evidence
-   - AC-2 → tests/commands/evidence
-   If tests don’t exist yet: specify where you will add them.
-
-STOP if:
-- Proposed changes violate CONSTRAINTS (e.g., new deps, API break) without explicit approval.
-
-Deliverables:
-- Change list by file (MECE)
-- AC → Verification Map
+For Size S: Just list 1-3 files affected.
 
 ---
 
-# Step 4 — Security & operational readiness gate (pre-implementation)
-Perform a focused review (tie to files from Step 3):
-Security gate (examples to consider):
-- authn/authz correctness, least privilege boundaries
-- data exposure/PII handling, logging of sensitive data
-- input validation, injection risks
-- secrets management (no credentials in code/config)
-- dependency/supply-chain (no new deps unless approved)
+# Phase 3 — Propose Changes (before coding)
 
-Operational readiness gate (pass/fail checks relevant to service tier):
-- observability: logs/metrics/traces for new behavior
-- error handling: safe failure + no sensitive leakage
-- performance guardrails: timeouts, pagination, rate limiting, caching
-- runbook/rollback readiness if change is risky
+\`\`\`markdown
+## Proposed Changes
+| File | What | Why |
+|------|------|-----|
+| ... | ... | ... |
 
-Deliverable:
-- Security+Ops checklist (Yes/No/N/A) + concrete mitigations mapped to planned files.
+## AC → Verification Map
+| AC | How to Verify |
+|----|---------------|
+| AC-1 | \`npm test -- path/to/test\` |
+| AC-2 | Manual: click X, expect Y |
+\`\`\`
 
-STOP if:
-- High-risk security issue discovered without a mitigation path.
+For Size L only - add:
+- Breaking changes analysis
+- Migration/rollback plan
 
 ---
 
-# Step 5 — Implement with verification (minimal safe change)
-1) Branching:
-   - Ensure working branch referencing ticket key (e.g., feature/ABC-123-<scope>-<summary>)
-2) Implement minimal safe change per Step 3.
-3) Add/adjust tests aligned to AC checklist.
-4) Run verification:
-   - lint + unit/integration/e2e as applicable
-   - collect evidence (command outputs, artifacts)
-5) Produce concise diff summary:
-   - what changed, where, why (file list + intent)
+# Phase 4 — Implement & Verify
 
-Deliverables:
-- Diff summary
-- Test evidence summary (commands run + results)
-- Updated AC → Verification Map (filled with actual evidence)
+1. **Branch**: \`feature/{ticket}-{short-desc}\` or \`fix/{ticket}-{short-desc}\`
 
----
+2. **Implement** minimal safe change per Phase 3
 
-# Step 6 — PR + Jira comment back (auditable)
-1) Create PR linked to ticket:
-   - title includes ticket key
-   - body includes: GOAL, scope, risk, test evidence, rollout/rollback
-2) Post Jira comment via MCP containing:
-   - PR link
-   - summary of solution + key files
-   - breaking changes notes (if any)
-   - test evidence (commands + results)
-   - risk/impact + mitigations
-   - rollout/rollback notes
-3) (Optional) Transition Jira status if workflow allows.
+3. **Test**: Run relevant tests, collect evidence
 
-Deliverable:
-- Jira comment text + confirmation of posting (key/time)
+4. **Commit format** (Conventional Commits):
+   \`\`\`
+   feat(module): short description [TICKET-123]
+   fix(module): short description [TICKET-123]
+   \`\`\`
+
+5. **Output**:
+   \`\`\`markdown
+   ## Implementation Summary
+   - Files changed: X
+   - Lines: +Y/-Z
+   - Tests: ✅ passed / ❌ failed
+   
+   ## AC Verification
+   - [x] AC-1: {evidence}
+   - [x] AC-2: {evidence}
+   \`\`\`
 
 ---
 
-# Step 7 — Post-merge hygiene (only if required by ticket/tier)
-- Release notes / changelog
-- Monitoring dashboards / alerts updated
-- Runbook updated
-- Follow-up tickets for non-goals/deferred work
+# Phase 5 — Security & Ops Gate (Size M/L only)
 
-Deliverable:
-- Post-merge checklist completion summary
+Quick checklist (skip N/A items):
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Auth/authz correct? | ✅/❌/N/A | |
+| Input validated? | ✅/❌/N/A | |
+| No secrets in code? | ✅/❌/N/A | |
+| Error handling safe? | ✅/❌/N/A | |
+| Logging appropriate? | ✅/❌/N/A | |
+
+⚠️ **STOP if**: Security issue found without mitigation
+
+---
+
+# Phase 6 — PR & Jira Update
+
+1. **Create PR** with:
+   - Title: \`[TICKET-123] Short description\`
+   - Body: Goal, changes, test evidence, risks
+
+2. **Comment on Jira** via \`mcp_atlassian_jira_add_comment\`:
+   \`\`\`markdown
+   ## Implementation Complete
+   **PR**: {link}
+   **Changes**: {summary}
+   **Test Evidence**: {commands + results}
+   **Risks**: {none | list}
+   \`\`\`
+
+3. (Optional) Transition ticket status if workflow allows
+
+---
+
+# Phase 7 — PR Feedback Loop (if requested)
+
+When user shares PR review feedback:
+1. Address each comment
+2. Push fixes
+3. Update Jira comment with revision note
+4. Re-verify affected ACs
+
+---
+
+# Quick Reference
+
+\`\`\`
+Size S: Phase 0 → 2 → 4 → 6
+Size M: Phase 0 → 1 → 2 → 3 → 4 → 5(light) → 6
+Size L: Phase 0 → 1 → 2 → 3 → 4 → 5(strict) → 6 → 7(if needed)
+\`\`\`
+
+**Key MCP Tools**:
+- \`mcp_atlassian_jira_get_issue\` - Fetch ticket
+- \`mcp_atlassian_jira_add_comment\` - Post update
+- \`mcp_atlassian_confluence_get_page\` - Read spec
+- \`mcp_atlassian_jira_transition_issue\` - Move status

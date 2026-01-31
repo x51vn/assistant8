@@ -71,24 +71,24 @@ export default function StockRow({ stock, onEdit, onDelete, onEvaluate }) {
   return (
     <tr class={rowClass}>
       {/* Symbol - Left aligned, bold for CASH */}
-      <td class="col-symbol">
+      <td class="col-symbol" data-label="Symbol">
         <span class={isCash ? 'symbol-cash' : 'symbol-regular'}>
           {stock.symbol}
         </span>
       </td>
 
       {/* Quantity - Right aligned */}
-      <td class="col-quantity" align="right">
+      <td class="col-quantity" data-label="Qty" align="right">
         {formatNumber(stock.quantity)}
       </td>
 
       {/* Average Price - Right aligned */}
-      <td class="col-avg-price" align="right">
+      <td class="col-avg-price" data-label="Avg" align="right">
         {formatCurrency(stock.avg_price)}
       </td>
 
       {/* Current Price - Right aligned, grayed if undefined */}
-      <td class="col-current-price" align="right">
+      <td class="col-current-price" data-label="Current" align="right">
         {stock.current_price !== undefined ? (
           <span>{formatCurrency(stock.current_price)}</span>
         ) : (
@@ -97,12 +97,12 @@ export default function StockRow({ stock, onEdit, onDelete, onEvaluate }) {
       </td>
 
       {/* Current Value - Right aligned */}
-      <td class="col-value" align="right">
+      <td class="col-value" data-label="Value" align="right">
         {formatCurrency(currentValue)}
       </td>
 
       {/* P&L Value - Right aligned, colored, hidden for CASH */}
-      <td class={`col-pl ${plColorClass}`} align="right">
+      <td class={`col-pl ${plColorClass}`} data-label="P&L" align="right">
         {isCash ? (
           <span class="cash-pl-label">Cash</span>
         ) : (
@@ -113,7 +113,7 @@ export default function StockRow({ stock, onEdit, onDelete, onEvaluate }) {
       </td>
 
       {/* P&L % - Right aligned, colored, hidden for CASH */}
-      <td class={`col-pl-pct ${plColorClass}`} align="right">
+      <td class={`col-pl-pct ${plColorClass}`} data-label="%" align="right">
         {!isCash && (
           <span class={`pl-pct ${plColorClass}`}>
             {plPercent >= 0 ? '+' : ''}
@@ -123,7 +123,7 @@ export default function StockRow({ stock, onEdit, onDelete, onEvaluate }) {
       </td>
 
       {/* Actions - Dropdown Menu */}
-      <td class="col-actions" align="center">
+      <td class="col-actions" data-label="" align="center">
         <div class="action-dropdown-container" ref={dropdownRef}>
           <button
             class="btn-icon btn-menu"

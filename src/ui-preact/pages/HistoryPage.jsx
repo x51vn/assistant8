@@ -195,11 +195,11 @@ export function HistoryPage() {
           </button>
           {historyItems.length > 0 && (
             <button
-              class="btn-danger-small"
+              class="btn-icon btn-delete"
               title="Xóa tất cả"
               onClick={() => setConfirmClearAll(true)}
             >
-              Xóa tất cả
+              <i class="fas fa-trash"></i>
             </button>
           )}
         </div>

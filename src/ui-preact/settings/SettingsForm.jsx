@@ -46,14 +46,6 @@ export function SettingsForm({ onSave, onSendNow, onReset }) {
   
   return (
     <form class="settings-form" onSubmit={handleSubmit}>
-      <div class="settings-header">
-        <h2>
-          <i class="fas fa-cog"></i>
-          Settings
-        </h2>
-        <p class="settings-subtitle">Cấu hình prompt templates và automation</p>
-      </div>
-      
       {/* Master Prompt (Required) */}
       <section class="form-section">
         <h3 class="section-title">

@@ -6,11 +6,13 @@
  * - Loading & error states
  * - Reactive updates from computed signals
  * - Vietnamese formatting with thousand separators
+ * - Collapsible section (default collapsed)
  * 
  * X51LABS-154: Task 2 - Consumer Components (PortfolioSummary)
  */
 
 import { h } from 'preact';
+import { useState } from 'preact/hooks';
 import {
   totalValue,
   totalPL,
@@ -21,6 +23,9 @@ import {
 } from '../state/portfolioState.js';
 
 export default function PortfolioSummary() {
+  // Collapse state - default collapsed
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
   // Format currency (VND)
   const formatCurrency = (num) => {
     return Number(Math.round(num || 0)).toLocaleString('vi-VN', {
@@ -51,9 +56,26 @@ export default function PortfolioSummary() {
         </div>
       )}
 
-      {/* Loading indicator hidden - using main loading-state in PortfolioTable */}
+      {/* Collapse Header */}
+      <button
+        class="summary-collapse-toggle"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        aria-expanded={!isCollapsed}
+        aria-controls="summary-content"
+      >
+        <span class="collapse-title">
+          <i class="fas fa-chart-pie"></i> Tóm Tắt Danh Mục
+        </span>
+        <span class={`collapse-value ${plColorClass}`}>
+          ₫{formatCurrency(totalValue.value)} ({formatPercent(totalPLPercent.value)})
+        </span>
+        <i class={`fas fa-chevron-${isCollapsed ? 'down' : 'up'} collapse-icon`}></i>
+      </button>
 
-      <div class="stat-cards">
+      {/* Collapsible Content */}
+      {!isCollapsed && (
+        <div id="summary-content" class="summary-content">
+          <div class="stat-cards">
         {/* NAV Card */}
         <div class="stat-card nav-card">
           <div class="stat-label">Giá Trị Danh Mục (NAV)</div>
@@ -108,6 +130,8 @@ export default function PortfolioSummary() {
           </span>
         </div>
       </div>
+        </div>
+      )}
     </div>
   );
 }
