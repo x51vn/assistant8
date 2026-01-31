@@ -37,7 +37,7 @@ export default function PortfolioActions({
         disabled={isDisabled}
         title="Add a new stock to your portfolio"
       >
-        <span class="button-icon">➕</span>
+        <i class="fas fa-plus button-icon"></i>
         Add Stock
       </button>
 
@@ -49,12 +49,12 @@ export default function PortfolioActions({
       >
         {isRefreshing ? (
           <>
-            <span class="button-icon spinner"></span>
+            <i class="fas fa-spinner fa-spin button-icon"></i>
             Updating...
           </>
         ) : (
           <>
-            <span class="button-icon">🔄</span>
+            <i class="fas fa-sync-alt button-icon"></i>
             Refresh
           </>
         )}
@@ -66,7 +66,7 @@ export default function PortfolioActions({
         disabled={isDisabled}
         title="Get ChatGPT analysis of your portfolio"
       >
-        <span class="button-icon">📊</span>
+        <i class="fas fa-chart-bar button-icon"></i>
         Evaluate
       </button>
 
@@ -76,7 +76,7 @@ export default function PortfolioActions({
         disabled={isDisabled}
         title="Search for interesting stocks using AI"
       >
-        <span class="button-icon">🔍</span>
+        <i class="fas fa-search button-icon"></i>
         Tea Stock
       </button>
     </div>

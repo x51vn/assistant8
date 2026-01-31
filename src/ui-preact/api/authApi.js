@@ -25,6 +25,7 @@ export async function checkAuthStatus() {
       return { authenticated: false, user: null, error: loadError };
     }
 
+    // ✅ FIX: Backend returns { authenticated, user }, use directly
     return {
       authenticated: response.authenticated || false,
       user: response.user || null
@@ -57,9 +58,13 @@ export async function login(email, password) {
       return { authenticated: false, user: null, error: loginError };
     }
 
+    // ✅ FIX: Backend returns { user }, need to derive authenticated
+    const user = response.user || null;
+    const authenticated = !!user;
+
     return {
-      authenticated: response.authenticated || false,
-      user: response.user || null
+      authenticated,
+      user
     };
   } catch (error) {
     console.error('[AuthAPI] Login request failed:', error);

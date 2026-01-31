@@ -4,7 +4,7 @@
  */
 
 import { h } from 'preact';
-import { TextareaField } from '../components/TextareaField.jsx';
+import { PromptField } from '../components/PromptField.jsx';
 import { CheckboxField } from '../components/CheckboxField.jsx';
 import { NumberField } from '../components/NumberField.jsx';
 import {
@@ -26,9 +26,10 @@ import {
 /**
  * @param {Object} props
  * @param {Function} props.onSave - Called when user submits form
+ * @param {Function} props.onSendNow - Called when user clicks send now button
  * @param {Function} props.onReset - Called when user clicks reset
  */
-export function SettingsForm({ onSave, onReset }) {
+export function SettingsForm({ onSave, onSendNow, onReset }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isFormValid.value && !isSaving.value) {
@@ -36,64 +37,99 @@ export function SettingsForm({ onSave, onReset }) {
     }
   };
   
+  const handleSendNow = (e) => {
+    e.preventDefault();
+    if (isFormValid.value && !isSaving.value) {
+      onSendNow();
+    }
+  };
+  
   return (
     <form class="settings-form" onSubmit={handleSubmit}>
-      <h2>⚙️ Settings</h2>
+      <div class="settings-header">
+        <h2>
+          <i class="fas fa-cog"></i>
+          Settings
+        </h2>
+        <p class="settings-subtitle">Cấu hình prompt templates và automation</p>
+      </div>
       
       {/* Master Prompt (Required) */}
       <section class="form-section">
-        <h3>Master Prompt *</h3>
-        <TextareaField
+        <h3 class="section-title">
+          <i class="fas fa-star"></i>
+          Master Prompt
+        </h3>
+        <PromptField
           id="masterPrompt"
           label="Main Prompt Template"
+          icon="fa-robot"
+          description="Prompt chính sẽ được sử dụng khi gửi yêu cầu tới ChatGPT"
           value={masterPrompt}
           rows={6}
           placeholder="Enter your main prompt template here..."
+          required={true}
         />
         {!isFormValid.value && (
-          <p class="error-text">⚠️ Master prompt is required</p>
+          <p class="error-text">
+            <i class="fas fa-exclamation-triangle"></i>
+            Master prompt is required
+          </p>
         )}
       </section>
       
       {/* Sub-Prompts */}
       <section class="form-section">
-        <h3>Specialized Prompts</h3>
+        <h3 class="section-title">
+          <i class="fas fa-layer-group"></i>
+          Specialized Prompts
+        </h3>
         
-        <TextareaField
+        <PromptField
           id="portfolioPrompt"
           label="Portfolio Analysis Prompt"
+          icon="fa-chart-line"
+          description="Prompt cho phân tích danh mục đầu tư"
           value={portfolioPrompt}
           rows={4}
           placeholder="Prompt for portfolio analysis..."
         />
         
-        <TextareaField
+        <PromptField
           id="stockEvalPrompt"
           label="Stock Evaluation Prompt"
+          icon="fa-chart-bar"
+          description="Template đánh giá cổ phiếu (sử dụng {SYMBOL} cho mã CP)"
           value={stockEvalPrompt}
           rows={3}
           placeholder="Template: Đánh giá mã cổ phiếu {SYMBOL}..."
         />
         
-        <TextareaField
+        <PromptField
           id="teaStockPrompt"
           label="Tea Stock Prompt"
+          icon="fa-mug-hot"
+          description="Prompt đặc biệt cho phân tích cổ phiếu ngành trà"
           value={teaStockPrompt}
           rows={3}
           placeholder="Special prompt for tea stock analysis..."
         />
         
-        <TextareaField
+        <PromptField
           id="contextMenuPrompt"
           label="Context Menu Prompt"
+          icon="fa-mouse-pointer"
+          description="Prompt cho context menu (sử dụng {CONTENT} cho nội dung)"
           value={contextMenuPrompt}
           rows={3}
           placeholder="Template: Hãy phân tích nội dung sau: {CONTENT}"
         />
         
-        <TextareaField
+        <PromptField
           id="englishPrompt"
           label="English Learning Prompt"
+          icon="fa-graduation-cap"
+          description="Prompt cho học tiếng Anh"
           value={englishPrompt}
           rows={5}
           placeholder="Teach me English about: {TOPIC}..."
@@ -102,40 +138,58 @@ export function SettingsForm({ onSave, onReset }) {
       
       {/* Settings Checkboxes */}
       <section class="form-section">
-        <h3>Automation Settings</h3>
+        <h3 class="section-title">
+          <i class="fas fa-sliders-h"></i>
+          Automation Settings
+        </h3>
         
-        <CheckboxField
-          id="autoRun"
-          label="Auto-run on startup"
-          checked={autoRun}
-        />
-        
-        <CheckboxField
-          id="evaluatePrevious"
-          label="Evaluate previous results"
-          checked={evaluatePrevious}
-        />
-        
-        <CheckboxField
-          id="reviewPrompt"
-          label="Review prompt before sending"
-          checked={reviewPrompt}
-        />
-        
-        <CheckboxField
-          id="realtimeEnabled"
-          label="Enable realtime updates"
-          checked={realtimeEnabled}
-        />
+        <div class="checkbox-group">
+          <CheckboxField
+            id="autoRun"
+            label="Auto-run on startup"
+            icon="fa-play-circle"
+            description="Tự động chạy master prompt khi mở extension"
+            checked={autoRun}
+          />
+          
+          <CheckboxField
+            id="evaluatePrevious"
+            label="Evaluate previous results"
+            icon="fa-history"
+            description="Đánh giá kết quả từ lần chạy trước"
+            checked={evaluatePrevious}
+          />
+          
+          <CheckboxField
+            id="reviewPrompt"
+            label="Review prompt before sending"
+            icon="fa-eye"
+            description="Xem lại prompt trước khi gửi đi"
+            checked={reviewPrompt}
+          />
+          
+          <CheckboxField
+            id="realtimeEnabled"
+            label="Enable realtime updates"
+            icon="fa-sync"
+            description="Kích hoạt cập nhật realtime từ Supabase"
+            checked={realtimeEnabled}
+          />
+        </div>
       </section>
       
       {/* Number Input */}
       <section class="form-section">
-        <h3>Timing</h3>
+        <h3 class="section-title">
+          <i class="fas fa-clock"></i>
+          Timing
+        </h3>
         
         <NumberField
           id="interval"
-          label="Update Interval (minutes)"
+          label="Update Interval"
+          icon="fa-clock"
+          description="Thời gian giữa các lần cập nhật tự động (phút)"
           value={interval}
           min={1}
           max={60}
@@ -159,6 +213,15 @@ export function SettingsForm({ onSave, onReset }) {
               <i class="fas fa-save"></i> Save Settings
             </span>
           )}
+        </button>
+        
+        <button
+          type="button"
+          class="secondary-btn"
+          onClick={handleSendNow}
+          disabled={!isFormValid.value || isSaving.value}
+        >
+          <i class="fas fa-paper-plane"></i> Gửi ngay
         </button>
         
         <button

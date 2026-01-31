@@ -1,4 +1,3 @@
-/** @jsx h */
 /**
  * PortfolioTable.jsx - Main table grid for portfolio display
  * 
@@ -19,9 +18,10 @@ import {
   openEditModal,
   removePortfolioItem
 } from '../state/portfolioState.js';
+import { deletePortfolio } from '../api/portfolioApi.js';
 import StockRow from './StockRow.jsx';
 
-export default function PortfolioTable() {
+export default function PortfolioTable({ onEdit, onDelete }) {
   // Sort items: stocks A-Z, then CASH
   const sortedItems = useComputed(() => {
     const items = portfolioItems.value;
@@ -36,12 +36,36 @@ export default function PortfolioTable() {
   });
 
   const handleEdit = (stock) => {
-    openEditModal(stock);
+    if (onEdit) {
+      onEdit(stock);
+    } else {
+      openEditModal(stock);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Bạn có chắc chắn muốn xóa cổ phiếu này?')) {
-      removePortfolioItem(id);
+  const handleDelete = async (stock) => {
+    try {
+      // Call API to delete from Supabase
+      const result = await deletePortfolio(stock.id);
+      
+      if (result.error) {
+        console.error('[PortfolioTable] Delete failed:', result.error);
+        alert(`Lỗi xóa: ${result.error.message}`);
+        return;
+      }
+      
+      // Remove from local state
+      removePortfolioItem(stock.id);
+      
+      // Notify parent component
+      if (onDelete) {
+        onDelete(stock.id, stock.symbol);
+      }
+      
+      console.log('[PortfolioTable] Successfully deleted:', stock.symbol);
+    } catch (err) {
+      console.error('[PortfolioTable] Delete error:', err);
+      alert(`Lỗi xóa: ${err.message}`);
     }
   };
 
@@ -102,7 +126,7 @@ export default function PortfolioTable() {
                   key={stock.id}
                   stock={stock}
                   onEdit={() => handleEdit(stock)}
-                  onDelete={() => handleDelete(stock.id)}
+                  onDelete={() => handleDelete(stock)}
                 />
               ))}
             </tbody>

@@ -92,30 +92,9 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, async (message) => {
       email: user.email 
     });
     
-    // Broadcast auth state change to all UI instances
-    try {
-      await chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-login-broadcast-${Date.now()}`,
-        timestamp: Date.now(),
-        data: { 
-          user: {
-            id: user.id,
-            email: user.email,
-            created_at: user.created_at,
-            updated_at: user.updated_at
-          },
-          authenticated: true
-        }
-      });
-    } catch (broadcastError) {
-      // Non-critical - UI may not be open
-      logger.warn('Failed to broadcast auth state', { 
-        correlationId, 
-        error: broadcastError.message 
-      });
-    }
+    // ✅ FIX: No manual broadcast needed - Supabase onAuthStateChange 
+    // listener (setupAuthStateListener) already broadcasts SIGNED_IN event
+    // Duplicate broadcast causes UI to flash/blink twice on login
     
     return createResponse(message, MESSAGE_TYPES.SUPABASE_AUTH_SUCCESS, {
       user: {
@@ -217,24 +196,9 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT, async (message) => {
     
     logger.info('Logout successful', { correlationId });
     
-    // Broadcast auth state change
-    try {
-      await chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-logout-broadcast-${Date.now()}`,
-        timestamp: Date.now(),
-        data: { 
-          user: null,
-          authenticated: false
-        }
-      });
-    } catch (broadcastError) {
-      logger.warn('Failed to broadcast logout', { 
-        correlationId, 
-        error: broadcastError.message 
-      });
-    }
+    // ✅ FIX: No manual broadcast needed - Supabase onAuthStateChange 
+    // listener (setupAuthStateListener) already broadcasts SIGNED_OUT event
+    // Duplicate broadcast causes UI to flash/blink twice on logout
     
     return createResponse(message, MESSAGE_TYPES.SUPABASE_AUTH_LOGGED_OUT, {
       success: true

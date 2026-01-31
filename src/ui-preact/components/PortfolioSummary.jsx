@@ -51,11 +51,7 @@ export default function PortfolioSummary() {
         </div>
       )}
 
-      {loading.value && (
-        <div class="summary-loading">
-          <span class="spinner-small"></span> Đang cập nhật...
-        </div>
-      )}
+      {/* Loading indicator hidden - using main loading-state in PortfolioTable */}
 
       <div class="stat-cards">
         {/* NAV Card */}

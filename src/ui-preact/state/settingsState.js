@@ -25,7 +25,8 @@ export const realtimeEnabled = signal(false);
 export const interval = signal(5); // Default 5 minutes
 
 // ===== UI STATE SIGNALS =====
-export const isLoading = signal(false);
+// NOTE: isLoading removed - use global loading from appState.js
+// All pages MUST use setGlobalLoading() / hideLoading() for consistency
 export const isSaving = signal(false);
 
 // ===== STATUS MESSAGE SIGNALS =====
@@ -120,7 +121,7 @@ export function hideConfirm() {
 // ===== USER INFO SIGNALS =====
 export const userEmail = signal('');
 export const userName = signal('');
-export const isAuthLoading = signal(false);
+// NOTE: isAuthLoading removed - use global loading from appState.js
 
 // ===== COMPUTED SIGNALS =====
 /**

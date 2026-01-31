@@ -1,4 +1,3 @@
-/** @jsx h */
 /**
  * PriceUpdateModal.jsx - Bulk Price Update Modal
  * 

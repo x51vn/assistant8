@@ -4,16 +4,34 @@
  * Features:
  * - P&L color coding: Green (gain), Red (loss), Gray (neutral/CASH)
  * - CASH special styling: Light blue background, bold, no P&L display
- * - Edit & Delete buttons
+ * - Edit & Delete buttons in dropdown menu
  * - Formatted numbers with thousand separators
  * 
  * X51LABS-154: Task 2 - Consumer Components (StockRow)
  */
 
 import { h } from 'preact';
+import { useState, useRef, useEffect } from 'preact/hooks';
 
 export default function StockRow({ stock, onEdit, onDelete }) {
   const isCash = stock.symbol === 'CASH';
+  const [isDropdownOpen, setDropdownOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    
+    if (isDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isDropdownOpen]);
 
   // Calculate P&L for this stock
   const entryValue = (stock.avg_price || 0) * stock.quantity;
@@ -99,24 +117,77 @@ export default function StockRow({ stock, onEdit, onDelete }) {
         )}
       </td>
 
-      {/* Actions - Buttons */}
+      {/* Actions - Dropdown Menu */}
       <td class="col-actions" align="center">
-        <button
-          class="btn-icon btn-edit"
-          title="Chỉnh sửa"
-          onClick={onEdit}
-          aria-label={`Chỉnh sửa ${stock.symbol}`}
-        >
-          ✏️
-        </button>
-        <button
-          class="btn-icon btn-delete"
-          title="Xóa"
-          onClick={onDelete}
-          aria-label={`Xóa ${stock.symbol}`}
-        >
-          🗑️
-        </button>
+        <div class="action-dropdown-container" ref={dropdownRef}>
+          <button
+            class="btn-icon btn-menu"
+            title="Menu"
+            onClick={(e) => { 
+              e.stopPropagation();
+              setDropdownOpen(!isDropdownOpen); 
+            }}
+            aria-label={`Menu cho ${stock.symbol}`}
+            aria-expanded={isDropdownOpen}
+          >
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+          
+          {isDropdownOpen && (
+            <div class="action-dropdown-menu">
+              <button
+                class="dropdown-item edit-item"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDropdownOpen(false);
+                  onEdit();
+                }}
+                title="Chỉnh sửa"
+              >
+                <i class="fas fa-edit"></i> Chỉnh sửa
+              </button>
+              <button
+                class="dropdown-item delete-item"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDropdownOpen(false);
+                  setConfirmDelete(true);
+                }}
+                title="Xóa"
+              >
+                <i class="fas fa-trash-alt"></i> Xóa
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Confirm Delete Modal */}
+        {confirmDelete && (
+          <div class="confirm-dialog-overlay" onClick={() => setConfirmDelete(false)}>
+            <div class="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <h3>Xác nhận xóa</h3>
+              <p>Bạn có chắc chắn muốn xóa {stock.symbol}?</p>
+              <div class="confirm-buttons">
+                <button
+                  class="btn-cancel"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  class="btn-confirm-delete"
+                  onClick={() => {
+                    setConfirmDelete(false);
+                    setDropdownOpen(false);
+                    onDelete();
+                  }}
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </td>
     </tr>
   );

@@ -154,3 +154,65 @@ Provide:
 3. Usage example
 4. Common situations to use it`;
 }
+
+/**
+ * Send master prompt immediately to ChatGPT
+ * @returns {Promise<void>}
+ * @throws {Error} if send fails
+ */
+export async function sendPromptNow() {
+  console.log('[SettingsAPI] Sending master prompt now...');
+  
+  // Validation
+  if (masterPrompt.value.trim().length === 0) {
+    throw new Error('Master prompt cannot be empty');
+  }
+  
+  const response = await chrome.runtime.sendMessage({
+    v: 1,
+    type: MESSAGE_TYPES.SEND_PROMPT,
+    correlationId: generateCorrelationId(),
+    timestamp: Date.now(),
+    payload: {
+      prompt: masterPrompt.value,
+      options: {
+        createNewChat: true,
+        focusTab: true
+      }
+    }
+  });
+  
+  console.log('[SettingsAPI] SEND_PROMPT response:', response);
+  
+  const sendError = response.error?.message || response.errorMessage;
+  if (response.type === MESSAGE_TYPES.ERROR || response.errorCode || sendError) {
+    throw new Error(sendError || 'Failed to send prompt');
+  }
+  
+  console.log('[SettingsAPI] Prompt sent successfully');
+}
+
+/**
+ * Delete all user settings from Supabase
+ * @returns {Promise<void>}
+ * @throws {Error} if delete fails
+ */
+export async function deleteSettings() {
+  console.log('[SettingsAPI] Deleting all settings from Supabase...');
+  
+  const response = await chrome.runtime.sendMessage({
+    v: 1,
+    type: MESSAGE_TYPES.SETTINGS_DELETE,
+    correlationId: generateCorrelationId(),
+    timestamp: Date.now()
+  });
+  
+  console.log('[SettingsAPI] SETTINGS_DELETE response:', response);
+  
+  const deleteError = response.error?.message || response.errorMessage;
+  if (response.error || response.errorCode || deleteError) {
+    throw new Error(deleteError || 'Failed to delete settings');
+  }
+  
+  console.log('[SettingsAPI] Settings deleted successfully from Supabase');
+}

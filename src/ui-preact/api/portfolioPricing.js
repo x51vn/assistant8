@@ -6,14 +6,48 @@
  * - Batch processing (max 5 stocks, 1s delay between batches)
  * - Error handling (network, rate limit, validation)
  * - Exponential backoff for rate limiting
+ * - 404 handling for unsupported symbols (ETFs, funds)
  * 
  * X51LABS-155: Task 3 - Real-time Pricing
+ * 
+ * ⚠️ SSI API Limitations:
+ * - ETF codes (e.g., E1VFVN30, FUEVFVND) return 404
+ * - Mutual fund codes return 404
+ * - Only supports regular stocks
  */
 
 const SSI_API_BASE = 'https://iboard-query.ssi.com.vn';
 const MAX_BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 1000;
 const MAX_RETRIES = 3;
+
+/**
+ * Check if symbol is likely unsupported by SSI API
+ * Common patterns:
+ * - ETF codes: E1VFVN30, FUEVFVND (contain 'VF', 'VN', start with E1)
+ * - Fund codes: Often contain 'FU', 'FUND'
+ * - Bonds: Start with 'BOND'
+ * 
+ * Note: This is heuristic. Some may still return 404.
+ * 
+ * @param {string} symbol - Stock symbol
+ * @returns {boolean} True if likely unsupported
+ */
+export function isLikelyUnsupportedSymbol(symbol) {
+  const upper = symbol.toUpperCase();
+  
+  // ETF patterns
+  if (upper.includes('VF') || upper.includes('ETF')) return true;
+  if (upper.startsWith('E1') || upper.startsWith('VFMV')) return true;
+  
+  // Fund patterns
+  if (upper.includes('FUND') || upper.includes('FU')) return true;
+  
+  // Bond patterns
+  if (upper.startsWith('BOND')) return true;
+  
+  return false;
+}
 
 /**
  * Fetch stock price from SSI iBoard API
@@ -31,6 +65,11 @@ export async function fetchStockPrice(symbol) {
       if (response.status === 429) {
         throw { code: 'RATE_LIMIT', status: 429, message: 'API rate limited' };
       }
+      if (response.status === 404) {
+        // 404 means symbol not found in SSI database
+        // This is normal for ETFs, funds, or invalid symbols
+        throw { code: 'NOT_FOUND', status: 404, message: `Symbol ${symbol} not found in SSI database` };
+      }
       throw new Error(`HTTP ${response.status}`);
     }
     
@@ -43,7 +82,12 @@ export async function fetchStockPrice(symbol) {
     
     return price;
   } catch (error) {
-    console.error(`[portfolioPricing] Fetch ${symbol} failed:`, error);
+    // Only log as error if it's NOT a 404
+    if (error.status === 404) {
+      console.warn(`[portfolioPricing] Symbol ${symbol} not found (404) - possibly ETF/fund or invalid code`);
+    } else {
+      console.error(`[portfolioPricing] Fetch ${symbol} failed:`, error);
+    }
     throw error;
   }
 }
@@ -162,6 +206,16 @@ export function classifyPricingError(error) {
   }
   
   const message = String(error.message).toLowerCase();
+  
+  // Symbol not found (404) - normal for ETFs/funds
+  if (error.code === 'NOT_FOUND' || error.status === 404 || message.includes('not found')) {
+    return {
+      code: 'SYMBOL_NOT_FOUND',
+      userMessage: 'Mã không được SSI API hỗ trợ (có thể là ETF/quỹ)',
+      severity: 'info',
+      canRetry: false
+    };
+  }
   
   // Rate limit
   if (error.code === 'RATE_LIMIT' || error.status === 429) {

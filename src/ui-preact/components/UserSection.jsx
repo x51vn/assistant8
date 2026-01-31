@@ -1,65 +1,35 @@
 /**
  * UserSection - User info + logout action
  * X51LABS-151: User section integration
+ * 
+ * ✅ FIX: Uses AuthContext for logout (single source of truth)
+ * ✅ FIX: No window.location.reload() - AuthContext handles state
+ * ✅ FIX: No duplicate checkAuthStatus - get user from AuthContext
  */
 
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { checkAuthStatus, logout } from '../api/authApi.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { showStatus, showConfirm, userEmail, userName, isAuthLoading, isSaving } from '../state/settingsState.js';
+import { showStatus, showConfirm, userEmail, userName, isSaving } from '../state/settingsState.js';
+import { useAuth } from '../hooks/useAuth.js';
 
 const MAX_EMAIL_LENGTH = 30;
 
 export function UserSection() {
+  // ✅ FIX: Use AuthContext as single source of truth
+  const { user, logout } = useAuth();
+
+  // Sync user info to settings state signals (for display only)
   useEffect(() => {
-    const loadUser = async () => {
-      isAuthLoading.value = true;
-      try {
-        const { authenticated, user } = await checkAuthStatus();
-        if (authenticated && user) {
-          const displayName = user.user_metadata?.full_name || user.full_name || '';
-          userName.value = displayName;
-          userEmail.value = user.email || '';
-        } else {
-          userName.value = '';
-          userEmail.value = 'Not logged in';
-        }
-      } catch (error) {
-        console.error('[UserSection] Failed to load user info:', error);
-        userName.value = '';
-        userEmail.value = 'Error loading user';
-      } finally {
-        isAuthLoading.value = false;
-      }
-    };
-
-    loadUser();
-
-    const handleAuthChange = (message) => {
-      if (message?.type === MESSAGE_TYPES.AUTH_STATE_CHANGED) {
-        const user = message.data?.user || null;
-        if (user) {
-          const displayName = user.user_metadata?.full_name || user.full_name || '';
-          userName.value = displayName;
-          userEmail.value = user.email || '';
-        } else {
-          userName.value = '';
-          userEmail.value = 'Not logged in';
-          // Auth gate may reload UI; force refresh to ensure clean state
-          setTimeout(() => {
-            window.location.reload();
-          }, 200);
-        }
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(handleAuthChange);
-
-    return () => {
-      chrome.runtime.onMessage.removeListener(handleAuthChange);
-    };
-  }, []);
+    if (user) {
+      const displayName = user.user_metadata?.full_name || user.full_name || '';
+      userName.value = displayName;
+      userEmail.value = user.email || '';
+    } else {
+      userName.value = '';
+      userEmail.value = 'Not logged in';
+    }
+  }, [user]);
 
   const handleLogout = () => {
     if (isSaving.value) {
@@ -73,22 +43,22 @@ export function UserSection() {
       confirmText: 'Đăng xuất',
       cancelText: 'Hủy',
       onConfirm: async () => {
-        isAuthLoading.value = true;
+        // ✅ FIX: Just call AuthContext logout - it handles loading state
+        // NO setGlobalLoading here (AuthContext does it)
+        // NO window.location.reload() (AuthContext state change triggers re-render)
         try {
           const result = await logout();
           if (result.success) {
             showStatus('Đăng xuất thành công', 'success');
-            setTimeout(() => {
-              window.location.reload();
-            }, 300);
+            // ✅ AuthContext will update authenticated=false
+            // ✅ App.jsx will re-render to show LoginForm
+            // ✅ No reload needed!
           } else {
             showStatus(result.error || 'Đăng xuất thất bại', 'error');
           }
         } catch (error) {
           console.error('[UserSection] Logout failed:', error);
           showStatus('Không thể đăng xuất. Vui lòng thử lại.', 'error');
-        } finally {
-          isAuthLoading.value = false;
         }
       }
     });
@@ -107,9 +77,8 @@ export function UserSection() {
       </div>
       <button
         type="button"
-        class="secondary-btn logout-btn"
+        class="secondary-btn"
         onClick={handleLogout}
-        disabled={isAuthLoading.value}
       >
         <i class="fas fa-sign-out-alt"></i> Đăng xuất
       </button>

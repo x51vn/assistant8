@@ -1,0 +1,303 @@
+/* Shared Styles - Variables, Theme, Common Components */
+
+/* Theme tokens */
+/* Theme tokens */
+:root {
+  color-scheme: light dark;
+  --app-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --app-text: #333;
+  --surface-bg: #ffffff;
+  --surface-alt: #f6f7fb;
+  --surface-border: #e8eaf3;
+  --surface-shadow: 0 8px 20px rgba(17, 24, 39, 0.06);
+  --heading-text: #1f2937;
+  --body-text: #374151;
+  --muted-text: #6b7280;
+  --input-bg: #fbfbfd;
+  --input-border: #d8dce7;
+  --input-focus: #667eea;
+  --toast-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  --dialog-overlay: rgba(0, 0, 0, 0.4);
+  --success-bg: #d4edda;
+  --success-text: #155724;
+  --success-border: #c3e6cb;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+  --error-border: #f5c6cb;
+  --info-bg: #d1ecf1;
+  --info-text: #0c5460;
+  --info-border: #bee5eb;
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --warning-border: #ffeeba;
+}
+
+
+/* Dark theme - Both media query AND class-based for runtime updates */
+/* Dark theme - Both media query AND class-based for runtime updates */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #0f172a;
+    --app-text: #e5e7eb;
+    --surface-bg: #111827;
+    --surface-alt: #0b1220;
+    --surface-border: #1f2937;
+    --surface-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    --heading-text: #f3f4f6;
+    --body-text: #d1d5db;
+    --muted-text: #9ca3af;
+    --input-bg: #0f172a;
+    --input-border: #243146;
+    --input-focus: #93a4ff;
+    --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+    --dialog-overlay: rgba(2, 6, 23, 0.7);
+    --success-bg: #1f3a2d;
+    --success-text: #b7f7d5;
+    --success-border: #2c5d41;
+    --error-bg: #3c1b1b;
+    --error-text: #f8b4b4;
+    --error-border: #6b2a2a;
+    --info-bg: #0c2f38;
+    --info-text: #9fe7f5;
+    --info-border: #1e4a54;
+    --warning-bg: #3a2f10;
+    --warning-text: #f5da8b;
+    --warning-border: #5a481a;
+  }
+}
+
+
+/* Class-based dark theme override (for runtime theme switching) */
+/* Class-based dark theme override (for runtime theme switching) */
+body.dark {
+  --app-bg: #0f172a;
+  --app-text: #e5e7eb;
+  --surface-bg: #111827;
+  --surface-alt: #0b1220;
+  --surface-border: #1f2937;
+  --surface-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  --heading-text: #f3f4f6;
+  --body-text: #d1d5db;
+  --muted-text: #9ca3af;
+  --input-bg: #0f172a;
+  --input-border: #243146;
+  --input-focus: #93a4ff;
+  --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  --dialog-overlay: rgba(2, 6, 23, 0.7);
+  --success-bg: #1f3a2d;
+  --success-text: #b7f7d5;
+  --success-border: #2c5d41;
+  --error-bg: #3c1b1b;
+  --error-text: #f8b4b4;
+  --error-border: #6b2a2a;
+  --info-bg: #0c2f38;
+  --info-text: #9fe7f5;
+  --info-border: #1e4a54;
+  --warning-bg: #3a2f10;
+  --warning-text: #f5da8b;
+  --warning-border: #5a481a;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+body.sidepanel .content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.nav-buttons {
+  display: flex;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.nav-btn.active {
+  background: white;
+  color: #667eea;
+}
+
+.page {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  animation: fadeIn 0.3s ease;
+}
+
+.page.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 15px;
+  color: var(--heading-text, #333);
+  font-weight: 600;
+}
+
+
+/* Confirmation Dialog */
+/* Confirmation Dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--dialog-overlay, rgba(0, 0, 0, 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.confirm-dialog {
+  background: var(--surface-bg, #fff);
+  border-radius: 10px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: var(--surface-shadow, 0 10px 30px rgba(0, 0, 0, 0.2));
+  animation: confirmFadeIn 0.2s ease;
+}
+
+.confirm-header {
+  padding: 16px 20px 0;
+}
+
+.confirm-header h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.confirm-body {
+  padding: 0 20px 16px;
+  font-size: 13px;
+  color: var(--body-text, #444);
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 20px 18px;
+}
+
+.confirm-actions .primary-btn,
+.confirm-actions .secondary-btn {
+  flex: 1;
+  margin: 0;
+}
+
+@keyframes confirmFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* Loading Spinner */
+/* Loading Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.spinner.hidden {
+  display: none;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Scrollbar Styling */
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Dark Theme Support - REMOVED: Using CSS variables from :root instead (lines 45-75, 80-150) */
+/* Dark Theme Support - REMOVED: Using CSS variables from :root instead (lines 45-75, 80-150) */
+
+
+/* Scrollbar styling */
+/* Scrollbar styling */
+.page-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.page-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page-wrapper::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.page-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+

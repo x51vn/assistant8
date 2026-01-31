@@ -1,4 +1,3 @@
-/** @jsx h */
 /**
  * StockModal.jsx - Add/Edit Stock Modal
  * 
@@ -12,6 +11,7 @@
  */
 
 import { h } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import {
   isAddModalOpen,
@@ -42,6 +42,27 @@ export default function StockModal() {
   const isCash = selectedStock.value?.symbol === 'CASH';
 
   if (!isOpen) return null;
+
+  // ✅ FIX: Populate form when modal opens or mode changes
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode && selectedStock.value) {
+        // Edit mode: populate form with stock data
+        console.log('[StockModal] Populating form for edit:', selectedStock.value);
+        formSymbol.value = selectedStock.value.symbol || '';
+        formEntryPrice.value = selectedStock.value.avg_price?.toString() || '';
+        formQuantity.value = selectedStock.value.quantity?.toString() || '';
+      } else {
+        // Add mode: clear form
+        console.log('[StockModal] Clearing form for add mode');
+        formSymbol.value = '';
+        formEntryPrice.value = '';
+        formQuantity.value = '';
+      }
+      // Clear errors on open
+      formErrors.value = {};
+    }
+  }, [isOpen, isEditMode]);
 
   const handleSymbolChange = (e) => {
     formSymbol.value = e.target.value.toUpperCase();

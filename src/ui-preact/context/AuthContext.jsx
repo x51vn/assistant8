@@ -1,6 +1,7 @@
 /**
  * AuthContext - Centralized authentication state management
  * X51LABS-162: Build AuthContext & useAuth Custom Hook
+ * X51LABS: Use global loading state (NO local loading)
  * 
  * Provides authentication state to entire Preact UI application
  * Uses Context API for state sharing across component tree
@@ -9,6 +10,7 @@
 import { createContext } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { checkAuthStatus, login, logout, listenAuthStateChanges } from '../api/authApi.js';
+import { setGlobalLoading, hideLoading } from '../state/appState.js';
 
 /**
  * Auth context shape:
@@ -32,29 +34,42 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // NOTE: NO local loading state - use global loading from appState.js
   const [error, setError] = useState(null);
+  
+  // ✅ Track if initial auth check is done to avoid duplicate states
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   // Check initial auth status on mount
+  // This runs ONCE on mount to check if user is already logged in
   useEffect(() => {
     const checkInitialAuth = async () => {
-      setLoading(true);
+      setGlobalLoading(true, 'Đang kiểm tra đăng nhập...');
       const result = await checkAuthStatus();
-      setAuthenticated(result.authenticated);
-      setUser(result.user);
-      setError(result.error || null);
-      setLoading(false);
+      
+      // Only update state if listener hasn't already done it
+      if (!initialCheckDone) {
+        setAuthenticated(result.authenticated);
+        setUser(result.user);
+        setError(result.error || null);
+        setInitialCheckDone(true);
+      }
+      
+      hideLoading();
     };
 
     checkInitialAuth();
   }, []);
 
   // Listen for auth state changes from background
+  // This handles: login, logout, token refresh, session restore
   useEffect(() => {
     const cleanup = listenAuthStateChanges(({ authenticated, user }) => {
+      console.log('[AuthContext] Auth state changed via listener:', { authenticated, hasUser: !!user });
       setAuthenticated(authenticated);
       setUser(user);
       setError(null);
+      setInitialCheckDone(true); // Mark as done so initial check won't override
     });
 
     return cleanup;
@@ -62,46 +77,56 @@ export function AuthProvider({ children }) {
 
   // Login handler
   const handleLogin = async (email, password) => {
-    setLoading(true);
+    console.log('[AuthContext] Starting login...');
+    setGlobalLoading(true, 'Đang đăng nhập...');
     setError(null);
     const result = await login(email, password);
-    setAuthenticated(result.authenticated);
-    setUser(result.user);
-    setError(result.error || null);
-    setLoading(false);
+    console.log('[AuthContext] Login result:', { authenticated: result.authenticated, user: result.user, error: result.error });
+    
+    // ✅ FIX: Don't set state here - listenAuthStateChanges will handle it
+    // This prevents double render/flash on login
+    // Only set error if login failed
+    if (result.error) {
+      setError(result.error);
+    }
+    
+    hideLoading();
+    console.log('[AuthContext] Login complete, waiting for auth state broadcast');
     return result;
   };
 
   // Logout handler
   const handleLogout = async () => {
-    setLoading(true);
+    setGlobalLoading(true, 'Đang đăng xuất...');
     setError(null);
     const result = await logout();
-    if (result.success) {
-      setAuthenticated(false);
-      setUser(null);
-    } else {
+    
+    // ✅ FIX: Don't set state here - listenAuthStateChanges will handle it
+    // This prevents double render/flash on logout
+    // Only set error if logout failed
+    if (!result.success) {
       setError(result.error || null);
     }
-    setLoading(false);
+    
+    hideLoading();
     return result;
   };
 
   // Check auth status handler
   const handleCheckAuthStatus = async () => {
-    setLoading(true);
+    setGlobalLoading(true, 'Đang kiểm tra trạng thái...');
     const result = await checkAuthStatus();
     setAuthenticated(result.authenticated);
     setUser(result.user);
     setError(result.error || null);
-    setLoading(false);
+    hideLoading();
     return result;
   };
 
   const value = {
     authenticated,
     user,
-    loading,
+    // NOTE: loading removed - use globalLoading from appState.js
     error,
     login: handleLogin,
     logout: handleLogout,

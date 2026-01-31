@@ -110,7 +110,12 @@ function copyExtensionStatic() {
       await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
       await copyFile(path.resolve(staticDir, 'sidepanel-preact.html'), path.resolve(outDir, 'sidepanel-preact.html'));
       await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
-      await copyFile(path.resolve(staticDir, 'styles.css'), path.resolve(outDir, 'styles.css'));
+      
+      // Copy split CSS files (X51LABS: Phase 1 - Legacy/Preact separation)
+      await copyFile(path.resolve(staticDir, 'styles-shared.css'), path.resolve(outDir, 'styles-shared.css'));
+      await copyFile(path.resolve(staticDir, 'styles-legacy.css'), path.resolve(outDir, 'styles-legacy.css'));
+      await copyFile(path.resolve(staticDir, 'styles-preact.css'), path.resolve(outDir, 'styles-preact.css'));
+      
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
 
       const imagesDir = path.resolve(staticDir, 'images');

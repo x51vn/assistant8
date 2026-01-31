@@ -8,16 +8,18 @@ import { h } from 'preact';
 /**
  * @param {Object} props
  * @param {string} props.label - Field label
+ * @param {string} [props.icon] - FontAwesome icon class
+ * @param {string} [props.description] - Optional description
  * @param {import('@preact/signals').Signal<boolean>} props.checked - Signal for checked state
  * @param {string} [props.id] - Input ID
  */
-export function CheckboxField({ label, checked, id }) {
+export function CheckboxField({ label, icon, description, checked, id }) {
   const handleChange = (e) => {
     checked.value = e.target.checked;
   };
   
   return (
-    <div class="form-field checkbox-field">
+    <div class="checkbox-field">
       <label for={id}>
         <input
           id={id}
@@ -25,7 +27,13 @@ export function CheckboxField({ label, checked, id }) {
           checked={checked.value}
           onChange={handleChange}
         />
-        <span>{label}</span>
+        <span class="checkbox-label-content">
+          {icon && <i class={`fas ${icon}`}></i>}
+          <span class="checkbox-text">
+            {label}
+            {description && <span class="checkbox-desc">{description}</span>}
+          </span>
+        </span>
       </label>
     </div>
   );
