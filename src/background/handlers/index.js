@@ -16,6 +16,8 @@ logger.info('Registering message handlers...');
 // Each module will call registerHandler() to register its handlers
 import './chatgpt.js';
 import './portfolio.js';
+import './assets.js'; // XST-697: Asset Management handlers
+import './netWorth.js'; // XST-698: Net Worth & History handlers
 
 import './content.js'; // ✅ KEPT: Used by SSI market-data provider (fetchFromAPI)
 import './alarms.js';

@@ -14,6 +14,7 @@ import { h } from 'preact';
 export function Navigation({ currentPage, onPageChange }) {
   const pages = [
     { id: 'portfolio', label: 'Portfolio', icon: 'fas fa-chart-pie' },
+    { id: 'assets', label: 'Tài sản', icon: 'fas fa-wallet' },
     { id: 'history', label: 'History', icon: 'fas fa-history' },
     { id: 'errors', label: 'Errors', icon: 'fas fa-exclamation-triangle' },
     { id: 'english', label: 'English', icon: 'fas fa-book' },

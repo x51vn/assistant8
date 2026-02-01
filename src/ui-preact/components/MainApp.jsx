@@ -8,6 +8,7 @@ import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { Navigation } from './Navigation.jsx';
 import { PortfolioPage } from '../pages/PortfolioPage.jsx';
+import AssetsPage from '../pages/AssetsPage.jsx';
 import { HistoryPage } from '../pages/HistoryPage.jsx';
 import { ErrorsPage } from '../pages/ErrorsPage.jsx';
 import { EnglishPage } from '../pages/EnglishPage.jsx';
@@ -22,6 +23,8 @@ export function MainApp() {
     switch (page.value) {
       case 'portfolio':
         return <PortfolioPage />;
+      case 'assets':
+        return <AssetsPage />;
       case 'history':
         return <HistoryPage />;
       case 'errors':
