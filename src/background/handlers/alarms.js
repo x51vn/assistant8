@@ -11,6 +11,9 @@ import { generateCorrelationId } from '../../logger.js';
 
 const logger = createLogger('Alarms');
 
+// Alarm name for commodity (gold/crypto) price updates
+export const ALARM_UPDATE_COMMODITY_PRICES = 'updateCommodityPrices';
+
 /**
  * Check if current time is during market hours
  * Vietnam stock market: 9:00 AM - 3:00 PM
@@ -69,6 +72,38 @@ export async function handleAlarm(alarm) {
         }
       } catch (error) {
         logger.error('UPDATE_PRICES alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // UPDATE_COMMODITY_PRICES alarm - Update gold & crypto prices (24/7)
+    if (alarm.name === ALARM_UPDATE_COMMODITY_PRICES || alarm.name === 'updateCommodityPrices') {
+      logger.info('UPDATE_COMMODITY_PRICES alarm triggered', { correlationId });
+      
+      try {
+        // Send message to commodity handler to update prices
+        const response = await chrome.runtime.sendMessage({
+          v: 1,
+          type: MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES,
+          correlationId,
+          timestamp: Date.now()
+        });
+        
+        if (response.errorCode) {
+          logger.error('Commodity price update failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else {
+          logger.info('Commodity price update completed', {
+            correlationId,
+            updated: response.updated,
+            goldUpdated: response.results?.gold?.length || 0,
+            cryptoUpdated: response.results?.crypto?.length || 0
+          });
+        }
+      } catch (error) {
+        logger.error('UPDATE_COMMODITY_PRICES alarm failed', { correlationId, error: error.message });
       }
       return;
     }

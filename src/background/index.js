@@ -325,6 +325,7 @@ async function restoreSessionOnStartup() {
  * Setup periodic alarms
  * - CHECK: Portfolio price check (5 minutes)
  * - AUTORUN: Auto-run evaluation (configurable interval)
+ * - COMMODITY: Gold & Crypto price updates (15 minutes, 24/7)
  * 
  * NOTE: This function clears ALL alarms and recreates only CHECK and AUTORUN.
  */
@@ -333,9 +334,14 @@ async function setupAlarms() {
     // IMPORTANT: Only clear specific alarms, not all
     await chrome.alarms.clear('CHECK');
     await chrome.alarms.clear('AUTORUN');
+    await chrome.alarms.clear('updateCommodityPrices');
     
-    // CHECK alarm - portfolio price updates
+    // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
+    
+    // ✅ NEW: Commodity (gold/crypto) price updates - runs 24/7, every 15 minutes
+    // Gold and crypto markets operate 24/7, not restricted to VN market hours
+    chrome.alarms.create('updateCommodityPrices', { periodInMinutes: 15 });
     
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
@@ -348,7 +354,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
     
-    logger.info('Alarms setup completed');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }

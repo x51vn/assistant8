@@ -7,35 +7,36 @@
 import { useState } from 'preact/hooks';
 
 /**
- * Asset type config with icons and colors
+ * Asset type config with Font Awesome icons
  */
 const ASSET_TYPE_CONFIG = {
-  cash: { label: 'Tiền mặt', color: '#4CAF50', icon: '💵', bgColor: '#E8F5E9' },
-  savings: { label: 'Tiết kiệm', color: '#2196F3', icon: '🏦', bgColor: '#E3F2FD' },
-  crypto: { label: 'Crypto', color: '#FF9800', icon: '₿', bgColor: '#FFF3E0' },
-  gold: { label: 'Vàng', color: '#FFD700', icon: '🥇', bgColor: '#FFFDE7' },
-  real_estate: { label: 'Bất động sản', color: '#795548', icon: '🏠', bgColor: '#EFEBE9' },
-  vehicle: { label: 'Xe cộ', color: '#607D8B', icon: '🚗', bgColor: '#ECEFF1' },
-  other: { label: 'Khác', color: '#9E9E9E', icon: '📦', bgColor: '#F5F5F5' }
+  cash: { label: 'Tiền mặt', icon: 'fa-money-bill-1' },
+  savings: { label: 'Tiết kiệm', icon: 'fa-piggy-bank' },
+  crypto: { label: 'Crypto', icon: 'fa-bitcoin' },
+  gold: { label: 'Vàng', icon: 'fa-medal' },
+  real_estate: { label: 'Bất động sản', icon: 'fa-house' },
+  vehicle: { label: 'Xe cộ', icon: 'fa-car' },
+  debt: { label: 'Khoản vay', icon: 'fa-credit-card', isLiability: true },
+  other: { label: 'Khác', icon: 'fa-box' }
 };
 
 /**
- * Liquidity labels
+ * Liquidity labels with severity mapping
  */
 const LIQUIDITY_LABELS = {
-  high: { label: 'Thanh khoản cao', color: '#4CAF50' },
-  medium: { label: 'Thanh khoản TB', color: '#FF9800' },
-  low: { label: 'Thanh khoản thấp', color: '#F44336' }
+  high: { label: 'Cao', severity: 'low', icon: 'fa-arrow-up' },
+  medium: { label: 'TB', severity: 'medium', icon: 'fa-minus' },
+  low: { label: 'Thấp', severity: 'high', icon: 'fa-arrow-down' }
 };
 
 /**
- * Risk level labels
+ * Risk level labels with severity mapping
  */
 const RISK_LABELS = {
-  low: { label: 'Rủi ro thấp', color: '#4CAF50' },
-  medium: { label: 'Rủi ro TB', color: '#FF9800' },
-  high: { label: 'Rủi ro cao', color: '#F44336' },
-  very_high: { label: 'Rủi ro rất cao', color: '#B71C1C' }
+  low: { label: 'Thấp', severity: 'low', icon: 'fa-shield' },
+  medium: { label: 'TB', severity: 'medium', icon: 'fa-exclamation-triangle' },
+  high: { label: 'Cao', severity: 'high', icon: 'fa-exclamation-circle' },
+  very_high: { label: 'Rất cao', severity: 'critical', icon: 'fa-skull' }
 };
 
 /**
@@ -52,6 +53,46 @@ function formatCurrency(value, currency = 'VND') {
   });
   
   return formatter.format(value);
+}
+
+/**
+ * Get Vietnamese label for gold unit
+ */
+function getGoldUnitLabel(unit) {
+  const unitMap = {
+    'chi': 'chỉ',
+    'chỉ': 'chỉ',
+    'luong': 'lượng',
+    'lượng': 'lượng',
+    'cay': 'cây',
+    'cây': 'cây',
+    'g': 'g',
+    'gram': 'g',
+    'oz': 'oz',
+    'ounce': 'oz',
+    'kg': 'kg'
+  };
+  return unitMap[unit?.toLowerCase()] || unit || 'chỉ';
+}
+
+/**
+ * Extract gold unit from notes field
+ * Pattern: [Unit: chi] or [Unit: luong]
+ */
+function extractGoldUnitFromNotes(notes) {
+  if (!notes) return 'chi';
+  const match = notes.match(/\[Unit:\s*([^\]]+)\]/i);
+  return match ? match[1].trim().toLowerCase() : 'chi';
+}
+
+/**
+ * Extract crypto symbol from asset name
+ * Pattern: "Bitcoin (BTC)" → "BTC"
+ */
+function extractCryptoSymbolFromName(name) {
+  if (!name) return null;
+  const match = name.match(/\(([A-Z0-9]+)\)/);
+  return match ? match[1] : null;
 }
 
 /**
@@ -76,23 +117,10 @@ function formatDate(dateStr) {
  */
 export default function AssetCard({ asset, onEdit, onDelete }) {
   const [showDetails, setShowDetails] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const typeConfig = ASSET_TYPE_CONFIG[asset.asset_type] || ASSET_TYPE_CONFIG.other;
   const liquidityConfig = LIQUIDITY_LABELS[asset.liquidity] || LIQUIDITY_LABELS.medium;
   const riskConfig = RISK_LABELS[asset.risk_level] || RISK_LABELS.medium;
-
-  // Handle delete click
-  const handleDeleteClick = () => {
-    if (confirmDelete) {
-      onDelete(asset);
-      setConfirmDelete(false);
-    } else {
-      setConfirmDelete(true);
-      // Auto reset after 3 seconds
-      setTimeout(() => setConfirmDelete(false), 3000);
-    }
-  };
 
   // Get type-specific details
   const getTypeDetails = () => {
@@ -172,60 +200,70 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
   };
 
   return (
-    <div 
-      className="asset-card" 
-      style={{ borderLeftColor: typeConfig.color }}
-    >
-      {/* Header */}
-      <div className="asset-card-header">
-        <div className="asset-type-badge" style={{ backgroundColor: typeConfig.bgColor }}>
-          <span className="asset-icon">{typeConfig.icon}</span>
-          <span className="asset-type-label" style={{ color: typeConfig.color }}>
-            {typeConfig.label}
-          </span>
-        </div>
-        <div className="asset-actions">
+    <div className="list-item">
+      {/* Header: Name + Actions */}
+      <div className="list-item-header">
+        <span className="list-item-title">{asset.name}</span>
+        <div className="list-item-actions">
           <button 
-            className="btn-icon" 
+            className="list-item-action"
             onClick={() => onEdit(asset)}
             title="Sửa"
           >
-            <i className="fas fa-edit"></i>
+            <i className="fas fa-pen"></i>
           </button>
           <button 
-            className={`btn-icon btn-delete ${confirmDelete ? 'confirm' : ''}`}
-            onClick={handleDeleteClick}
-            title={confirmDelete ? 'Nhấn lần nữa để xóa' : 'Xóa'}
+            className="list-item-action delete"
+            onClick={() => onDelete(asset)}
+            title="Xóa"
           >
-            <i className={`fas ${confirmDelete ? 'fa-check' : 'fa-trash'}`}></i>
+            <i className="fas fa-trash"></i>
           </button>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="asset-card-body">
-        <div className="asset-name">{asset.name}</div>
-        <div className="asset-value">
-          {formatCurrency(asset.current_value, asset.currency)}
-        </div>
+      {/* Meta: Type + Tags */}
+      <div className="list-item-meta">
+        <span className={`list-item-tag primary ${typeConfig.isLiability ? 'liability' : ''}`}>
+          <i className={`fas ${typeConfig.icon}`}></i> {typeConfig.label}
+        </span>
+        {!typeConfig.isLiability && (
+          <>
+            <span className={`list-item-tag severity-tag ${liquidityConfig.severity}`} title="Thanh khoản">
+              <i className={`fas ${liquidityConfig.icon}`}></i> {liquidityConfig.label}
+            </span>
+            <span className={`list-item-tag severity-tag ${riskConfig.severity}`} title="Rủi ro">
+              <i className={`fas ${riskConfig.icon}`}></i> {riskConfig.label}
+            </span>
+          </>
+        )}
       </div>
 
-      {/* Tags */}
-      <div className="asset-tags">
-        <span 
-          className="tag liquidity-tag" 
-          style={{ color: liquidityConfig.color }}
-          title="Thanh khoản"
-        >
-          <i className="fas fa-tint"></i> {liquidityConfig.label.split(' ').pop()}
-        </span>
-        <span 
-          className="tag risk-tag"
-          style={{ color: riskConfig.color }}
-          title="Mức rủi ro"
-        >
-          <i className="fas fa-exclamation-circle"></i> {riskConfig.label.split(' ').pop()}
-        </span>
+      {/* Main Value */}
+      <div className="list-item-description">
+        {asset.asset_type === 'gold' && asset.quantity ? (
+          <>
+            <strong className="asset-value">
+              {asset.quantity} {getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))} vàng
+            </strong>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+              ≈ {formatCurrency(asset.current_value, asset.currency)} {asset.unit_price ? `(${formatCurrency(asset.unit_price, asset.currency)}/${getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))})` : ''}
+            </div>
+          </>
+        ) : asset.asset_type === 'crypto' && asset.quantity ? (
+          <>
+            <strong className="asset-value">
+              {asset.quantity} {asset.symbol || extractCryptoSymbolFromName(asset.name) || 'coin'}
+            </strong>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+              ≈ {formatCurrency(asset.current_value, asset.currency)} {asset.unit_price ? `(${formatCurrency(asset.unit_price, asset.currency)}/coin)` : ''}
+            </div>
+          </>
+        ) : (
+          <strong className={`asset-value ${typeConfig.isLiability ? 'liability-value' : ''}`}>
+            {typeConfig.isLiability ? '-' : ''}{formatCurrency(asset.current_value, asset.currency)}
+          </strong>
+        )}
       </div>
 
       {/* Expandable Details */}
@@ -233,8 +271,8 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
         className="asset-details-toggle"
         onClick={() => setShowDetails(!showDetails)}
       >
-        <span>Chi tiết</span>
         <i className={`fas fa-chevron-${showDetails ? 'up' : 'down'}`}></i>
+        <span>Chi tiết</span>
       </div>
 
       {showDetails && (

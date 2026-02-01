@@ -18,7 +18,13 @@
     "https://iboard-query.ssi.com.vn/*",
     "https://iboard.ssi.com.vn/*",
     "https://bgapidatafeed.vps.com.vn/*",
-    "https://*.supabase.co/*"
+    "https://*.supabase.co/*",
+    "https://btmc.vn/*",
+    "https://www.btmc.vn/*",
+    "https://giavang.doji.vn/*",
+    "https://sjc.com.vn/*",
+    "https://api.coingecko.com/*",
+    "https://api.binance.com/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"

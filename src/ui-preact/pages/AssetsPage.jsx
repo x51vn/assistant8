@@ -5,54 +5,25 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
-import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
 import AssetCard from '../components/AssetCard.jsx';
 import AssetModal from '../components/AssetModal.jsx';
 import NetWorthSummary from '../components/NetWorthSummary.jsx';
+import { updateAssetPrices } from '../api/commodityApi.js';
 
 /**
- * Simple Confirmation Dialog Component (inline)
- */
-function SimpleConfirmDialog({ title, message, confirmText, cancelText, onConfirm, onCancel, isDestructive }) {
-  return (
-    <div className="modal-overlay confirm-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
-        <div className="confirm-header">
-          <h3>{title}</h3>
-        </div>
-        <div className="confirm-body">
-          <p>{message}</p>
-        </div>
-        <div className="confirm-actions">
-          <button type="button" className="btn-secondary" onClick={onCancel}>
-            {cancelText || 'Hủy'}
-          </button>
-          <button 
-            type="button" 
-            className={`btn-primary ${isDestructive ? 'btn-danger' : ''}`} 
-            onClick={onConfirm}
-          >
-            {confirmText || 'Xác nhận'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Asset type filter options
+ * Asset type filter options with Font Awesome icons
  */
 const FILTER_OPTIONS = [
   { value: 'all', label: 'Tất cả' },
-  { value: 'cash', label: '💵 Tiền mặt' },
-  { value: 'savings', label: '🏦 Tiết kiệm' },
-  { value: 'crypto', label: '₿ Crypto' },
-  { value: 'gold', label: '🥇 Vàng' },
-  { value: 'real_estate', label: '🏠 Bất động sản' },
-  { value: 'vehicle', label: '🚗 Xe cộ' },
-  { value: 'other', label: '📦 Khác' }
+  { value: 'cash', label: 'Tiền mặt', icon: 'fa-money-bill-1' },
+  { value: 'savings', label: 'Tiết kiệm', icon: 'fa-piggy-bank' },
+  { value: 'crypto', label: 'Crypto', icon: 'fa-bitcoin' },
+  { value: 'gold', label: 'Vàng', icon: 'fa-medal' },
+  { value: 'real_estate', label: 'Bất động sản', icon: 'fa-house' },
+  { value: 'vehicle', label: 'Xe cộ', icon: 'fa-car' },
+  { value: 'other', label: 'Khác', icon: 'fa-box' }
 ];
 
 /**
@@ -70,6 +41,7 @@ export default function AssetsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
 
   // Load assets on mount
   useEffect(() => {
@@ -84,12 +56,9 @@ export default function AssetsPage() {
     setError(null);
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.ASSETS_GET,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        data: { includeInactive: false }
-      });
+      const response = await chrome.runtime.sendMessage(
+        createMessage(MESSAGE_TYPES.ASSETS_GET, { data: { includeInactive: false } })
+      );
 
       if (response.success) {
         setAssets(response.items || []);
@@ -101,6 +70,40 @@ export default function AssetsPage() {
       console.error('[AssetsPage] Load error:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Refresh gold and crypto prices from live data
+   */
+  async function handleRefreshPrices() {
+    // Check if there are any gold or crypto assets to update
+    const hasGoldOrCrypto = assets.some(a => a.asset_type === 'gold' || a.asset_type === 'crypto');
+    
+    if (!hasGoldOrCrypto) {
+      return; // Nothing to update
+    }
+
+    setRefreshingPrices(true);
+    setError(null);
+
+    try {
+      const result = await updateAssetPrices(assets);
+      
+      if (result.success && result.updatedAssets && result.updatedAssets.length > 0) {
+        // Update local state with refreshed assets
+        setAssets(prev => {
+          const updatedMap = new Map(result.updatedAssets.map(a => [a.id, a]));
+          return prev.map(a => updatedMap.get(a.id) || a);
+        });
+      } else if (!result.success) {
+        setError(result.error || 'Không thể cập nhật giá');
+      }
+    } catch (err) {
+      console.error('[AssetsPage] Refresh prices error:', err);
+      setError('Lỗi cập nhật giá. Vui lòng thử lại.');
+    } finally {
+      setRefreshingPrices(false);
     }
   }
 
@@ -135,12 +138,9 @@ export default function AssetsPage() {
     if (!deleteId) return;
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.ASSET_DELETE,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        data: { id: deleteId }
-      });
+      const response = await chrome.runtime.sendMessage(
+        createMessage(MESSAGE_TYPES.ASSET_DELETE, { data: { id: deleteId } })
+      );
 
       if (response.success) {
         setAssets(prev => prev.filter(a => a.id !== deleteId));
@@ -169,12 +169,9 @@ export default function AssetsPage() {
         ? { id: editingAsset.id, ...assetData }
         : assetData;
 
-      const response = await chrome.runtime.sendMessage({
-        type: messageType,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        data
-      });
+      const response = await chrome.runtime.sendMessage(
+        createMessage(messageType, { data })
+      );
 
       if (response.success) {
         if (isEdit) {
@@ -223,6 +220,17 @@ export default function AssetsPage() {
       <div className="page-header">
         <h2><i className="fas fa-coins"></i> Tài sản</h2>
         <div className="header-actions">
+          {/* Refresh prices button - only show if there are gold or crypto assets */}
+          {assets.some(a => a.asset_type === 'gold' || a.asset_type === 'crypto') && (
+            <button 
+              className="btn-icon"
+              onClick={handleRefreshPrices}
+              disabled={refreshingPrices}
+              title="Cập nhật giá vàng & crypto"
+            >
+              <i className={`fas fa-chart-line ${refreshingPrices ? 'fa-spin' : ''}`}></i>
+            </button>
+          )}
           <button 
             className="btn-icon" 
             onClick={loadAssets}
@@ -261,8 +269,10 @@ export default function AssetsPage() {
             key={opt.value}
             className={`filter-btn ${filter === opt.value ? 'active' : ''}`}
             onClick={() => setFilter(opt.value)}
+            title={opt.label}
           >
-            {opt.label}
+            {opt.icon && <i className={`fas ${opt.icon}`}></i>}
+            <span>{opt.label}</span>
           </button>
         ))}
       </div>
@@ -306,18 +316,16 @@ export default function AssetsPage() {
 
       {/* Delete Confirmation */}
       {showConfirm && (
-        <SimpleConfirmDialog
-          title="Xóa tài sản"
-          message="Bạn có chắc muốn xóa tài sản này? Hành động này không thể hoàn tác."
-          confirmText="Xóa"
-          cancelText="Hủy"
-          onConfirm={confirmDelete}
-          onCancel={() => {
-            setShowConfirm(false);
-            setDeleteId(null);
-          }}
-          isDestructive={true}
-        />
+        <div className="modal-overlay" onClick={() => { setShowConfirm(false); setDeleteId(null); }}>
+          <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Xóa tài sản</h3>
+            <p>Bạn có chắc muốn xóa tài sản này? Hành động này không thể hoàn tác.</p>
+            <div className="confirm-buttons">
+              <button className="btn-cancel" onClick={() => { setShowConfirm(false); setDeleteId(null); }}>Hủy</button>
+              <button className="btn-confirm-delete" onClick={confirmDelete}>Xóa</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

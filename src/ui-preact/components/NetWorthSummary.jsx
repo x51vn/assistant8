@@ -18,6 +18,7 @@ const ASSET_TYPE_CONFIG = {
   gold: { label: 'Vàng', color: '#FFD700', icon: '🥇' },
   real_estate: { label: 'BĐS', color: '#795548', icon: '🏠' },
   vehicle: { label: 'Xe cộ', color: '#607D8B', icon: '🚗' },
+  debt: { label: 'Khoản vay', color: '#F44336', icon: '💳', isLiability: true },
   other: { label: 'Khác', color: '#9E9E9E', icon: '📦' }
 };
 
@@ -73,9 +74,11 @@ export default function NetWorthSummary({ onRefresh }) {
       // Map response to expected format
       setData({
         totalNetWorth: response.total || 0,
-        totalPortfolio: response.totalPortfolio || 0,
         totalAssets: response.totalAssets || 0,
+        totalDebts: response.totalDebts || 0,
+        totalPortfolio: response.totalPortfolio || 0,
         breakdown: response.breakdown || {},
+        debtBreakdown: response.debtBreakdown || {},
         portfolioBreakdown: response.portfolioBreakdown || {},
         assetsBreakdown: response.assetsBreakdown || {},
         calculatedAt: response.calculatedAt,
@@ -105,7 +108,8 @@ export default function NetWorthSummary({ onRefresh }) {
   const getBreakdown = () => {
     if (!data?.breakdown) return [];
     
-    const total = data.totalNetWorth || 0;
+    // Use totalAssets (excluding debts) for percentage calculation
+    const total = data.totalAssets || 0;
     if (total === 0) return [];
 
     return Object.entries(data.breakdown)
@@ -115,7 +119,7 @@ export default function NetWorthSummary({ onRefresh }) {
         percentage: (value / total) * 100,
         config: ASSET_TYPE_CONFIG[type] || ASSET_TYPE_CONFIG.other
       }))
-      .filter(item => item.value > 0)
+      .filter(item => item.value > 0 && !item.config.isLiability) // Exclude debts from bar
       .sort((a, b) => b.value - a.value);
   };
 
@@ -206,7 +210,7 @@ export default function NetWorthSummary({ onRefresh }) {
         </div>
       )}
 
-      {/* Quick Stats - Portfolio vs Assets */}
+      {/* Quick Stats - Portfolio vs Assets vs Debts */}
       {data && (
         <div className="net-worth-stats">
           <div className="stat">
@@ -221,6 +225,14 @@ export default function NetWorthSummary({ onRefresh }) {
             </span>
             <span className="stat-value">{formatCurrency(data.totalAssets || 0)}</span>
           </div>
+          {data.totalDebts > 0 && (
+            <div className="stat error">
+              <span className="stat-label">
+                <i className="fas fa-credit-card"></i> Nợ
+              </span>
+              <span className="stat-value">-{formatCurrency(data.totalDebts)}</span>
+            </div>
+          )}
           <div className="stat">
             <span className="stat-label">
               <i className="fas fa-clock"></i> Cập nhật

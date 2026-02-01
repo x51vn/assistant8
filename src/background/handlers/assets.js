@@ -17,7 +17,7 @@ const logger = createLogger('Handlers/Assets');
 /**
  * Valid asset types
  */
-const VALID_ASSET_TYPES = ['cash', 'savings', 'real_estate', 'crypto', 'gold', 'vehicle', 'other'];
+const VALID_ASSET_TYPES = ['cash', 'savings', 'real_estate', 'crypto', 'gold', 'vehicle', 'debt', 'other'];
 
 /**
  * Valid liquidity levels

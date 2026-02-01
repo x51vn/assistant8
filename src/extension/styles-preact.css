@@ -1901,6 +1901,27 @@ textarea.input-field {
   color: var(--heading-text, #2c3e50);
 }
 
+/* Liability Value Display (Debt) */
+.asset-value.liability-value {
+  color: var(--error-text, #dc3545);
+}
+
+/* Liability Tag Styling */
+.list-item-tag.liability {
+  background: #fee2e2;
+  color: #dc3545;
+  border: 1px solid #fca5a5;
+}
+
+/* Liability Stat Display */
+.stat.error {
+  border-left-color: var(--error-border, #dc3545);
+}
+
+.stat.error .stat-value {
+  color: var(--error-text, #dc3545);
+}
+
 /* Error Text in Forms */
 .error-text {
   display: flex;

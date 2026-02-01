@@ -18,6 +18,7 @@ import './chatgpt.js';
 import './portfolio.js';
 import './assets.js'; // XST-697: Asset Management handlers
 import './netWorth.js'; // XST-698: Net Worth & History handlers
+import './commodity.js'; // XST-xxx: Gold & Crypto price handlers
 
 import './content.js'; // ✅ KEPT: Used by SSI market-data provider (fetchFromAPI)
 import './alarms.js';

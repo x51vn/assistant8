@@ -18,21 +18,34 @@ const logger = createLogger('Handlers/NetWorth');
  * Calculate net worth from assets and portfolio
  * @param {Object[]} assets - Active assets
  * @param {Object[]} portfolio - Portfolio items
- * @returns {{ total: number, breakdown: Object }}
+ * @returns {{ total: number, totalAssets: number, totalDebts: number, breakdown: Object, debtBreakdown: Object }}
  */
 function calculateNetWorth(assets, portfolio) {
   const breakdown = {};
+  let totalAssets = 0;
+  let totalDebts = 0;
+  const debtBreakdown = {};
 
-  // Aggregate assets by type
+  // Aggregate assets by type, separate debts
   for (const asset of assets) {
     const type = asset.asset_type || 'other';
     const value = Number(asset.current_value) || 0;
-    breakdown[type] = (breakdown[type] || 0) + value;
+
+    if (type === 'debt') {
+      // Debts are liabilities (reduce net worth)
+      totalDebts += value;
+      debtBreakdown[type] = (debtBreakdown[type] || 0) + value;
+    } else {
+      // Regular assets
+      totalAssets += value;
+      breakdown[type] = (breakdown[type] || 0) + value;
+    }
   }
 
   // Add stocks from portfolio
+  let stocksTotal = 0;
   if (portfolio && portfolio.length > 0) {
-    const stocksTotal = portfolio.reduce((sum, item) => {
+    stocksTotal = portfolio.reduce((sum, item) => {
       const price = Number(item.current_price) || 0;
       const qty = Number(item.quantity) || 0;
       return sum + (price * qty);
@@ -40,13 +53,20 @@ function calculateNetWorth(assets, portfolio) {
 
     if (stocksTotal > 0) {
       breakdown.stocks = stocksTotal;
+      totalAssets += stocksTotal;
     }
   }
 
-  // Calculate total
-  const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+  // Calculate total: assets - debts
+  const total = totalAssets - totalDebts;
 
-  return { total, breakdown };
+  return { 
+    total, 
+    totalAssets, 
+    totalDebts, 
+    breakdown, 
+    debtBreakdown
+  };
 }
 
 /**
@@ -88,6 +108,11 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
           stocks: summary.total_portfolio || 0
         };
 
+        // Separate debts
+        const debtBreakdown = summary.assets_breakdown?.debt ? 
+          { debt: summary.assets_breakdown.debt } : 
+          {};
+
         logger.info('Net worth from summary', { 
           correlationId, 
           total: summary.total_net_worth,
@@ -98,8 +123,10 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
           success: true,
           total: summary.total_net_worth || 0,
           totalPortfolio: summary.total_portfolio || 0,
-          totalAssets: summary.total_assets || 0,
+          totalAssets: (summary.total_assets || 0) + (summary.total_portfolio || 0),
+          totalDebts: summary.assets_breakdown?.debt || 0,
           breakdown,
+          debtBreakdown,
           portfolioBreakdown: summary.portfolio_breakdown || {},
           assetsBreakdown: summary.assets_breakdown || {},
           calculatedAt: summary.updated_at,
@@ -147,18 +174,23 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
     );
 
     // Calculate net worth
-    const { total, breakdown } = calculateNetWorth(assets, portfolio);
+    const { total, totalAssets, totalDebts, breakdown, debtBreakdown } = calculateNetWorth(assets, portfolio);
 
     logger.info('Net worth calculated on-the-fly', { 
       correlationId, 
       total, 
+      totalAssets,
+      totalDebts,
       assetTypes: Object.keys(breakdown).length 
     });
 
     return createResponse(message, MESSAGE_TYPES.NET_WORTH_DATA, {
       success: true,
       total,
+      totalAssets,
+      totalDebts,
       breakdown,
+      debtBreakdown,
       calculatedAt: new Date().toISOString(),
       source: 'calculated'
     });
