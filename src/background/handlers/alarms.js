@@ -108,6 +108,40 @@ export async function handleAlarm(alarm) {
       return;
     }
 
+    // ✅ NEW: SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
+    if (alarm.name === 'SESSION_CHECK') {
+      logger.debug('SESSION_CHECK alarm triggered', { correlationId });
+      
+      try {
+        // Send message to session manager to check session expiration
+        const response = await chrome.runtime.sendMessage({
+          v: 1,
+          type: MESSAGE_TYPES.SESSION_CHECK,
+          correlationId,
+          timestamp: Date.now()
+        });
+        
+        if (response.errorCode) {
+          logger.warn('Session check failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else {
+          logger.debug('Session check completed', {
+            correlationId,
+            status: response.status,
+            minutesUntilExpiry: response.minutesUntilExpiry
+          });
+        }
+      } catch (error) {
+        // Expected when UI is not open - session manager will broadcast if needed
+        if (!error?.message?.includes('Receiving end does not exist')) {
+          logger.warn('SESSION_CHECK alarm failed', { correlationId, error: error.message });
+        }
+      }
+      return;
+    }
+
     // DAILY_CLEANUP alarm - Cleanup old data
     if (alarm.name === ALARM_DAILY_CLEANUP || alarm.name === 'dailyCleanup') {
       logger.info('DAILY_CLEANUP alarm triggered', { correlationId });

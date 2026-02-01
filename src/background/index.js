@@ -25,6 +25,7 @@ import './handlers/index.js'; // This will register all handlers
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
 import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
+import * as sessionManagerModule from './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling
 // ❌ REMOVED: import './handlers/telemetry.js'; (dead code - no telemetry events called)
 
 const logger = createLogger('Background');
@@ -326,6 +327,7 @@ async function restoreSessionOnStartup() {
  * - CHECK: Portfolio price check (5 minutes)
  * - AUTORUN: Auto-run evaluation (configurable interval)
  * - COMMODITY: Gold & Crypto price updates (15 minutes, 24/7)
+ * - SESSION_CHECK: Session expiration check (1 minute) - X51LABS-XXX
  * 
  * NOTE: This function clears ALL alarms and recreates only CHECK and AUTORUN.
  */
@@ -335,6 +337,7 @@ async function setupAlarms() {
     await chrome.alarms.clear('CHECK');
     await chrome.alarms.clear('AUTORUN');
     await chrome.alarms.clear('updateCommodityPrices');
+    await chrome.alarms.clear('SESSION_CHECK');
     
     // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
@@ -342,6 +345,11 @@ async function setupAlarms() {
     // ✅ NEW: Commodity (gold/crypto) price updates - runs 24/7, every 15 minutes
     // Gold and crypto markets operate 24/7, not restricted to VN market hours
     chrome.alarms.create('updateCommodityPrices', { periodInMinutes: 15 });
+    
+    // ✅ NEW: Session expiration check - runs every 1 minute
+    // Proactively checks if session is about to expire
+    // Allows graceful handling instead of sudden logout
+    chrome.alarms.create('SESSION_CHECK', { periodInMinutes: 1 });
     
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
@@ -354,7 +362,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
     
-    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min)');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, SESSION_CHECK: 1min)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }
