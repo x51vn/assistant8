@@ -8,10 +8,10 @@
  * 4. Network errors during refresh
  * 
  * SOLUTION:
- * 1. Monitor token expiration proactively (refresh 5 mins before expiry)
- * 2. Broadcast SESSION_ABOUT_TO_EXPIRE to UI for graceful handling
- * 3. On refresh failure, broadcast SESSION_EXPIRED instead of silent SIGNED_OUT
- * 4. UI can prompt user to re-login instead of sudden redirect
+ * 1. Monitor token expiration (check every 1 minute)
+ * 2. Silently refresh token 2 minutes before expiry (background operation)
+ * 3. Only show login required when token is truly expired and cannot refresh
+ * 4. No premature warnings - just seamless refresh
  */
 
 import { registerHandler } from '../messageRouter.js';
@@ -28,10 +28,6 @@ const logger = createLogger('Handlers/SessionManager');
 // Track when we last checked session expiration (avoid excessive checks)
 let lastSessionCheckTime = 0;
 const SESSION_CHECK_INTERVAL_MS = 60000; // Check every 1 minute
-
-// Track when we last broadcast SESSION_ABOUT_TO_EXPIRE (avoid spam)
-let lastExpiryWarningTime = 0;
-const EXPIRY_WARNING_COOLDOWN_MS = 300000; // 5 minutes between warnings
 
 // ============================================================================
 // SESSION CHECK HANDLER
@@ -117,7 +113,7 @@ registerHandler(MESSAGE_TYPES.SESSION_CHECK, async (message) => {
         });
       }
 
-      // Refresh failed - session is dead
+      // Refresh failed - session is dead, only then broadcast logout
       broadcastSessionExpired(session.user);
       return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
         status: 'expired',
@@ -127,31 +123,36 @@ registerHandler(MESSAGE_TYPES.SESSION_CHECK, async (message) => {
       });
     }
 
-    // Case 2b: Token expiring soon (within 5 minutes)
-    if (timeUntilExpiry < 5 * 60000) {
+    // Case 2b: Token expiring soon (within 2 minutes) - attempt silent refresh only
+    // ✅ FIX: Only refresh silently, don't warn user until token is truly expired
+    if (timeUntilExpiry < 2 * 60000) {
+      logger.debug('Token expiring soon - attempting silent refresh', {
+        correlationId,
+        minutesUntilExpiry
+      });
+
       // Attempt refresh
       const refreshResult = await attemptTokenRefresh(correlationId);
       if (refreshResult.success) {
-        logger.info('Token refreshed proactively', { correlationId });
+        logger.info('Token refreshed silently', { correlationId });
         return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
           status: 'valid_refreshed',
           authenticated: true
         });
       }
 
-      // Refresh failed - warn UI
-      const now_warn = Date.now();
-      if (now_warn - lastExpiryWarningTime > EXPIRY_WARNING_COOLDOWN_MS) {
-        lastExpiryWarningTime = now_warn;
-        broadcastSessionAboutToExpire(session.user, minutesUntilExpiry);
-      }
+      // ⚠️ FIX: Don't broadcast SESSION_ABOUT_TO_EXPIRE
+      // Just keep session valid and let it expire naturally
+      // Only show error when token truly expires and cannot refresh
+      logger.warn('Silent refresh failed, waiting for natural expiry', {
+        correlationId,
+        minutesUntilExpiry
+      });
 
       return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-        status: 'expiring_soon',
+        status: 'valid_but_expiring',
         authenticated: true,
-        minutesUntilExpiry,
-        action: 'WARN_USER',
-        message: `Phiên đăng nhập sẽ hết hạn sau ${minutesUntilExpiry} phút`
+        minutesUntilExpiry
       });
     }
 
