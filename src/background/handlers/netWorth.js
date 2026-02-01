@@ -51,7 +51,8 @@ function calculateNetWorth(assets, portfolio) {
 
 /**
  * Handle NET_WORTH_GET
- * Calculate total net worth including assets and stocks
+ * Fetch pre-computed totals from asset_summaries table (updated by DB triggers)
+ * Falls back to on-the-fly calculation if summary not found
  */
 registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
   const correlationId = message.correlationId;
@@ -59,7 +60,56 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
 
   try {
     const userId = await requireAuth(message);
-    const { includeStocks = true } = message.data || {};
+    const { forceRecalculate = false } = message.data || {};
+
+    // Try to fetch from pre-computed summary first (fast path)
+    if (!forceRecalculate) {
+      const summary = await supabaseWithRetry(
+        async () => {
+          const { data, error } = await supabase
+            .from('asset_summaries')
+            .select('total_portfolio, total_assets, total_net_worth, portfolio_breakdown, assets_breakdown, updated_at')
+            .eq('user_id', userId)
+            .single();
+
+          if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+          return data;
+        },
+        {
+          operationName: 'getAssetSummary',
+          correlationId
+        }
+      );
+
+      if (summary) {
+        // Combine breakdowns for UI
+        const breakdown = {
+          ...(summary.assets_breakdown || {}),
+          stocks: summary.total_portfolio || 0
+        };
+
+        logger.info('Net worth from summary', { 
+          correlationId, 
+          total: summary.total_net_worth,
+          source: 'asset_summaries'
+        });
+
+        return createResponse(message, MESSAGE_TYPES.NET_WORTH_DATA, {
+          success: true,
+          total: summary.total_net_worth || 0,
+          totalPortfolio: summary.total_portfolio || 0,
+          totalAssets: summary.total_assets || 0,
+          breakdown,
+          portfolioBreakdown: summary.portfolio_breakdown || {},
+          assetsBreakdown: summary.assets_breakdown || {},
+          calculatedAt: summary.updated_at,
+          source: 'summary'
+        });
+      }
+    }
+
+    // Fallback: Calculate on-the-fly if no summary exists
+    logger.info('No summary found, calculating on-the-fly', { correlationId });
 
     // Fetch active assets
     const assets = await supabaseWithRetry(
@@ -79,30 +129,27 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
       }
     );
 
-    // Fetch portfolio if requested
-    let portfolio = [];
-    if (includeStocks) {
-      portfolio = await supabaseWithRetry(
-        async () => {
-          const { data, error } = await supabase
-            .from('portfolio')
-            .select('current_price, quantity')
-            .eq('user_id', userId);
+    // Fetch portfolio
+    const portfolio = await supabaseWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from('portfolio')
+          .select('current_price, avg_price, quantity')
+          .eq('user_id', userId);
 
-          if (error) throw error;
-          return data || [];
-        },
-        {
-          operationName: 'getPortfolioForNetWorth',
-          correlationId
-        }
-      );
-    }
+        if (error) throw error;
+        return data || [];
+      },
+      {
+        operationName: 'getPortfolioForNetWorth',
+        correlationId
+      }
+    );
 
     // Calculate net worth
     const { total, breakdown } = calculateNetWorth(assets, portfolio);
 
-    logger.info('Net worth calculated', { 
+    logger.info('Net worth calculated on-the-fly', { 
       correlationId, 
       total, 
       assetTypes: Object.keys(breakdown).length 
@@ -112,17 +159,18 @@ registerHandler(MESSAGE_TYPES.NET_WORTH_GET, async (message) => {
       success: true,
       total,
       breakdown,
-      calculatedAt: new Date().toISOString()
+      calculatedAt: new Date().toISOString(),
+      source: 'calculated'
     });
 
   } catch (error) {
     if (error.errorCode) return error;
 
-    logger.error('Net worth calculation failed', { correlationId, error: error.message });
+    logger.error('Net worth fetch failed', { correlationId, error: error.message });
     return createErrorResponse(
       message,
       ERROR_CODES.SUPABASE_ERROR,
-      'Không thể tính tổng tài sản. Vui lòng thử lại.',
+      'Không thể tải tổng tài sản. Vui lòng thử lại.',
       { technicalError: error.message }
     );
   }

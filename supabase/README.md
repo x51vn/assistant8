@@ -1,11 +1,11 @@
 # Supabase Database Setup Guide
 
 > **Ticket**: GPT-009 (Supabase SQL schema + RLS pack)  
-> **Date**: January 23, 2026
+> **Updated**: February 2026 (Asset Summaries + Edge Functions)
 
 ## Overview
 
-This guide explains how to set up the PostgreSQL database for ChatGPT Assistant on Supabase. The schema includes 8 tables with Row Level Security (RLS) policies for multi-user data isolation.
+This guide explains how to set up the PostgreSQL database for ChatGPT Assistant on Supabase. The schema includes 9 tables with Row Level Security (RLS) policies for multi-user data isolation, plus triggers for real-time aggregation and an Edge Function for daily snapshots.
 
 ---
 
@@ -24,11 +24,14 @@ This guide explains how to set up the PostgreSQL database for ChatGPT Assistant 
 1. Go to your Supabase project
 2. Navigate to **SQL Editor** in the sidebar
 3. Click **New Query**
-4. Copy the entire contents of `supabase/migrations/001_initial_schema.sql`
-5. Paste into the query editor
-6. Click **Run** (or press `Ctrl+Enter`)
-7. Wait for completion (should take ~2-5 seconds)
-8. Verify success by running the verification queries (see below)
+4. Apply migrations **in order**:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_fix_chat_id_nullable.sql`
+   - `supabase/migrations/003_create_assets_tables.sql`
+   - `supabase/migrations/004_asset_summaries_triggers.sql` ← **New**
+5. Click **Run** for each
+6. Wait for completion (should take ~2-5 seconds each)
+7. Verify success by running the verification queries (see below)
 
 ### Option 2: Apply via Supabase CLI (Advanced)
 
@@ -45,6 +48,41 @@ supabase link --project-ref YOUR_PROJECT_REF
 # Apply migration
 supabase db push
 ```
+
+---
+
+## Edge Function: Daily Asset Snapshot
+
+Deploy the Edge Function for daily net worth snapshots (runs at 4 PM weekdays):
+
+```bash
+# From project root
+cd supabase
+
+# Deploy the function
+supabase functions deploy daily-asset-snapshot
+
+# Verify deployment
+supabase functions list
+```
+
+### Configure Scheduled Job (Cron)
+
+After deploying, set up the scheduled job in Supabase Dashboard:
+
+1. Go to **Database** → **Scheduled Jobs**
+2. Create new job:
+   - **Name**: `daily_asset_snapshot`
+   - **Schedule**: `0 9 * * 1-5` (9 AM UTC = 4 PM Vietnam time)
+   - **Command**: 
+     ```sql
+     SELECT net.http_post(
+       url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/daily-asset-snapshot',
+       headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+     );
+     ```
+
+**Alternative**: Use pg_cron extension if http_post not available.
 
 ---
 

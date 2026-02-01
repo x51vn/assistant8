@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
-import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 
 /**
  * Asset type labels and colors
@@ -62,17 +62,25 @@ export default function NetWorthSummary({ onRefresh }) {
     setError(null);
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.NET_WORTH_GET,
-        correlationId: crypto.randomUUID(),
-        timestamp: Date.now()
-      });
+      const response = await chrome.runtime.sendMessage(
+        createMessage(MESSAGE_TYPES.NET_WORTH_GET)
+      );
 
-      if (response?.error) {
-        throw new Error(response.error);
+      if (response?.error || response?.errorCode) {
+        throw new Error(response.errorMessage || response.error || 'Lỗi không xác định');
       }
 
-      setData(response);
+      // Map response to expected format
+      setData({
+        totalNetWorth: response.total || 0,
+        totalPortfolio: response.totalPortfolio || 0,
+        totalAssets: response.totalAssets || 0,
+        breakdown: response.breakdown || {},
+        portfolioBreakdown: response.portfolioBreakdown || {},
+        assetsBreakdown: response.assetsBreakdown || {},
+        calculatedAt: response.calculatedAt,
+        source: response.source // 'summary' or 'calculated'
+      });
     } catch (err) {
       console.error('[NetWorthSummary] Error fetching:', err);
       setError(err.message || 'Lỗi khi tải dữ liệu');
@@ -198,22 +206,28 @@ export default function NetWorthSummary({ onRefresh }) {
         </div>
       )}
 
-      {/* Quick Stats */}
+      {/* Quick Stats - Portfolio vs Assets */}
       {data && (
         <div className="net-worth-stats">
           <div className="stat">
-            <span className="stat-label">Tài sản</span>
-            <span className="stat-value">{data.assetCount || 0}</span>
+            <span className="stat-label">
+              <i className="fas fa-chart-line"></i> Cổ phiếu
+            </span>
+            <span className="stat-value">{formatCurrency(data.totalPortfolio || 0)}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Cổ phiếu</span>
-            <span className="stat-value">{data.stockCount || 0}</span>
+            <span className="stat-label">
+              <i className="fas fa-wallet"></i> Tài sản
+            </span>
+            <span className="stat-value">{formatCurrency(data.totalAssets || 0)}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Cập nhật</span>
+            <span className="stat-label">
+              <i className="fas fa-clock"></i> Cập nhật
+            </span>
             <span className="stat-value">
-              {data.lastUpdated 
-                ? new Date(data.lastUpdated).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              {data.calculatedAt 
+                ? new Date(data.calculatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                 : '-'}
             </span>
           </div>
