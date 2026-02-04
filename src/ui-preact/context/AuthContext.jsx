@@ -78,8 +78,19 @@ export function AuthProvider({ children }) {
   // This handles: login, logout, token refresh, session restore
   // ✅ Also loads settings when user becomes authenticated
   useEffect(() => {
-    const cleanup = listenAuthStateChanges(async ({ authenticated: isAuth, user: authUser }) => {
-      console.log('[AuthContext] Auth state changed via listener:', { authenticated: isAuth, hasUser: !!authUser });
+    const cleanup = listenAuthStateChanges(async ({ authenticated: isAuth, user: authUser, sessionExpired }) => {
+      console.log('[AuthContext] Auth state changed via listener:', { authenticated: isAuth, hasUser: !!authUser, sessionExpired });
+      
+      // ✅ FIX: Handle SESSION_EXPIRED with user-friendly message
+      if (sessionExpired) {
+        console.log('[AuthContext] Session expired - showing login required');
+        setAuthenticated(false);
+        setUser(null);
+        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        setInitialCheckDone(true);
+        return;
+      }
+      
       setAuthenticated(isAuth);
       setUser(authUser);
       setError(null);

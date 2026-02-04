@@ -105,10 +105,18 @@ export async function logout() {
  */
 export function listenAuthStateChanges(callback) {
   const handleAuthChange = (message) => {
+    // Handle normal auth state changes (login/logout)
     if (message?.type === MESSAGE_TYPES.AUTH_STATE_CHANGED) {
       const user = message.data?.user || null;
       const authenticated = !!user;
       callback({ authenticated, user });
+    }
+    
+    // ✅ FIX: Handle SESSION_EXPIRED from sessionManager
+    // This fires when token expires and cannot be refreshed
+    if (message?.type === MESSAGE_TYPES.SESSION_EXPIRED) {
+      console.log('[AuthAPI] Session expired - logging out user');
+      callback({ authenticated: false, user: null, sessionExpired: true });
     }
   };
 
