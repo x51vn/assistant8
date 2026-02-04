@@ -41,7 +41,7 @@ test-results/
 # Build output
 build/
 out/
-dist/*.map
+dist/
 
 # Source map files (generated during build, not needed in git)
 *.map
