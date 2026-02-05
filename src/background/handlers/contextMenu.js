@@ -11,7 +11,7 @@ import { persistPromptSafe } from './_persistPromptHelper.js';
 const logger = createLogger('ContextMenu');
 
 /**
- * Get context menu prompt from Supabase settings
+ * Get context menu prompt from Supabase prompts table
  * @returns {Promise<string>} The context menu prompt template
  */
 async function getContextMenuPrompt() {
@@ -21,17 +21,19 @@ async function getContextMenuPrompt() {
       return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
     }
 
+    // Load from unified prompts table
     const { data, error } = await supabase
-      .from('settings')
-      .select('config')
+      .from('prompts')
+      .select('content')
       .eq('user_id', user.id)
+      .eq('key', 'prompt.contextMenu')
       .single();
 
     if (error || !data) {
       return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
     }
 
-    return data.config?.prompts?.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
+    return data.content || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
   } catch (error) {
     logger.error('Failed to get context menu prompt from Supabase', { error: error.message });
     return 'Hãy phân tích nội dung sau:\n\n{CONTENT}';

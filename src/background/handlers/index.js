@@ -19,6 +19,7 @@ import './portfolio.js';
 import './assets.js'; // XST-697: Asset Management handlers
 import './netWorth.js'; // XST-698: Net Worth & History handlers
 import './commodity.js'; // XST-xxx: Gold & Crypto price handlers
+import './indices.js'; // Market Indices handlers (VNI, VN30, HNX, UPCOM)
 
 import './content.js'; // ✅ KEPT: Used by SSI market-data provider (fetchFromAPI)
 import './alarms.js';
@@ -31,6 +32,7 @@ import './chatHistory.js'; // GPT-014: Chat History CRUD handlers
 import './errorTracking.js'; // GPT-016: Error tracking CRUD handlers
 import './settings.js'; // ✅ GPT-FIX: Settings handlers (Supabase-backed)
 import './english.js'; // ✅ English learning handlers (Supabase table: english)
+import './prompts.js'; // ✅ Unified Prompts handler (ALL prompts: system + writing)
 import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
 import './chatHistoryAutoSave.js'; // Option A: Auto-save ChatGPT prompt/response to chat_history
 

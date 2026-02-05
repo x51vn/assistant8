@@ -2,12 +2,12 @@
  * SettingsPage - Main settings page container
  * X51LABS-150: Implement Settings Form with Preact Signals
  * X51LABS: Use global loading bar (NO local loading UI)
- * 
+ *
  * Features:
  * - Load settings from Supabase on mount
  * - Auto-reload on tab click
  * - Auto-reload on auth change
- * - Save/Send/Reset/Delete operations
+ * - Save operations
  */
 
 import { h } from 'preact';
@@ -16,9 +16,10 @@ import { SettingsForm } from './SettingsForm.jsx';
 import { StatusMessage } from '../components/StatusMessage.jsx';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.jsx';
 import { UserSection } from '../components/UserSection.jsx';
-import { loadSettings, saveSettings, sendPromptNow, deleteSettings } from '../api/settingsApi.js';
+import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.js';
+import { clearTemplateCache } from '../api/writingApi.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { isSaving, resetAllFields, showStatus, showConfirm } from '../state/settingsState.js';
+import { isSaving, showStatus, allPrompts } from '../state/settingsState.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 
 export function SettingsPage() {
@@ -122,8 +123,31 @@ export function SettingsPage() {
   const handleSave = async () => {
     isSaving.value = true;
     try {
+      // Save basic settings
       await saveSettings();
       console.log('[SettingsPage] Settings saved successfully');
+
+      // Save all prompts (12 total: 6 system + 6 writing templates)
+      if (Object.keys(allPrompts.value).length > 0) {
+        try {
+          await saveAllPrompts(allPrompts.value);
+          clearTemplateCache(); // Ensure WritingPage uses latest templates immediately
+          console.log('[SettingsPage] All prompts saved successfully');
+        } catch (promptError) {
+          // Check if this is a partial success error
+          if (promptError.partialSuccess) {
+            showStatus(
+              `Đã lưu settings nhưng prompts lưu không hoàn toàn. ${promptError.message}`,
+              'warning'
+            );
+          } else {
+            // Log the error and show info message - don't block the save
+            console.error('[SettingsPage] Failed to save prompts:', promptError);
+            showStatus('Đã lưu settings nhưng prompts gặp lỗi. Vui lòng thử lại.', 'warning');
+          }
+        }
+      }
+
       showStatus('Đã lưu cài đặt thành công!', 'success');
     } catch (error) {
       console.error('[SettingsPage] Failed to save settings:', error);
@@ -132,61 +156,17 @@ export function SettingsPage() {
       isSaving.value = false;
     }
   };
-  
-  // ✅ NEW: Handle send now
-  const handleSendNow = async () => {
-    isSaving.value = true;
-    try {
-      await sendPromptNow();
-      console.log('[SettingsPage] Prompt sent successfully');
-      showStatus('Prompt đã gửi tới ChatGPT!', 'success');
-    } catch (error) {
-      console.error('[SettingsPage] Failed to send prompt:', error);
-      showStatus(`Gửi thất bại: ${error.message}`, 'error');
-    } finally {
-      isSaving.value = false;
-    }
-  };
-  
-  // ✅ FIXED: Handle reset with Supabase delete
-  const handleReset = () => {
-    showConfirm({
-      title: 'Xác nhận reset',
-      message: 'Bạn có chắc muốn reset tất cả cài đặt về mặc định?\n\nThao tác này sẽ xóa toàn bộ cài đặt trên server và không thể hoàn tác.',
-      confirmText: 'Reset',
-      cancelText: 'Hủy',
-      onConfirm: async () => {
-        // Reset UI first
-        resetAllFields();
-        console.log('[SettingsPage] UI reset to defaults');
-        
-        // Delete from Supabase
-        try {
-          await deleteSettings();
-          console.log('[SettingsPage] Settings deleted from Supabase');
-          showStatus('Đã reset cài đặt thành công! Tất cả dữ liệu đã được xóa.', 'success');
-        } catch (error) {
-          console.error('[SettingsPage] Failed to delete settings from Supabase:', error);
-          showStatus('Reset UI thành công nhưng xóa trên server thất bại. Vui lòng thử lại.', 'warning');
-        }
-      }
-    });
-  };
-  
+
   // ✅ NO LOCAL LOADING UI - Using global loading bar from App.jsx
   // All loading states are handled by setGlobalLoading() / hideLoading()
-  
+
   // Render form
   return (
     <div class="settings-page">
       <StatusMessage />
       <ConfirmationDialog />
       <div class="settings-layout">
-        <SettingsForm 
-          onSave={handleSave}
-          onSendNow={handleSendNow}
-          onReset={handleReset}
-        />
+        <SettingsForm onSave={handleSave} />
         <UserSection />
       </div>
     </div>

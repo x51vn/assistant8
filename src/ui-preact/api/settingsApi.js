@@ -7,13 +7,9 @@
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
+import { clearTemplateCache } from './writingApi.js';
 import {
-  masterPrompt,
-  portfolioPrompt,
-  stockEvalPrompt,
-  teaStockPrompt,
-  contextMenuPrompt,
-  englishPrompt,
+  allPrompts,
   autoRun,
   evaluatePrevious,
   reviewPrompt,
@@ -44,26 +40,14 @@ export async function loadSettings() {
   }
   
   // ⚠️ CRITICAL: createResponse spreads payload directly (not nested in .data)
-  // Response structure: { config: { prompts: {...}, autoRun, ... } }
+  // Response structure: { config: { autoRun, evaluatePrevious, ... } }
   const config = response.config || {};
-  const prompts = config.prompts || {};
-  
+
   console.log('[SettingsAPI] Parsed config:', {
-    hasPrompts: !!prompts,
-    promptKeys: Object.keys(prompts),
     autoRun: config.autoRun,
     interval: config.interval
   });
-  
-  // Populate prompt signals (6 fields)
-  // ✅ Handle both new (config.prompts.master) and legacy (config.prompt) formats
-  masterPrompt.value = prompts.master || config.prompt || '';
-  portfolioPrompt.value = prompts.portfolio || '';
-  stockEvalPrompt.value = prompts.stockEval || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
-  teaStockPrompt.value = prompts.teaStock || '';
-  contextMenuPrompt.value = prompts.contextMenu || 'Hãy phân tích nội dung sau:\n\n{CONTENT}';
-  englishPrompt.value = prompts.english || getDefaultEnglishPrompt();
-  
+
   // Populate boolean signals (4 fields)
   autoRun.value = config.autoRun ?? false;
   evaluatePrevious.value = config.evaluatePrevious ?? false;
@@ -78,17 +62,13 @@ export async function loadSettings() {
 
 /**
  * Save current signal values to background/Supabase
+ * NOTE: System prompts are saved separately via saveSystemPrompts()
  * @returns {Promise<void>}
  * @throws {Error} if save fails
  */
 export async function saveSettings() {
   console.log('[SettingsAPI] Saving settings...');
-  
-  // Validation (client-side, server also validates)
-  if (masterPrompt.value.trim().length === 0) {
-    throw new Error('Master prompt cannot be empty');
-  }
-  
+
   // Build config object matching background handler expectations
   const config = {
     // Boolean settings
@@ -96,33 +76,12 @@ export async function saveSettings() {
     evaluatePrevious: evaluatePrevious.value,
     reviewPrompt: reviewPrompt.value,
     realtimeEnabled: realtimeEnabled.value,
-    
+
     // Number settings
-    interval: interval.value,
-    
-    // Prompts (normalized structure)
-    prompts: {
-      master: masterPrompt.value,
-      portfolio: portfolioPrompt.value,
-      stockEval: stockEvalPrompt.value,
-      teaStock: teaStockPrompt.value,
-      contextMenu: contextMenuPrompt.value,
-      english: englishPrompt.value
-    }
+    interval: interval.value
   };
-  
-  console.log('[SettingsAPI] Sending SETTINGS_UPDATE with config:', {
-    autoRun: config.autoRun,
-    interval: config.interval,
-    promptLengths: {
-      master: config.prompts.master.length,
-      portfolio: config.prompts.portfolio.length,
-      stockEval: config.prompts.stockEval.length,
-      teaStock: config.prompts.teaStock.length,
-      contextMenu: config.prompts.contextMenu.length,
-      english: config.prompts.english.length
-    }
-  });
+
+  console.log('[SettingsAPI] Sending SETTINGS_UPDATE with config:', config);
   
   const response = await chrome.runtime.sendMessage({
     v: 1,
@@ -143,52 +102,42 @@ export async function saveSettings() {
 }
 
 /**
- * Helper: Get default English prompt template
- */
-function getDefaultEnglishPrompt() {
-  return `Teach me English about: {TOPIC}
-
-Provide:
-1. An English sentence/phrase
-2. Vietnamese translation
-3. Usage example
-4. Common situations to use it`;
-}
-
-/**
  * Send master prompt immediately to ChatGPT
  * @returns {Promise<void>}
  * @throws {Error} if send fails
  */
 export async function sendPromptNow() {
   console.log('[SettingsAPI] Sending master prompt now...');
-  
+
+  // Get master prompt from allPrompts
+  const masterContent = allPrompts.value['prompt.master']?.content || '';
+
   // Validation
-  if (masterPrompt.value.trim().length === 0) {
+  if (masterContent.trim().length === 0) {
     throw new Error('Master prompt cannot be empty');
   }
-  
+
   const response = await chrome.runtime.sendMessage({
     v: 1,
     type: MESSAGE_TYPES.SEND_PROMPT,
     correlationId: generateCorrelationId(),
     timestamp: Date.now(),
     payload: {
-      prompt: masterPrompt.value,
+      prompt: masterContent,
       options: {
         createNewChat: true,
         focusTab: true
       }
     }
   });
-  
+
   console.log('[SettingsAPI] SEND_PROMPT response:', response);
-  
+
   const sendError = response.error?.message || response.errorMessage;
   if (response.type === MESSAGE_TYPES.ERROR || response.errorCode || sendError) {
     throw new Error(sendError || 'Failed to send prompt');
   }
-  
+
   console.log('[SettingsAPI] Prompt sent successfully');
 }
 
@@ -199,20 +148,149 @@ export async function sendPromptNow() {
  */
 export async function deleteSettings() {
   console.log('[SettingsAPI] Deleting all settings from Supabase...');
-  
+
   const response = await chrome.runtime.sendMessage({
     v: 1,
     type: MESSAGE_TYPES.SETTINGS_DELETE,
     correlationId: generateCorrelationId(),
     timestamp: Date.now()
   });
-  
+
   console.log('[SettingsAPI] SETTINGS_DELETE response:', response);
-  
+
   const deleteError = response.error?.message || response.errorMessage;
   if (response.error || response.errorCode || deleteError) {
     throw new Error(deleteError || 'Failed to delete settings');
   }
-  
+
   console.log('[SettingsAPI] Settings deleted successfully from Supabase');
+}
+
+/**
+ * Load all prompts from background/Supabase (12 total: 6 system + 6 writing templates)
+ * Returns prompts from DB or defaults if unavailable
+ * @returns {Promise<Object>} - All prompts object with keys
+ */
+export async function loadAllPrompts() {
+  console.log('[SettingsAPI] Loading all prompts...');
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PROMPTS_GET_ALL,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    console.log('[SettingsAPI] PROMPTS_GET_ALL response:', {
+      success: response.success,
+      promptsCount: response.prompts ? Object.keys(response.prompts).length : 0,
+      isDefaultFallback: response.isDefaultFallback
+    });
+
+    if (response.error || response.errorCode) {
+      throw new Error(response.error?.message || response.errorMessage || 'Failed to load prompts');
+    }
+
+    return response.prompts || {};
+  } catch (error) {
+    console.error('[SettingsAPI] Failed to load all prompts:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save all prompts to background/Supabase (12 total: 6 system + 6 writing templates)
+ * Upserts all prompts in bulk
+ * @param {Object} prompts - All prompts object with keys and content
+ * @returns {Promise<Object>} - Save result with success count
+ */
+export async function saveAllPrompts(prompts) {
+  console.log('[SettingsAPI] Saving all prompts...');
+
+  // Validate prompts
+  if (!prompts || typeof prompts !== 'object') {
+    throw new Error('Invalid prompts data');
+  }
+
+  // Check that master prompt is not empty
+  if (!prompts['prompt.master']?.content || typeof prompts['prompt.master'].content !== 'string' || prompts['prompt.master'].content.trim().length === 0) {
+    throw new Error('Master prompt cannot be empty');
+  }
+
+  try {
+    // Prepare prompts for sending
+    const promptsToSend = {};
+    for (const [key, prompt] of Object.entries(prompts)) {
+      promptsToSend[key] = prompt;
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PROMPTS_UPSERT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { prompts: promptsToSend }
+    });
+
+    console.log('[SettingsAPI] PROMPTS_UPSERT response:', {
+      success: response.success,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      partialSuccess: response.partialSuccess,
+      results: response.results
+    });
+
+    if (response.error || response.errorCode) {
+      throw new Error(response.error?.message || response.errorMessage || 'Failed to save prompts');
+    }
+
+    // Check for partial failure
+    if (response.partialSuccess) {
+      const error = new Error(`Lưu prompts thất bại (${response.successCount}/${Object.keys(prompts).length} thành công)`);
+      error.partialSuccess = true;
+      error.results = response.results;
+      throw error;
+    }
+
+    // Clear writing template cache so changes take effect immediately
+    clearTemplateCache();
+
+    return response;
+  } catch (error) {
+    console.error('[SettingsAPI] Failed to save all prompts:', error);
+    throw error;
+  }
+}
+
+/**
+ * Initialize default prompts for user
+ * Called when user first opens Settings or after login
+ * Creates prompts if missing, idempotent (safe to run multiple times)
+ * @returns {Promise<void>}
+ */
+export async function initializeAllPrompts() {
+  console.log('[SettingsAPI] Initializing prompts...');
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PROMPTS_INIT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    console.log('[SettingsAPI] PROMPTS_INIT response:', response);
+
+    if (response.error || response.errorCode) {
+      console.warn('[SettingsAPI] Failed to initialize prompts:', response.error?.message || response.errorMessage);
+      // Don't throw - initialization failure shouldn't block the Settings page
+      return;
+    }
+
+    console.log('[SettingsAPI] Prompts initialized successfully');
+  } catch (error) {
+    console.warn('[SettingsAPI] Failed to initialize prompts:', error);
+    // Don't throw - initialization failure shouldn't block the UI
+  }
 }
