@@ -53,6 +53,8 @@ export const MESSAGE_TYPES = {
   CONTENT_EXTRACTED: 'CONTENT_EXTRACTED',
   CONTENT_PROMPT_SENT: 'CONTENT_PROMPT_SENT',
   CONTENT_PROMPT_FAILED: 'CONTENT_PROMPT_FAILED',
+  // Content script -> Background: captured assistant response for an extension-run prompt
+  CONTENT_RESPONSE_CAPTURED: 'CONTENT_RESPONSE_CAPTURED',
   
   // State management
   STATE_GET: 'STATE_GET',

@@ -6,6 +6,7 @@
 import { createLogger } from '../../logger.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { supabase } from '../../supabaseConfig.js';
+import { persistPromptSafe } from './_persistPromptHelper.js';
 
 const logger = createLogger('ContextMenu');
 
@@ -120,11 +121,21 @@ export async function handleContextMenuClick(info, tab) {
     logger.info('Sending prompt to ChatGPT', { correlationId, tabId: tabResult.tabId });
     const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, finalPrompt, {
       createNewChat: true, // Create new chat for each context menu analysis
+      runId: correlationId, // Option A: correlate auto-capture + chat_history via run_id
       reviewOnly: false // Auto send
     });
 
+    const chatId = sendResult.data?.chatId || null;
+    const chatUrl = sendResult.data?.chatUrl || null;
+
     if (sendResult.success) {
       logger.info('Prompt sent successfully', { correlationId });
+
+      // Phase 1: Persist prompt to chat_history (response will be captured by content script)
+      await persistPromptSafe(correlationId, finalPrompt, chatId, chatUrl, {
+        source: 'CONTEXT_MENU'
+      });
+
       logger.endOperation(correlationId, 'success');
     } else {
       logger.error('Failed to send prompt', { correlationId, error: sendResult.error });

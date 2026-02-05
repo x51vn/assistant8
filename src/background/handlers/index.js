@@ -32,6 +32,7 @@ import './errorTracking.js'; // GPT-016: Error tracking CRUD handlers
 import './settings.js'; // ✅ GPT-FIX: Settings handlers (Supabase-backed)
 import './english.js'; // ✅ English learning handlers (Supabase table: english)
 import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
+import './chatHistoryAutoSave.js'; // Option A: Auto-save ChatGPT prompt/response to chat_history
 
 logger.info('All message handlers registered');
 

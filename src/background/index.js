@@ -18,6 +18,7 @@ import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { flushChatHistoryOutbox } from './services/chatHistoryService.js';
 import './handlers/index.js'; // This will register all handlers
 
 // CRITICAL: Static imports to avoid Vite preload helper injection
@@ -75,6 +76,16 @@ setTimeout(() => {
     });
   });
 }, 1000);
+
+// Option A: Flush any queued chat_history items on startup (best-effort).
+// This helps when prompts/responses were captured while offline or before login.
+setTimeout(() => {
+  flushChatHistoryOutbox({ reason: 'startup' }).catch(error => {
+    logger.warn('Failed to flush chat_history outbox on startup', {
+      error: error?.message || String(error)
+    });
+  });
+}, 2000);
 
 /**
  * Installation handler - runs once when extension is installed/updated

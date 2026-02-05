@@ -8,6 +8,7 @@ import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared
 import { createLogger } from '../../logger.js';
 import { ERROR_CODES } from '../../types.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
+import { persistPromptSafe } from './_persistPromptHelper.js';
 
 const logger = createLogger('PromptHandler');
 
@@ -18,6 +19,7 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
   const correlationId = logger.startOperation('sendPrompt', message.correlationId);
   // ✅ CONSISTENCY FIX: Support both payload and data for backward compatibility
   const { prompt, options } = message.payload || message.data || {};
+  const runId = message.correlationId; // Option A: use correlationId as run_id for chat_history
   
   try {
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -42,6 +44,7 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
     // Send prompt
     const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt.trim(), {
       createNewChat: options?.createNewChat !== false,
+      runId, // propagate to content script for capture correlation
       reviewOnly: options?.reviewOnly || false
     });
 
@@ -50,18 +53,19 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
     }
 
     logger.info('Prompt sent successfully', { correlationId });
-    
-    // 🔍 DEBUG: Log captured chat metadata
+
     const chatId = sendResult.data?.chatId || null;
     const chatUrl = sendResult.data?.chatUrl || null;
-    console.log('🔍 [PromptHandler] Chat metadata captured:', {
-      chatId,
-      chatUrl,
-      hasId: !!chatId,
-      hasUrl: !!chatUrl,
-      fullData: sendResult.data
-    });
-    
+
+    // Phase 1: Persist prompt to chat_history (response will be captured by content script)
+    // IMPORTANT: Never fail prompt sending if persistence fails.
+    if (options?.saveToHistory !== false) {
+      await persistPromptSafe(runId, prompt, chatId, chatUrl, {
+        source: 'SEND_PROMPT',
+        status: sendResult.data?.status || null
+      });
+    }
+
     logger.endOperation(correlationId, 'success');
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_SENT, {
@@ -69,6 +73,7 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
       success: true,
       chatId,
       chatUrl,
+      runId,
       status: sendResult.data?.status || null
     });
 

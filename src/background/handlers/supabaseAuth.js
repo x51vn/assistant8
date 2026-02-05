@@ -15,6 +15,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
 import { ERROR_CODES, ERROR_MESSAGES_VN } from '../../shared/errorCodes.js';
+import { flushChatHistoryOutbox } from '../services/chatHistoryService.js';
 
 const logger = createLogger('Handlers/SupabaseAuth');
 
@@ -353,6 +354,11 @@ function setupAuthStateListener() {
         }
       }).catch(err => {
         logger.warn('Failed to broadcast sign in', { error: err.message });
+      });
+
+      // Option A: user just signed in -> flush any queued chat_history items.
+      flushChatHistoryOutbox({ reason: 'signed_in' }).catch(err => {
+        logger.warn('Failed to flush chat_history outbox after sign-in', { error: err?.message || String(err) });
       });
     }
   });

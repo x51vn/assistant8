@@ -704,6 +704,116 @@ async function waitForStableAssistantResponse({ timeoutMs = 15 * 60 * 1000, stab
   }
 }
 
+// =============================================================================
+// Option A: Auto-capture assistant response and notify background for persistence
+// =============================================================================
+
+const MAX_CAPTURE_PROMPT_CHARS = 50_000;
+const MAX_CAPTURE_RESPONSE_CHARS = 100_000;
+
+function truncateText(text, maxChars) {
+  if (typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  return trimmed.length > maxChars ? trimmed.slice(0, maxChars) : trimmed;
+}
+
+async function waitForConversationToChange(beforeMsgCount, timeoutMs = 15000) {
+  if (!Number.isFinite(beforeMsgCount)) return true;
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const count = getConversationMessageCount();
+    if (count > beforeMsgCount) return true;
+    await sleep(200);
+  }
+  return false;
+}
+
+async function waitForNewAssistantMessage({ beforeMessageId, beforeText, timeoutMs = 30000 } = {}) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const latest = getLatestAssistantMessageMeta();
+
+    // If we can observe any change, we can proceed to stable capture.
+    if (latest.messageId && beforeMessageId && latest.messageId !== beforeMessageId) {
+      return latest;
+    }
+    if (latest.text && beforeText && latest.text !== beforeText) {
+      return latest;
+    }
+
+    // If generating is detected, an assistant response is in progress.
+    if (isGenerating()) {
+      return latest;
+    }
+
+    await sleep(250);
+  }
+
+  return getLatestAssistantMessageMeta();
+}
+
+async function captureAndReportAssistantResponse(params) {
+  const {
+    runId,
+    prompt,
+    beforeAssistantMessageId = null,
+    beforeAssistantText = null,
+    beforeMsgCount = null,
+    timeoutMs = 15 * 60 * 1000
+  } = params || {};
+
+  if (!runId || typeof runId !== 'string') return;
+
+  const startedAt = Date.now();
+
+  try {
+    // Avoid capturing the "last message in the previous chat" immediately.
+    await waitForConversationToChange(beforeMsgCount, 15000);
+
+    // Ensure an assistant message has changed/started before we wait for stability.
+    await waitForNewAssistantMessage({
+      beforeMessageId: beforeAssistantMessageId,
+      beforeText: beforeAssistantText,
+      timeoutMs: 30000
+    });
+
+    const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs: 1500 });
+    const latest = getLatestAssistantMessageMeta();
+    const meta = getChatMeta();
+
+    const responseText = truncateText(waited.text || latest.text || '', MAX_CAPTURE_RESPONSE_CHARS);
+    const promptText = truncateText(prompt || '', MAX_CAPTURE_PROMPT_CHARS);
+
+    // Always report capture status (even if response is null) so background can update metadata.
+    const message = {
+      v: 1,
+      type: 'CONTENT_RESPONSE_CAPTURED',
+      correlationId: `content-response-${runId}-${Date.now()}`,
+      timestamp: Date.now(),
+      data: {
+        runId,
+        prompt: promptText,
+        response: responseText,
+        status: waited.status,
+        assistantMessageId: latest.messageId || null,
+        chatId: meta.chatId,
+        chatUrl: meta.chatUrl,
+        waitedMs: Date.now() - startedAt,
+        capturedAt: Date.now()
+      }
+    };
+
+    chrome.runtime.sendMessage(message).catch((err) => {
+      console.warn('[Content] Failed to send CONTENT_RESPONSE_CAPTURED:', err?.message || err);
+    });
+  } catch (e) {
+    console.warn('[Content] Auto-capture failed:', e?.message || e);
+  }
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let responded = false;
   const safeSendResponse = (payload) => {
@@ -787,6 +897,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const reviewOnly = request.reviewOnly === true;
         const runId = typeof request.runId === 'string' ? request.runId : null;
 
+        // Baseline snapshot to prevent capturing the previous assistant message.
+        const beforeAssistant = getLatestAssistantMessageMeta();
+        const beforeMsgCount = getConversationMessageCount();
+
         // 🔍 DEBUG: Log before sending
         console.log('🔍 [Content] Before inputAndSendPrompt, URL:', location.href);
         
@@ -827,6 +941,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         
         safeSendResponse({ status, runId, ...meta });
+
+        // Fire-and-forget: capture assistant response and notify background for persistence.
+        // Only for real sends (not reviewOnly) and when we have a runId for correlation.
+        if (!reviewOnly && success && runId) {
+          captureAndReportAssistantResponse({
+            runId,
+            prompt,
+            beforeAssistantMessageId: beforeAssistant.messageId,
+            beforeAssistantText: beforeAssistant.text,
+            beforeMsgCount,
+            timeoutMs: 15 * 60 * 1000
+          }).catch(() => {});
+        }
       } catch (e) {
         console.error('[Content] send_input error:', e);
         safeSendResponse({ status: 'error', error: String(e?.message || e) });

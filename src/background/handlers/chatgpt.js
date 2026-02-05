@@ -7,6 +7,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
+import { persistPromptSafe } from './_persistPromptHelper.js';
 
 const logger = createLogger('Handlers/ChatGPT');
 
@@ -16,6 +17,7 @@ const logger = createLogger('Handlers/ChatGPT');
  */
 registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
   const { prompt, options = {} } = message;
+  const runId = message.correlationId;
   
   logger.info('Handling CHATGPT_SEND_INPUT', { 
     correlationId: message.correlationId,
@@ -31,8 +33,9 @@ registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
     });
   }
   
-  // Send input
-  const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt, options);
+  // Send input (Option A: always propagate runId for correlation)
+  const mergedOptions = { ...options, runId: options.runId || runId };
+  const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt, mergedOptions);
   
   if (!sendResult.success) {
     return createResponse(message, MESSAGE_TYPES.ERROR, {
@@ -40,8 +43,15 @@ registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
     });
   }
   
+  // Phase 1: Persist prompt to chat_history (response will be captured by content script)
+  if (mergedOptions.saveToHistory !== false) {
+    await persistPromptSafe(mergedOptions.runId, prompt, sendResult.data?.chatId, sendResult.data?.chatUrl, {
+      source: 'CHATGPT_SEND_INPUT'
+    });
+  }
+
   return createResponse(message, MESSAGE_TYPES.CHATGPT_INPUT_SENT, {
-    data: sendResult.data
+    data: { ...sendResult.data, runId: mergedOptions.runId }
   });
 });
 
