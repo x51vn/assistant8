@@ -41,10 +41,11 @@ registerHandler(MESSAGE_TYPES.MARKET_INDICES_GET, async (message) => {
   } catch (error) {
     logger.error('Failed to fetch indices', { correlationId, error: error.message });
 
-    return createErrorResponse(message, {
-      code: 'MARKET_DATA_ERROR',
-      message: error.message || 'Failed to fetch market indices'
-    });
+    return createErrorResponse(
+      message,
+      'MARKET_DATA_ERROR',
+      error.message || 'Failed to fetch market indices'
+    );
   }
 });
 
@@ -123,4 +124,3 @@ function transformIndicesData(apiData) {
     updatedAt: new Date(item.updatedAt || item.lastUpdated).toISOString()
   }));
 }
-

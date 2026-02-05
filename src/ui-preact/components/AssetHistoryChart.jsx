@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
+import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 
 /**
@@ -66,6 +67,15 @@ export default function AssetHistoryChart({ userId }) {
   const [error, setError] = useState(null);
   const [range, setRange] = useState('30d');
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'chart'
+
+  // Sync loading state with global loading
+  useEffect(() => {
+    if (loading) {
+      showLoading('Đang tải lịch sử...');
+    } else {
+      hideLoading();
+    }
+  }, [loading]);
 
   // Fetch history data
   const fetchHistory = async () => {
@@ -296,14 +306,6 @@ export default function AssetHistoryChart({ userId }) {
             <span className="stat-label">Trung bình</span>
             <span className="stat-value">{formatCurrency(stats.avg)}</span>
           </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="history-loading">
-          <i className="fas fa-spinner fa-spin"></i>
-          <span>Đang tải...</span>
         </div>
       )}
 

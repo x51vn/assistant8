@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
+import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 
 /**
@@ -56,6 +57,15 @@ export default function NetWorthSummary({ onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(false);
+
+  // Sync loading state with global loading
+  useEffect(() => {
+    if (loading) {
+      showLoading('Đang tải tài sản ròng...');
+    } else {
+      hideLoading();
+    }
+  }, [loading]);
 
   // Fetch net worth data
   const fetchNetWorth = async () => {
@@ -123,16 +133,7 @@ export default function NetWorthSummary({ onRefresh }) {
       .sort((a, b) => b.value - a.value);
   };
 
-  if (loading) {
-    return (
-      <div className="net-worth-summary loading">
-        <div className="net-worth-header">
-          <div className="skeleton-text" style={{ width: '100px' }}></div>
-          <div className="skeleton-text" style={{ width: '150px', height: '32px' }}></div>
-        </div>
-      </div>
-    );
-  }
+
 
   if (error) {
     return (

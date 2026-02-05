@@ -10,7 +10,7 @@
  */
 
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import {
   marketIndices,
   indicesLoading,
@@ -18,10 +18,21 @@ import {
   getFormattedLastUpdateTime,
   clearIndicesError
 } from '../state/marketIndicesState.js';
+import { showLoading, hideLoading } from '../state/appState.js';
 import { updateIndicesNow } from '../api/marketIndicesUpdater.js';
 
 export default function MarketIndices() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Sync global loading with indices loading state
+  useEffect(() => {
+    if (indicesLoading.value) {
+      showLoading('Đang tải chỉ số thị trường...');
+    } else {
+      hideLoading();
+    }
+  }, [indicesLoading.value]);
+
   const formatNumber = (num) => {
     if (typeof num !== 'number') return '—';
     return num.toLocaleString('vi-VN', {
@@ -90,23 +101,8 @@ export default function MarketIndices() {
             </div>
           )}
 
-          {/* Loading State */}
-          {indicesLoading.value && !indicesError.value && (
-            <div class="indices-loading">
-              <div class="indices-skeleton">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} class="stat-card skeleton">
-                    <div class="skeleton-line skeleton-label"></div>
-                    <div class="skeleton-line skeleton-value"></div>
-                    <div class="skeleton-line skeleton-sublabel"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Data State */}
-          {!indicesLoading.value && !indicesError.value && marketIndices.value.length > 0 && (
+          {!indicesError.value && marketIndices.value.length > 0 && (
             <>
               <div class="stat-cards indices-cards">
                 {marketIndices.value.map((index) => (
@@ -133,7 +129,7 @@ export default function MarketIndices() {
           )}
 
           {/* Empty State */}
-          {!indicesLoading.value && !indicesError.value && marketIndices.value.length === 0 && (
+          {!indicesError.value && marketIndices.value.length === 0 && (
             <div class="indices-empty">
               <i class="fas fa-chart-line"></i>
               <p>Không có dữ liệu chỉ số</p>

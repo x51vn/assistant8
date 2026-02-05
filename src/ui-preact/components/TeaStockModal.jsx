@@ -15,6 +15,7 @@ import { h } from 'preact';
 import { signal, computed } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import { isTeaStockModalOpen, addPortfolioItem } from '../state/portfolioState.js';
+import { showLoading, hideLoading, globalLoading } from '../state/appState.js';
 import { addPortfolio } from '../api/portfolioApi.js';
 import { generateCorrelationId } from '../../logger.js';
 import { MESSAGE_TYPES, MESSAGE_VERSION } from '../../shared/messageSchema.js';
@@ -33,7 +34,6 @@ Return results as a list with stock symbols and brief analysis.`
 );
 
 const searchPrompt = signal(searchTemplate.value);
-const isLoading = signal(false);
 const searchResults = signal('');
 const parsedStocks = signal([]);
 const searchError = signal(null);
@@ -62,7 +62,7 @@ const handleSearch = async () => {
   }
 
   try {
-    isLoading.value = true;
+    showLoading('Đang tìm kiếm cổ phiếu...');
     searchError.value = null;
     searchResults.value = '';
     parsedStocks.value = [];
@@ -97,7 +97,7 @@ const handleSearch = async () => {
       searchError.value = response.errorMessage || 'Failed to get response from ChatGPT';
     } else if (response?.data) {
       searchResults.value = response.data;
-      
+
       // Extract stock symbols
       const stocks = extractStocks(response.data);
       parsedStocks.value = stocks.map(symbol => ({
@@ -111,7 +111,7 @@ const handleSearch = async () => {
   } catch (error) {
     searchError.value = error.message || 'Failed to search stocks via ChatGPT';
   } finally {
-    isLoading.value = false;
+    hideLoading();
   }
 };
 
@@ -207,7 +207,7 @@ export default function TeaStockModal() {
                   onChange={(e) => { searchPrompt.value = e.target.value; }}
                   placeholder="Enter your stock search criteria..."
                   rows={5}
-                  disabled={isLoading.value}
+                  disabled={globalLoading.value}
                 />
               </div>
 
@@ -275,16 +275,16 @@ export default function TeaStockModal() {
               <button
                 class="btn btn--secondary"
                 onClick={handleClose}
-                disabled={isLoading.value}
+                disabled={globalLoading.value}
               >
                 Cancel
               </button>
               <button
-                class={`btn btn--primary ${isLoading.value ? 'loading' : ''}`}
+                class={`btn btn--primary ${globalLoading.value ? 'loading' : ''}`}
                 onClick={handleSearch}
-                disabled={isLoading.value}
+                disabled={globalLoading.value}
               >
-                {isLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Searching...</> : <><i class="fas fa-search"></i> Search</>}
+                {globalLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Searching...</> : <><i class="fas fa-search"></i> Search</>}
               </button>
             </>
           ) : (

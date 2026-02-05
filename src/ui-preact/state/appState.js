@@ -45,3 +45,19 @@ export function showLoading(message = 'Đang tải...') {
 export function hideLoading() {
   setGlobalLoading(false);
 }
+
+/**
+ * Get current global loading state
+ * @returns {boolean}
+ */
+export function isGlobalLoading() {
+  return globalLoading.value;
+}
+
+/**
+ * Get current loading message
+ * @returns {string}
+ */
+export function getLoadingMessage() {
+  return loadingMessage.value;
+}

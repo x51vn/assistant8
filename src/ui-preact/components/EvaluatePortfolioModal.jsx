@@ -15,6 +15,7 @@ import { h } from 'preact';
 import { signal, computed } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import { isEvaluateModalOpen, portfolioItems } from '../state/portfolioState.js';
+import { showLoading, hideLoading, globalLoading } from '../state/appState.js';
 import { generateCorrelationId } from '../../logger.js';
 import { MESSAGE_TYPES, MESSAGE_VERSION } from '../../shared/messageSchema.js';
 import TextareaField from './TextareaField.jsx';
@@ -32,7 +33,6 @@ Portfolio data is shown below. Please provide actionable insights.`
 );
 
 const customPrompt = signal(promptTemplate.value);
-const isLoading = signal(false);
 const chatResponse = signal('');
 const chatError = signal(null);
 const isSaved = signal(false);
@@ -84,7 +84,7 @@ const handleSendPrompt = async () => {
   }
 
   try {
-    isLoading.value = true;
+    showLoading('Đang phân tích danh mục...');
     chatError.value = null;
     chatResponse.value = '';
     isSaved.value = false;
@@ -100,7 +100,7 @@ Current Value: ₫${formatCurrency(summary.totalCurrent)}
 P&L: ₫${formatCurrency(summary.totalPnL)} (${summary.totalPnLPercent.toFixed(2)}%)
 
 Portfolio Items:
-${(portfolioItems.value || []).map(item => 
+${(portfolioItems.value || []).map(item =>
   `- ${item.symbol}: ${item.quantity} @ ₫${item.avg_price} (Current: ₫${item.current_price || item.avg_price})`
 ).join('\n')}`;
 
@@ -142,7 +142,7 @@ ${(portfolioItems.value || []).map(item =>
   } catch (error) {
     chatError.value = error.message || 'Failed to send prompt to ChatGPT';
   } finally {
-    isLoading.value = false;
+    hideLoading();
   }
 };
 
@@ -219,7 +219,7 @@ export default function EvaluatePortfolioModal() {
                   onChange={(e) => { customPrompt.value = e.target.value; }}
                   placeholder="Enter your analysis prompt..."
                   rows={6}
-                  disabled={isLoading.value}
+                  disabled={globalLoading.value}
                 />
               </div>
 
@@ -252,16 +252,16 @@ export default function EvaluatePortfolioModal() {
               <button
                 class="btn btn--secondary"
                 onClick={handleClose}
-                disabled={isLoading.value}
+                disabled={globalLoading.value}
               >
                 Cancel
               </button>
               <button
-                class={`btn btn--primary ${isLoading.value ? 'loading' : ''}`}
+                class={`btn btn--primary ${globalLoading.value ? 'loading' : ''}`}
                 onClick={handleSendPrompt}
-                disabled={isLoading.value}
+                disabled={globalLoading.value}
               >
-                {isLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Analyzing...</> : <><i class="fas fa-paper-plane"></i> Send to ChatGPT</>}
+                {globalLoading.value ? <><i class="fas fa-spinner fa-spin"></i> Analyzing...</> : <><i class="fas fa-paper-plane"></i> Send to ChatGPT</>}
               </button>
             </>
           ) : (

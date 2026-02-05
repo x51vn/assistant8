@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
+import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
 import AssetCard from '../components/AssetCard.jsx';
@@ -47,6 +48,24 @@ export default function AssetsPage() {
   useEffect(() => {
     loadAssets();
   }, []);
+
+  // Sync loading state with global loading
+  useEffect(() => {
+    if (loading) {
+      showLoading('Đang tải tài sản...');
+    } else {
+      hideLoading();
+    }
+  }, [loading]);
+
+  // Sync refreshing prices with global loading
+  useEffect(() => {
+    if (refreshingPrices) {
+      showLoading('Đang cập nhật giá vàng & crypto...');
+    } else if (!loading) {
+      hideLoading();
+    }
+  }, [refreshingPrices, loading]);
 
   /**
    * Load assets from backend
@@ -197,19 +216,7 @@ export default function AssetsPage() {
     ? assets 
     : assets.filter(a => a.asset_type === filter);
 
-  /**
-   * Render loading state
-   */
-  if (loading) {
-    return (
-      <div className="page-container assets-page">
-        <div className="loading-state">
-          <i className="fas fa-spinner fa-spin"></i>
-          <span>Đang tải...</span>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="page-container assets-page">
@@ -219,13 +226,13 @@ export default function AssetsPage() {
         <div className="header-actions">
           {/* Refresh prices button - only show if there are gold or crypto assets */}
           {assets.some(a => a.asset_type === 'gold' || a.asset_type === 'crypto') && (
-            <button 
+            <button
               className="btn-icon"
               onClick={handleRefreshPrices}
               disabled={refreshingPrices}
               title="Cập nhật giá vàng & crypto"
             >
-              <i className={`fas fa-chart-line ${refreshingPrices ? 'fa-spin' : ''}`}></i>
+              <i className="fas fa-chart-line"></i>
             </button>
           )}
           <button 

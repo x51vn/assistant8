@@ -10,6 +10,7 @@
  */
 
 import { h } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { useComputed } from '@preact/signals';
 import {
   portfolioItems,
@@ -18,10 +19,20 @@ import {
   openEditModal,
   removePortfolioItem
 } from '../state/portfolioState.js';
+import { showLoading, hideLoading } from '../state/appState.js';
 import { deletePortfolio } from '../api/portfolioApi.js';
 import StockRow from './StockRow.jsx';
 
 export default function PortfolioTable({ onEdit, onDelete, onEvaluateStock }) {
+  // Sync loading state with global loading
+  useEffect(() => {
+    if (loading.value) {
+      showLoading('Đang tải danh mục...');
+    } else {
+      hideLoading();
+    }
+  }, [loading.value]);
+
   // Sort items: stocks A-Z, then CASH
   const sortedItems = useComputed(() => {
     const items = portfolioItems.value;
@@ -75,13 +86,6 @@ export default function PortfolioTable({ onEdit, onDelete, onEvaluateStock }) {
         <div class="error-banner" role="alert">
           <span class="error-icon"><i class="fas fa-exclamation-triangle"></i></span>
           <span class="error-message">{error.value}</span>
-        </div>
-      )}
-
-      {loading.value && (
-        <div class="loading-state">
-          <div class="spinner"></div>
-          <span>Đang tải dữ liệu...</span>
         </div>
       )}
 
