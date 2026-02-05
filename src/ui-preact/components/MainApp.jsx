@@ -12,6 +12,7 @@ import AssetsPage from '../pages/AssetsPage.jsx';
 import { HistoryPage } from '../pages/HistoryPage.jsx';
 import { ErrorsPage } from '../pages/ErrorsPage.jsx';
 import { EnglishPage } from '../pages/EnglishPage.jsx';
+import { WritingPage } from '../pages/WritingPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { currentPage, setCurrentPage } from '../state/navigationState.js';
 
@@ -31,6 +32,8 @@ export function MainApp() {
         return <ErrorsPage />;
       case 'english':
         return <EnglishPage />;
+      case 'writing':
+        return <WritingPage />;
       case 'settings':
         return <SettingsPage />;
       default:

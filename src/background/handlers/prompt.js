@@ -60,10 +60,18 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
     // Phase 1: Persist prompt to chat_history (response will be captured by content script)
     // IMPORTANT: Never fail prompt sending if persistence fails.
     if (options?.saveToHistory !== false) {
-      await persistPromptSafe(runId, prompt, chatId, chatUrl, {
+      const baseMetadata = {
         source: 'SEND_PROMPT',
         status: sendResult.data?.status || null
-      });
+      };
+
+      // Merge with custom metadata (e.g., for Writing Assistant module)
+      const fullMetadata = {
+        ...baseMetadata,
+        ...(options?.metadata || {})
+      };
+
+      await persistPromptSafe(runId, prompt, chatId, chatUrl, fullMetadata);
     }
 
     logger.endOperation(correlationId, 'success');

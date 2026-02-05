@@ -18,6 +18,7 @@ export function Navigation({ currentPage, onPageChange }) {
     { id: 'history', label: 'History', icon: 'fas fa-history' },
     { id: 'errors', label: 'Errors', icon: 'fas fa-exclamation-triangle' },
     { id: 'english', label: 'English', icon: 'fas fa-book' },
+    { id: 'writing', label: 'Writing', icon: 'fas fa-pen-fancy' },
     { id: 'settings', label: 'Settings', icon: 'fas fa-cog' }
   ];
 
