@@ -1,13 +1,23 @@
 /**
  * Writing API - Background communication layer for Writing Assistant
  * Routes writing operations to background handlers and ChatGPT
+ *
+ * ✅ UPDATED: Now fetches templates from Supabase (public.prompts) with fallback to defaults
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
+import { renderTemplate } from '../../shared/templateRenderer.js';
+import {
+  DEFAULT_WRITING_TEMPLATES,
+  WRITING_TEMPLATE_KEYS,
+  JOB_TYPE_TO_KEY,
+  prepareTemplateData
+} from '../../shared/writingTemplates.js';
 
 /**
- * Prompt templates for each writing job
+ * Fallback templates (used when DB is unavailable)
+ * These are the same as DEFAULT_WRITING_TEMPLATES but in function format for backward compatibility
  */
 const PROMPT_TEMPLATES = {
   email: ({ keyPoints, context, recipient, emailGoal, languageOutput, tone, audience, length, constraints }) => {
@@ -120,8 +130,78 @@ Create a clear, logical outline with:
 ${includeExamples ? '- Brief examples where relevant' : ''}
 
 Format as markdown-style outline with # or ## headings.`;
+  },
+
+  english_learning: ({ topic, languageOutput }) => {
+    return `Create a meaningful English learning exercise about "${topic}". Format your response as follows:
+1. A sentence or phrase in English with some vocabulary to learn
+2. Vietnamese translation
+3. 2-3 example uses or variations
+4. A brief explanation of why this is useful to learn
+
+Make it engaging and practical for English learners.`;
   }
 };
+
+// Cache for writing templates (fetched once per session)
+let cachedTemplates = null;
+let templatesCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch writing templates from background handler
+ * @returns {Promise<Object>} - Templates object with keys as template keys
+ */
+async function fetchWritingTemplates() {
+  // Return cached if still fresh
+  if (cachedTemplates && Date.now() - templatesCacheTime < CACHE_DURATION) {
+    return cachedTemplates;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.PROMPTS_GET_BY_TYPE,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { promptType: 'writing' }
+    });
+
+    if (response?.error || response?.errorCode) {
+      throw new Error(response?.error?.message || response?.errorMessage || 'Failed to load writing templates');
+    }
+
+    if (response && response.prompts) {
+      cachedTemplates = response.prompts;
+      templatesCacheTime = Date.now();
+      return response.prompts;
+    }
+  } catch (error) {
+    console.warn('[WritingAPI] Failed to fetch templates from background:', error);
+    // Fall through to defaults
+  }
+
+  // Return defaults as fallback
+  return getDefaultTemplates();
+}
+
+/**
+ * Get default templates in the new format
+ * @returns {Object} - Templates object
+ */
+function getDefaultTemplates() {
+  const defaults = {};
+
+  for (const key of Object.values(WRITING_TEMPLATE_KEYS)) {
+    defaults[key] = {
+      key,
+      content: DEFAULT_WRITING_TEMPLATES[key],
+      isDefault: true
+    };
+  }
+
+  return defaults;
+}
 
 /**
  * Extract error from response
@@ -147,17 +227,32 @@ function extractError(response) {
 }
 
 /**
+ * Render prompt from template using data
+ * @param {string} template - Template string with {{var}} syntax
+ * @param {object} inputs - Input data
+ * @param {object} options - Options
+ * @returns {string} - Rendered prompt
+ */
+function renderPrompt(template, inputs, options) {
+  const data = prepareTemplateData('', inputs, options);
+  return renderTemplate(template, data);
+}
+
+/**
  * Send writing job prompt to ChatGPT
- * @param {string} jobType - Type of writing job
+ * @param {string} jobType - Type of writing job (email, social, etc.)
  * @param {object} inputs - Input data for the job
  * @param {object} options - Job options (tone, length, etc.)
  * @returns {Promise<{success: boolean, error?: {code, message}}>}
  */
 export async function sendWritingJob(jobType, inputs, options = {}) {
   try {
-    // Get template and render prompt
-    const template = PROMPT_TEMPLATES[jobType];
-    if (!template) {
+    // Fetch templates (will use cache if available)
+    const templates = await fetchWritingTemplates();
+
+    // Get template key for this job type
+    const templateKey = JOB_TYPE_TO_KEY[jobType];
+    if (!templateKey) {
       return {
         success: false,
         error: {
@@ -167,23 +262,63 @@ export async function sendWritingJob(jobType, inputs, options = {}) {
       };
     }
 
-    const prompt = template({ ...inputs, ...options });
+    // Get template content
+    let templateContent;
+    const tmpl = templates[templateKey];
+
+    if (tmpl && tmpl.content) {
+      // Use template from DB or defaults
+      templateContent = tmpl.content;
+    } else {
+      // Ultimate fallback: use hardcoded function template
+      const fallbackTemplate = PROMPT_TEMPLATES[jobType];
+      if (!fallbackTemplate) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_JOB',
+            message: `No template found for job type: ${jobType}`
+          }
+        };
+      }
+
+      // Render using old function-based approach
+      return await sendWritingJobWithFallback(jobType, inputs, options, fallbackTemplate);
+    }
+
+    // Render template with data
+    const prompt = renderPrompt(templateContent, inputs, options);
+
+    if (!prompt || prompt.trim().length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'RENDER_ERROR',
+          message: 'Không thể tạo prompt từ template'
+        }
+      };
+    }
 
     // Prepare metadata for chat_history save
     const metadata = {
-      module: 'writing_assistant',
+      module: jobType === 'english_learning' ? 'english_learning' : 'writing_assistant',
       jobType,
+      templateKey,
+      ...(jobType === 'english_learning' && {
+        topic: inputs.topic,
+        autoSelected: options.autoSelect === true || options.autoSelect === 'true'
+      }),
       options: {
         tone: options.tone,
         languageOutput: options.languageOutput,
         length: options.length,
-        // Include other relevant options, exclude large text fields
         ...(jobType === 'email' && { emailGoal: options.emailGoal, includeSubject: options.includeSubject }),
         ...(jobType === 'social' && { platform: options.platform, cta: options.cta, hashtags: options.hashtags, variants: options.variants }),
         ...(jobType === 'summarize' && { summaryStyle: options.summaryStyle, focus: options.focus, maxLines: options.maxLines }),
         ...(jobType === 'rewrite' && { rewriteGoal: options.rewriteGoal, faithfulness: options.faithfulness, targetLength: options.targetLength }),
         ...(jobType === 'translate' && { direction: options.direction, style: options.style, domain: options.domain }),
-        ...(jobType === 'outline' && { docType: options.docType, structureDepth: options.structureDepth, includeExamples: options.includeExamples })
+        ...(jobType === 'outline' && { docType: options.docType, structureDepth: options.structureDepth, includeExamples: options.includeExamples }),
+        ...(jobType === 'english_learning' && { autoSelect: options.autoSelect })
       }
     };
 
@@ -220,6 +355,55 @@ export async function sendWritingJob(jobType, inputs, options = {}) {
       }
     };
   }
+}
+
+/**
+ * Fallback: Use old function-based template rendering
+ */
+async function sendWritingJobWithFallback(jobType, inputs, options, fallbackTemplate) {
+  try {
+    const prompt = fallbackTemplate({ ...inputs, ...options });
+
+    const metadata = {
+      module: 'writing_assistant',
+      jobType,
+      options: {
+        tone: options.tone,
+        languageOutput: options.languageOutput,
+        length: options.length
+      }
+    };
+
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt,
+        options: {
+          createNewChat: true,
+          focusTab: true,
+          metadata,
+          ...options
+        }
+      }
+    });
+
+    const error = extractError(response);
+    return error ? { success: false, error } : { success: true, error: null };
+  } catch (error) {
+    console.error('[WritingAPI] Fallback rendering failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Clear template cache (useful when user updates templates in Settings)
+ */
+export function clearTemplateCache() {
+  cachedTemplates = null;
+  templatesCacheTime = 0;
 }
 
 /**
@@ -454,4 +638,88 @@ export async function insertIntoActiveElement(text) {
     console.error('[WritingAPI] Failed to insert text:', error);
     return false;
   }
+}
+
+/**
+ * Auto-select topic for English learning using ChatGPT
+ * @returns {Promise<{topic?: string, error?: string}>}
+ */
+export async function autoSelectTopic() {
+  try {
+    const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
+
+    // Send prompt
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SEND_PROMPT,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      payload: {
+        prompt: pickPrompt,
+        options: {
+          createNewChat: true,
+          focusTab: false
+        }
+      }
+    });
+
+    const error = extractError(response);
+    if (error) {
+      return { topic: null, error: error.message };
+    }
+
+    // Poll for response (max 20 attempts = 30 seconds)
+    const maxPolls = 20;
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+
+      const outputResponse = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        payload: { wait: false }
+      });
+
+      const output = outputResponse?.output || outputResponse?.payload?.output;
+
+      if (output) {
+        // Extract first non-empty line and clean it
+        const firstLine = output
+          .split('\n')
+          .map(s => s.trim())
+          .find(Boolean) || output;
+
+        const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
+        return { topic, error: null };
+      }
+    }
+
+    // Timeout
+    return {
+      topic: null,
+      error: 'ChatGPT did not respond in time. Please try again.'
+    };
+  } catch (error) {
+    console.error('[WritingAPI] Failed to auto-select topic:', error);
+    return {
+      topic: null,
+      error: error.message || 'Network error'
+    };
+  }
+}
+
+/**
+ * Get English learning prompt template
+ * @param {string} topic - Topic for the exercise
+ * @returns {string} - Formatted prompt
+ */
+export function getEnglishLearningTemplate(topic) {
+  return `Create a meaningful English learning exercise about "${topic}". Format your response as follows:
+1. A sentence or phrase in English with some vocabulary to learn
+2. Vietnamese translation
+3. 2-3 example uses or variations
+4. A brief explanation of why this is useful to learn
+
+Make it engaging and practical for English learners.`;
 }

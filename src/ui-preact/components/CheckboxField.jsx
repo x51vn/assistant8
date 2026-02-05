@@ -1,6 +1,7 @@
 /**
  * CheckboxField - Reusable checkbox component
  * X51LABS-150: Form components with signal binding
+ * ✅ FIXED: Now accepts boolean value and onChange callback (not signal)
  */
 
 import { h } from 'preact';
@@ -10,21 +11,22 @@ import { h } from 'preact';
  * @param {string} props.label - Field label
  * @param {string} [props.icon] - FontAwesome icon class
  * @param {string} [props.description] - Optional description
- * @param {import('@preact/signals').Signal<boolean>} props.checked - Signal for checked state
+ * @param {boolean} props.checked - Current checked state (not a signal)
+ * @param {Function} props.onChange - Callback called with new boolean value
  * @param {string} [props.id] - Input ID
  */
-export function CheckboxField({ label, icon, description, checked, id }) {
+export function CheckboxField({ label, icon, description, checked, onChange, id }) {
   const handleChange = (e) => {
-    checked.value = e.target.checked;
+    onChange(e.target.checked);
   };
-  
+
   return (
     <div class="checkbox-field">
       <label for={id}>
         <input
           id={id}
           type="checkbox"
-          checked={checked.value}
+          checked={checked}
           onChange={handleChange}
         />
         <span class="checkbox-label-content">

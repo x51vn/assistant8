@@ -18,7 +18,8 @@ import {
   openWritingChat,
   fetchWritingHistory,
   copyToClipboard,
-  insertIntoActiveElement
+  insertIntoActiveElement,
+  autoSelectTopic
 } from '../api/writingApi.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 
@@ -139,6 +140,19 @@ const JOB_TYPES = {
       { name: 'structureDepth', label: 'Độ sâu', type: 'select', options: ['h2_only', 'h2_h3'], default: 'h2_h3' },
       { name: 'includeExamples', label: 'Bao gồm ví dụ', type: 'checkbox', default: false },
       { name: 'languageOutput', label: 'Ngôn ngữ output', type: 'select', options: ['vi', 'en'], default: 'vi' }
+    ]
+  },
+
+  english_learning: {
+    id: 'english_learning',
+    label: 'English Learning',
+    icon: 'fas fa-book',
+    inputs: [
+      { name: 'topic', label: 'Topic (optional)', type: 'text', required: false, placeholder: 'Leave empty for AI to pick trending topic' }
+    ],
+    options: [
+      { name: 'autoSelect', label: 'Let AI pick topic', type: 'checkbox', default: false },
+      { name: 'languageOutput', label: 'Language output', type: 'select', options: ['vi', 'en'], default: 'vi' }
     ]
   }
 };
@@ -331,14 +345,46 @@ export function WritingPage() {
 
   const handleGenerate = async () => {
     const job = JOB_TYPES[selectedJob];
+    let finalInputs = { ...inputs };
+
+    // Auto-select topic for English learning if needed
+    if (selectedJob === 'english_learning' && options.autoSelect && !inputs.topic) {
+      setGenerating(true);
+      setResultMessage({
+        type: 'loading',
+        text: 'ChatGPT is picking a trending topic...'
+      });
+
+      const topicResult = await autoSelectTopic();
+
+      if (topicResult.error) {
+        setResultMessage({
+          type: 'error',
+          text: `Lỗi: ${topicResult.error}`
+        });
+        setGenerating(false);
+        return;
+      }
+
+      finalInputs.topic = topicResult.topic;
+      setInputs(prev => ({ ...prev, topic: topicResult.topic }));
+
+      setResultMessage({
+        type: 'loading',
+        text: `Selected topic: ${topicResult.topic}. Sending prompt...`
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
     // Validate required inputs
     const missingRequired = job.inputs
-      .filter(inp => inp.required && !inputs[inp.name])
+      .filter(inp => inp.required && !finalInputs[inp.name])
       .map(inp => inp.label);
 
     if (missingRequired.length > 0) {
       showToast(`Thiếu: ${missingRequired.join(', ')}`, 'error');
+      setGenerating(false);
       return;
     }
 
@@ -349,10 +395,10 @@ export function WritingPage() {
     });
 
     currentJobRef.current = selectedJob;
-    currentInputsRef.current = inputs;
+    currentInputsRef.current = finalInputs;
     currentOptionsRef.current = options;
 
-    const sendResult = await sendWritingJob(selectedJob, inputs, options);
+    const sendResult = await sendWritingJob(selectedJob, finalInputs, options);
 
     if (sendResult.error) {
       setResultMessage({

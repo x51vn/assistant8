@@ -2,18 +2,19 @@ import { signal, computed, effect } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { fetchPortfolio, addPortfolio, updatePortfolio, deletePortfolio } from '../api/portfolioApi.js';
 import { startPricePolling, stopPricePolling, updatePricesNow, isUpdatingPrices } from '../api/portfolioPriceUpdater.js';
+import { startIndicesPolling, stopIndicesPolling } from '../api/marketIndicesUpdater.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 import {
-  masterPrompt as masterPromptSignal,
-  portfolioPrompt as portfolioPromptSignal,
-  stockEvalPrompt as stockEvalPromptSignal,
-  teaStockPrompt as teaStockPromptSignal
+  getMasterPrompt,
+  getPortfolioPrompt,
+  getStockEvalPrompt,
+  getTeaStockPrompt
 } from '../state/settingsState.js';
-import { 
-  portfolioItems, 
-  setPortfolioItems, 
-  addPortfolioItem, 
-  updatePortfolioItem, 
+import {
+  portfolioItems,
+  setPortfolioItems,
+  addPortfolioItem,
+  updatePortfolioItem,
   removePortfolioItem,
   openEditModal,
   setSelectedStock,
@@ -33,6 +34,7 @@ import PortfolioSummary from '../components/PortfolioSummary.jsx';
 import PortfolioTable from '../components/PortfolioTable.jsx';
 import StockModal from '../components/StockModal.jsx';
 import PriceUpdateModal from '../components/PriceUpdateModal.jsx';
+import MarketIndices from '../components/MarketIndices.jsx';
 
 /**
  * Helper: Calculate P&L for a stock
@@ -160,10 +162,11 @@ async function sendPromptWithHistory(prompt, title, createNewChat = true) {
   }
 }
 
-// NOTE: getSettings() function REMOVED - now using settings signals directly:
-// - portfolioPromptSignal (from settingsState.js)
-// - stockEvalPromptSignal (from settingsState.js)
-// - teaStockPromptSignal (from settingsState.js)
+// NOTE: getSettings() function REMOVED - now using settings helper functions:
+// - getPortfolioPrompt() (from settingsState.js)
+// - getStockEvalPrompt() (from settingsState.js)
+// - getTeaStockPrompt() (from settingsState.js)
+// - getMasterPrompt() (from settingsState.js)
 
 /**
  * PortfolioPage - Main Container Component
@@ -334,23 +337,23 @@ export default function PortfolioPage() {
 
   /**
    * Handle run prompt (runs saved master prompt immediately)
-   * Button: "Chạy Prompt ngay" - reads masterPrompt from settings signal
+   * Button: "Chạy Prompt ngay" - reads masterPrompt from settings helper
    * Matches legacy runBtn functionality - sends master prompt ONLY, no portfolio data
    */
   const handleRunPrompt = async () => {
     try {
       setIsRunningPrompt(true);
-      
-      // Read MASTER prompt from settings signal (NOT portfolioPrompt)
-      const prompt = masterPromptSignal.value;
-      
+
+      // Read MASTER prompt from settings helper (NOT portfolioPrompt)
+      const prompt = getMasterPrompt();
+
       if (!prompt || !prompt.trim()) {
         setShowErrorToast('Vui lòng nhập Master Prompt trong tab "Cấu hình"');
         setTimeout(() => { setShowErrorToast(null); }, 3000);
         setIsRunningPrompt(false);
         return;
       }
-      
+
       // Legacy runBtn sends master prompt directly WITHOUT portfolio data
       console.log('[Portfolio] Running master prompt immediately');
 
@@ -374,13 +377,13 @@ export default function PortfolioPage() {
   };
 
   /**
-   * Handle evaluate portfolio - reads prompt from settings signal
+   * Handle evaluate portfolio - reads prompt from settings helper
    * Button: "Đánh giá danh mục" - combines portfolio data with portfolioPrompt
    */
   const handleEvaluatePortfolio = async () => {
-    // Read prompt from settings signal (NOT from modal input)
-    const prompt = portfolioPromptSignal.value;
-    
+    // Read prompt from settings helper (NOT from modal input)
+    const prompt = getPortfolioPrompt();
+
     if (!prompt || !prompt.trim()) {
       setShowErrorToast('Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
       setTimeout(() => { setShowErrorToast(null); }, 3000);
@@ -438,7 +441,7 @@ export default function PortfolioPage() {
 
   /**
    * Handle evaluate stock (individual stock evaluation from dropdown)
-   * Reads stockEvalPrompt from settings signal
+   * Reads stockEvalPrompt from settings helper
    */
   const handleEvaluateStock = async (stock) => {
     try {
@@ -448,8 +451,8 @@ export default function PortfolioPage() {
         return;
       }
 
-      // Read prompt from settings signal (NOT from API call)
-      const evalPrompt = stockEvalPromptSignal.value || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
+      // Read prompt from settings helper (NOT from API call)
+      const evalPrompt = getStockEvalPrompt() || 'Đánh giá mã cổ phiếu {SYMBOL}: xu hướng, điểm mạnh/yếu, khuyến nghị.';
       
       // Use correct field names: symbol, avg_price, current_price
       const prompt = evalPrompt.replace('{SYMBOL}', stock.symbol);
@@ -478,13 +481,13 @@ export default function PortfolioPage() {
   };
 
   /**
-   * Handle tea stock search - reads prompt from settings signal
+   * Handle tea stock search - reads prompt from settings helper
    * Button: "Tìm cổ phiếu trà đá" - sends teaStockPrompt to ChatGPT
    */
   const handleTeaStockSearch = async () => {
-    // Read prompt from settings signal (NOT from modal input)
-    const prompt = teaStockPromptSignal.value;
-    
+    // Read prompt from settings helper (NOT from modal input)
+    const prompt = getTeaStockPrompt();
+
     if (!prompt || !prompt.trim()) {
       setShowErrorToast('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
       setTimeout(() => { setShowErrorToast(null); }, 3000);
@@ -537,12 +540,13 @@ export default function PortfolioPage() {
       try {
         setGlobalLoading(true, 'Loading portfolio...');
         const result = await fetchPortfolio();
-        
+
         if (result.error) {
           setPageError(result.error.message || 'Failed to load portfolio');
         } else {
           setPortfolioItems(result.items || []);
           startPricePolling();
+          startIndicesPolling();
         }
         hideLoading();
       } catch (error) {
@@ -556,6 +560,7 @@ export default function PortfolioPage() {
     // Cleanup on unmount
     return () => {
       stopPricePolling();
+      stopIndicesPolling();
     };
   }, []);
 
@@ -605,6 +610,9 @@ export default function PortfolioPage() {
             anyModalOpen={anyModalOpen.value}
           />
 
+          {/* Market Indices */}
+          <MarketIndices />
+
           {/* Portfolio Summary */}
           <PortfolioSummary />
 
@@ -647,10 +655,10 @@ export default function PortfolioPage() {
 }
 
 // NOTE: EvaluatePortfolioModal and TeaStockModal REMOVED
-// These buttons now read prompts directly from settings signals and execute immediately
-// - handleEvaluatePortfolio: reads portfolioPromptSignal + builds portfolio data table
-// - handleTeaStockSearch: reads teaStockPromptSignal (no portfolio data)
-// - handleRunPrompt: reads masterPromptSignal (no portfolio data) - legacy runBtn behavior
-// - handleEvaluateStock: reads stockEvalPromptSignal + stock details
+// These buttons now read prompts directly from settings helpers and execute immediately
+// - handleEvaluatePortfolio: reads getPortfolioPrompt() + builds portfolio data table
+// - handleTeaStockSearch: reads getTeaStockPrompt() (no portfolio data)
+// - handleRunPrompt: reads getMasterPrompt() (no portfolio data) - legacy runBtn behavior
+// - handleEvaluateStock: reads getStockEvalPrompt() + stock details
 
 export { PortfolioPage };

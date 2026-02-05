@@ -315,11 +315,28 @@ export async function openEnglishChat(chatId) {
 }
 
 /**
- * Get default English prompt template
+ * Get English prompt template from unified prompts system
+ * Uses system prompt 'prompt.english' if available, falls back to default
  * @param {string} topic - Topic to replace in template
  * @returns {string} - Formatted prompt
  */
 export function getEnglishPromptTemplate(topic) {
+  try {
+    // Try to get from allPrompts signal (settingsState)
+    // This allows users to customize the English prompt in Settings
+    const { allPrompts } = require('../state/settingsState.js');
+    if (allPrompts && allPrompts.value && allPrompts.value['prompt.english']) {
+      const baseTemplate = allPrompts.value['prompt.english'].content;
+      if (baseTemplate && baseTemplate.trim()) {
+        return baseTemplate.replace('{TOPIC}', topic);
+      }
+    }
+  } catch (err) {
+    // Fall back to default if import fails or prompt not loaded
+    console.warn('[EnglishAPI] Could not load custom English prompt, using default:', err.message);
+  }
+
+  // Fallback to default hardcoded template
   return `Create a meaningful English learning exercise about "${topic}". Format your response as follows:
 1. A sentence or phrase in English with some vocabulary to learn
 2. Vietnamese translation
