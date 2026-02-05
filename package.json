@@ -1,6 +1,8 @@
 {
   "name": "chatgpt-extension",
   "version": "1.0.0",
+  "description": "trợ lý cá nhân",
+  "author": "vudu",
   "private": true,
   "type": "module",
   "scripts": {
