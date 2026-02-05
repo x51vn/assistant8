@@ -4,7 +4,8 @@
  * Ticket: XST-703
  */
 
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
+import { getGoldPrices, getPricePerUnit, convertGoldUnit } from '../api/commodityApi.js';
 
 /**
  * Asset type config with Font Awesome icons
@@ -117,6 +118,43 @@ function formatDate(dateStr) {
  */
 export default function AssetCard({ asset, onEdit, onDelete }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [goldPrice, setGoldPrice] = useState(null);
+  const [goldLoading, setGoldLoading] = useState(false);
+  const [goldError, setGoldError] = useState(null);
+
+  // Fetch live gold prices when component mounts or asset changes
+  useEffect(() => {
+    if (asset.asset_type === 'gold' && asset.quantity) {
+      fetchGoldPrice();
+    }
+  }, [asset.id, asset.quantity]);
+
+  async function fetchGoldPrice() {
+    setGoldLoading(true);
+    setGoldError(null);
+    try {
+      const priceData = await getGoldPrices();
+      if (priceData.success && priceData.pricePerLuong) {
+        setGoldPrice(priceData.pricePerLuong);
+      } else {
+        setGoldError('Không thể lấy giá vàng');
+      }
+    } catch (error) {
+      setGoldError('Lỗi khi lấy giá vàng');
+      console.error('[AssetCard] Error fetching gold price:', error);
+    } finally {
+      setGoldLoading(false);
+    }
+  }
+
+  // Calculate gold value from live price
+  function calculateGoldValue() {
+    if (!goldPrice || !asset.quantity) return 0;
+
+    const unit = asset.unit || extractGoldUnitFromNotes(asset.notes) || 'chi';
+    const pricePerUnit = getPricePerUnit(goldPrice, unit);
+    return Math.round(asset.quantity * pricePerUnit);
+  }
 
   const typeConfig = ASSET_TYPE_CONFIG[asset.asset_type] || ASSET_TYPE_CONFIG.other;
   const liquidityConfig = LIQUIDITY_LABELS[asset.liquidity] || LIQUIDITY_LABELS.medium;
@@ -247,7 +285,38 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
               {asset.quantity} {getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))} vàng
             </strong>
             <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-              ≈ {formatCurrency(asset.current_value, asset.currency)} {asset.unit_price ? `(${formatCurrency(asset.unit_price, asset.currency)}/${getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))})` : ''}
+              {goldLoading ? (
+                <>
+                  <i className="fas fa-spinner fa-spin"></i> Cập nhật giá...
+                </>
+              ) : goldError ? (
+                <>
+                  <span style={{ color: '#d32f2f' }}>⚠️ {goldError}</span>
+                  <button
+                    onClick={fetchGoldPrice}
+                    style={{
+                      marginLeft: '6px',
+                      padding: '2px 6px',
+                      fontSize: '11px',
+                      backgroundColor: '#f0f0f0',
+                      border: '1px solid #ccc',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                    title="Thử lại"
+                  >
+                    Thử lại
+                  </button>
+                </>
+              ) : goldPrice ? (
+                <>
+                  ≈ {formatCurrency(calculateGoldValue(), asset.currency)} ({formatCurrency(getPricePerUnit(goldPrice, asset.unit || extractGoldUnitFromNotes(asset.notes) || 'chi'), asset.currency)}/{getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))})
+                </>
+              ) : (
+                <>
+                  <span style={{ color: '#999' }}>Chưa có dữ liệu giá</span>
+                </>
+              )}
             </div>
           </>
         ) : asset.asset_type === 'crypto' && asset.quantity ? (

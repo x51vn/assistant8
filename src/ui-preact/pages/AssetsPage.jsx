@@ -79,7 +79,7 @@ export default function AssetsPage() {
   async function handleRefreshPrices() {
     // Check if there are any gold or crypto assets to update
     const hasGoldOrCrypto = assets.some(a => a.asset_type === 'gold' || a.asset_type === 'crypto');
-    
+
     if (!hasGoldOrCrypto) {
       return; // Nothing to update
     }
@@ -88,15 +88,12 @@ export default function AssetsPage() {
     setError(null);
 
     try {
-      const result = await updateAssetPrices(assets);
-      
-      if (result.success && result.updatedAssets && result.updatedAssets.length > 0) {
-        // Update local state with refreshed assets
-        setAssets(prev => {
-          const updatedMap = new Map(result.updatedAssets.map(a => [a.id, a]));
-          return prev.map(a => updatedMap.get(a.id) || a);
-        });
-      } else if (!result.success) {
+      const result = await updateAssetPrices();
+
+      if (result.success) {
+        // Reload assets from database to get updated prices
+        await loadAssets();
+      } else {
         setError(result.error || 'Không thể cập nhật giá');
       }
     } catch (err) {

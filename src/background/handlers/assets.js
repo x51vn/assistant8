@@ -49,18 +49,22 @@ function validateAssetData(data, isUpdate = false) {
     return { valid: false, error: 'Dữ liệu tài sản không được để trống' };
   }
 
-  // For create: name, asset_type, current_value are required
+  // For create: name, asset_type are required
   if (!isUpdate) {
     if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
       return { valid: false, error: 'Tên tài sản là bắt buộc' };
     }
-    
+
     if (!data.asset_type || !VALID_ASSET_TYPES.includes(data.asset_type)) {
       return { valid: false, error: `Loại tài sản không hợp lệ. Chấp nhận: ${VALID_ASSET_TYPES.join(', ')}` };
     }
-    
-    if (data.current_value === undefined || data.current_value === null) {
-      return { valid: false, error: 'Giá trị hiện tại là bắt buộc' };
+
+    // For gold assets: don't require current_value (calculated at display time)
+    // For other assets: current_value is required
+    if (data.asset_type !== 'gold') {
+      if (data.current_value === undefined || data.current_value === null) {
+        return { valid: false, error: 'Giá trị hiện tại là bắt buộc' };
+      }
     }
   }
 
@@ -241,6 +245,11 @@ registerHandler(MESSAGE_TYPES.ASSET_ADD, async (message) => {
     // Normalize data
     const normalized = normalizeAssetData(assetData);
 
+    // For gold assets: remove current_value if present (will be calculated at display time)
+    if (assetData.asset_type === 'gold') {
+      delete normalized.current_value;
+    }
+
     // Insert to Supabase
     const item = await supabaseWithRetry(
       async () => {
@@ -311,6 +320,33 @@ registerHandler(MESSAGE_TYPES.ASSET_UPDATE, async (message) => {
 
     if (Object.keys(normalized).length === 0) {
       return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Không có dữ liệu để cập nhật');
+    }
+
+    // For gold assets: remove current_value from update (will be calculated at display time)
+    // First, fetch current asset to check if it's gold
+    const existingAsset = await supabaseWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from('assets')
+          .select('asset_type')
+          .eq('id', id)
+          .eq('user_id', userId)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            throw { errorCode: ERROR_CODES.NOT_FOUND, errorMessage: 'Tài sản không tồn tại hoặc bạn không có quyền sửa' };
+          }
+          throw error;
+        }
+        return data;
+      },
+      { operationName: 'getAssetType', correlationId }
+    );
+
+    // If asset is gold, remove current_value from update
+    if (existingAsset.asset_type === 'gold') {
+      delete normalized.current_value;
     }
 
     // Update in Supabase

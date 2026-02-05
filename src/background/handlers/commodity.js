@@ -196,22 +196,20 @@ registerHandler(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES, async (message) => 
     const results = { gold: [], crypto: [] };
 
     // Update gold assets
+    // NOTE: For gold assets, we DON'T update current_value in DB (calculated at display time)
+    // We only track the prices for reference/caching
     for (const asset of goldAssets) {
       const goldType = extractGoldType(asset.name);
       const goldPrice = findGoldPrice(goldPrices, goldType);
-      
+
       if (goldPrice) {
         const unit = extractGoldUnit(asset.notes) || 'chi'; // Default to chỉ
         const quantity = Number(asset.quantity) || 0;
         const pricePerUnit = getPricePerUnit(goldPrice.pricePerLuong, unit);
         const newValue = quantity * pricePerUnit;
 
-        updates.push({
-          id: asset.id,
-          unit_price: pricePerUnit,
-          current_value: Math.round(newValue)
-        });
-
+        // For gold: don't update DB (calculated dynamically at display time)
+        // Just track in results for logging/reference
         results.gold.push({
           id: asset.id,
           name: asset.name,
@@ -220,7 +218,8 @@ registerHandler(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES, async (message) => 
           pricePerUnit,
           oldValue: asset.current_value,
           newValue: Math.round(newValue),
-          source: goldPrice.source
+          source: goldPrice.source,
+          note: 'Gold value calculated dynamically at display time'
         });
       }
     }
@@ -259,6 +258,7 @@ registerHandler(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES, async (message) => 
     }
 
     // 5. Batch update to Supabase
+    // Only crypto assets are updated (gold values calculated at display time)
     if (updates.length > 0) {
       await supabaseWithRetry(
         async () => {
@@ -274,10 +274,10 @@ registerHandler(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES, async (message) => 
               .eq('user_id', userId);
 
             if (error) {
-              logger.warn('Failed to update asset', { 
-                correlationId, 
-                assetId: update.id, 
-                error: error.message 
+              logger.warn('Failed to update asset', {
+                correlationId,
+                assetId: update.id,
+                error: error.message
               });
             }
           }

@@ -111,31 +111,32 @@ export async function getCryptoPrices(symbols) {
 
 /**
  * Update all gold and crypto asset prices
- * Fetches live prices and updates asset values
+ * Fetches live prices from API and updates all user assets in database
+ * User assets are fetched server-side to ensure accuracy
  * @returns {Promise<{success: boolean, updated: number, results: Object}>}
  */
 export async function updateAssetPrices() {
   const correlationId = generateCorrelationId();
-  
+
   try {
     logger.info('Updating commodity asset prices', { correlationId });
-    
+
     const response = await chrome.runtime.sendMessage({
       ...createMessage(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES),
       correlationId
     });
-    
+
     if (response.errorCode) {
       throw new Error(response.errorMessage || 'Failed to update asset prices');
     }
-    
-    logger.info('Asset prices updated', { 
-      correlationId, 
+
+    logger.info('Asset prices updated', {
+      correlationId,
       updated: response.updated,
       goldUpdated: response.results?.gold?.length || 0,
       cryptoUpdated: response.results?.crypto?.length || 0
     });
-    
+
     return {
       success: true,
       updated: response.updated || 0,
@@ -143,9 +144,9 @@ export async function updateAssetPrices() {
       timestamp: response.timestamp
     };
   } catch (error) {
-    logger.error('Failed to update asset prices', { 
-      correlationId, 
-      error: error.message 
+    logger.error('Failed to update asset prices', {
+      correlationId,
+      error: error.message
     });
     throw error;
   }

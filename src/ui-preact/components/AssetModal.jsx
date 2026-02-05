@@ -259,17 +259,27 @@ export default function AssetModal({ asset, onClose, onSave, saving }) {
       const data = {
         name: formData.name.trim(),
         asset_type: formData.asset_type,
-        current_value: parseFloat(formData.current_value) || 0,
         currency: formData.currency,
         liquidity: formData.liquidity,
         risk_level: formData.risk_level,
         notes: formData.notes.trim() || null
       };
 
+      // For gold assets: don't store current_value (calculate at display time from live prices)
+      // For other assets: store current_value
+      if (formData.asset_type !== 'gold') {
+        data.current_value = parseFloat(formData.current_value) || 0;
+      }
+
       // Add type-specific fields
       if (['crypto', 'gold'].includes(formData.asset_type)) {
         data.quantity = parseFloat(formData.quantity) || 1;
-        data.unit_price = formData.unit_price ? parseFloat(formData.unit_price) : null;
+
+        // For gold: don't store unit_price (fetch live at display time)
+        // For crypto: store unit_price if provided
+        if (formData.asset_type !== 'gold') {
+          data.unit_price = formData.unit_price ? parseFloat(formData.unit_price) : null;
+        }
         
         // Store unit/symbol in notes for gold (unit) and crypto (symbol)
         // This preserves the unit info for price calculations
