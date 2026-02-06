@@ -15,8 +15,11 @@ import { JiraPage } from '../pages/JiraPage.jsx';
 import { WritingPage } from '../pages/WritingPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { currentPage, setCurrentPage } from '../state/navigationState.js';
+import { useContextMenuListener } from '../hooks/useContextMenuListener.js';
 
 export function MainApp() {
+  // Listen for context menu → side panel messages
+  useContextMenuListener();
   // Subscribe to navigation state using effect
   const page = currentPage;
 

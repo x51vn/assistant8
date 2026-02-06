@@ -16,6 +16,7 @@ import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
 import { ERROR_CODES, ERROR_MESSAGES_VN } from '../../shared/errorCodes.js';
 import { flushChatHistoryOutbox } from '../services/chatHistoryService.js';
+import { invalidatePromptCache } from './contextMenu.js';
 
 const logger = createLogger('Handlers/SupabaseAuth');
 
@@ -92,6 +93,9 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, async (message) => {
       userId: user.id,
       email: user.email 
     });
+    
+    // Invalidate context menu prompt cache so fresh prompts are loaded
+    invalidatePromptCache();
     
     // ✅ FIX: No manual broadcast needed - Supabase onAuthStateChange 
     // listener (setupAuthStateListener) already broadcasts SIGNED_IN event
@@ -196,6 +200,9 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT, async (message) => {
     // If we get here, logout succeeded
     
     logger.info('Logout successful', { correlationId });
+    
+    // Invalidate context menu prompt cache
+    invalidatePromptCache();
     
     // ✅ FIX: No manual broadcast needed - Supabase onAuthStateChange 
     // listener (setupAuthStateListener) already broadcasts SIGNED_OUT event

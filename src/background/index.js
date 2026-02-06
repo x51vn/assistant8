@@ -460,23 +460,14 @@ async function cleanupLegacyAlarms() {
 
 /**
  * Create context menus
- * Idempotent - safe to call multiple times
+ * Delegated to contextMenu module for submenu structure.
+ * Idempotent - safe to call multiple times.
  */
 async function createContextMenus() {
   try {
-    // Remove all existing menus first
-    await chrome.contextMenus.removeAll();
-    
-    // Create new menu
-    chrome.contextMenus.create({
-      id: 'chatgpt-assistant-analyze',
-      title: 'ChatGPT Assistant - Phân tích',
-      contexts: ['selection', 'page']
-    });
-    
-    logger.info('Context menus created');
+    await contextMenuModule.createContextMenus();
+    logger.info('Context menus created (delegated to contextMenu module)');
   } catch (error) {
-    // Ignore errors (menu might already exist)
     logger.debug('Context menu creation note', { error: error?.message });
   }
 }

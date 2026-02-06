@@ -225,6 +225,9 @@ export const MESSAGE_TYPES = {
   // X51LABS-94: Telemetry
   TELEMETRY_REPORT: 'TELEMETRY_REPORT',
   TELEMETRY_RECORDED: 'TELEMETRY_RECORDED',
+
+  // Context Menu → Side Panel (analysis in panel instead of ChatGPT tab)
+  CONTEXT_MENU_TO_SIDEPANEL: 'CONTEXT_MENU_TO_SIDEPANEL',
   
   // Migration
   MIGRATION_CHECK: 'MIGRATION_CHECK',
