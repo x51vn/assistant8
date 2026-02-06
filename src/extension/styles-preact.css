@@ -1145,7 +1145,7 @@ textarea.input-field {
    SETTINGS PAGE
    ======================================== */
 .settings-page {
-  padding: 16px;
+  padding: 0;
   background: var(--surface-alt, #f6f7fb);
 }
 
@@ -1460,10 +1460,41 @@ textarea.input-field {
   font-size: 12px;
 }
 
+.collapse-value.stat-positive {
+  color: var(--success-text, #22c55e);
+}
+
+.collapse-value.stat-negative {
+  color: var(--error-text, #ef4444);
+}
+
+.collapse-value.stat-neutral {
+  color: var(--muted-text, #6b7280);
+}
+
 .collapse-icon {
   color: var(--muted-text, #666);
   font-size: 12px;
   transition: transform 0.2s;
+}
+
+/* Summary Error - for both portfolio and indices */
+.summary-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--error-bg, #fef2f2);
+  border: 1px solid var(--error-border, #fca5a5);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 12px;
+  font-size: 12px;
+  color: var(--error-text, #ef4444);
+  gap: 8px;
+}
+
+.summary-error i {
+  font-size: 14px;
 }
 
 /* Summary Content */
@@ -1959,9 +1990,17 @@ textarea.input-field {
 
 .history-date { font-size: 12px; color: var(--muted-text); }
 
-.history-actions { display: flex; gap: 4px; }
-
 .history-content { padding: 12px; cursor: pointer; }
+
+.history-item-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 8px;
+}
+
+.btn-delete-subtle { color: var(--muted-text); }
+.btn-delete-subtle:hover { color: var(--danger-color, #e74c3c); }
 
 .history-prompt,
 .history-response {
@@ -2569,58 +2608,31 @@ textarea.input-field {
   flex-direction: column;
 }
 
-/* Job Selector */
-.job-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.job-selector h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--heading-text);
-  margin: 0;
-}
-
-.job-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.job-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--surface-alt);
+/* Job Dropdown (in page-header) */
+.job-dropdown {
+  padding: 6px 10px;
   border: 1px solid var(--surface-border);
   border-radius: 6px;
+  background: var(--surface-bg);
   color: var(--body-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  min-width: 160px;
+  transition: border-color 0.2s ease;
 }
 
-.job-button:hover:not(:disabled) {
-  background: var(--table-row-hover);
+.job-dropdown:hover:not(:disabled) {
   border-color: var(--primary-color);
 }
 
-.job-button.active {
-  background: var(--primary-color);
-  color: white;
+.job-dropdown:focus {
+  outline: none;
   border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
-.job-button i {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.job-button:disabled {
+.job-dropdown:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -2897,4 +2909,315 @@ textarea:disabled {
 
 .writing-history-item .btn-delete:hover {
   background: var(--error-bg);
+}
+
+/* ========================================
+   CONFLUENCE UPLOAD SECTION (Writing Page)
+   ======================================== */
+.confluence-upload-section {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed var(--border-color, #ddd);
+  border-radius: 8px;
+  background: var(--surface-bg, #fafbfc);
+}
+
+.confluence-upload-section .checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.confluence-upload-section .checkbox-inline input[type="checkbox"] {
+  margin: 0;
+}
+
+.confluence-fields {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ========================================
+   JIRA PAGE - Jira Tickets Management
+   ======================================== */
+.jira-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Jira Filters */
+.jira-filters {
+  background: var(--surface-bg, #fafbfc);
+  border: 1px solid var(--border-color, #e1e4e8);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.jira-filters .filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.jira-filters .jql-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.jira-filters .search-btn {
+  height: 36px;
+  white-space: nowrap;
+}
+
+/* Error Banner */
+.error-banner {
+  background: #fff2f2;
+  border: 1px solid #ffcdd2;
+  color: #c62828;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.error-banner i {
+  margin-right: 6px;
+}
+
+/* Issues List */
+.jira-issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issues-count {
+  font-size: 12px;
+  color: var(--text-muted, #6b778c);
+  padding: 4px 0;
+}
+
+/* Jira Issue Item */
+.jira-issue-item {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e1e4e8);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jira-issue-item:hover {
+  border-color: var(--primary-color, #4a9eff);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.jira-issue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.jira-issue-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--primary-color, #4a9eff);
+}
+
+.jira-issue-key i {
+  font-size: 14px;
+}
+
+.jira-issue-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.jira-issue-item:hover .jira-issue-actions {
+  opacity: 1;
+}
+
+.jira-issue-summary {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-primary, #24292e);
+}
+
+.jira-issue-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.jira-status-badge {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.jira-priority i {
+  font-size: 14px;
+}
+
+.jira-assignee, .jira-updated {
+  color: var(--text-muted, #6b778c);
+}
+
+.jira-assignee i, .jira-updated i {
+  margin-right: 3px;
+}
+
+.jira-issue-description {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, #e1e4e8);
+  font-size: 13px;
+  color: var(--text-secondary, #586069);
+  white-space: pre-wrap;
+}
+
+/* Jira Modal */
+.jira-modal {
+  max-width: 500px;
+}
+
+.input-group-row {
+  display: flex;
+  gap: 12px;
+}
+
+.input-group-row .input-group {
+  flex: 1;
+}
+
+/* Modal styles (shared) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal-content {
+  background: var(--card-bg, #fff);
+  border-radius: 12px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e1e4e8);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color, #e1e4e8);
+}
+
+.confirm-modal {
+  max-width: 400px;
+  padding: 20px;
+}
+
+.confirm-modal h3 {
+  margin: 0 0 8px 0;
+}
+
+.confirm-modal p {
+  margin: 0 0 16px 0;
+  color: var(--text-secondary, #586069);
+}
+
+.btn-danger {
+  background: #d32f2f;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.btn-danger:hover {
+  background: #b71c1c;
+}
+
+/* Settings - Atlassian section */
+.section-description {
+  font-size: 13px;
+  color: var(--text-muted, #6b778c);
+  margin: 0 0 12px 0;
+}
+
+.section-description a {
+  color: var(--primary-color, #4a9eff);
+}
+
+.status-message {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-message.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.status-message.error {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
 }

@@ -21,6 +21,7 @@ import {
   insertIntoActiveElement,
   autoSelectTopic
 } from '../api/writingApi.js';
+import { createConfluencePage, textToConfluenceStorage } from '../api/atlassianApi.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 
 /**
@@ -65,7 +66,7 @@ const JOB_TYPES = {
     label: 'Viết bài social',
     icon: 'fas fa-share-alt',
     inputs: [
-      { name: 'rawContent', label: 'Nội dung (bắt buộc)', type: 'textarea', required: true, placeholder: 'Ý chính hoặc nội dung thô' },
+      { name: 'rawContent', label: 'Nội dung (để trống để AI tự đề xuất)', type: 'textarea', required: false, placeholder: 'Ý chính hoặc nội dung thô (để trống = AI tự chọn chủ đề)' },
       { name: 'link', label: 'Link (tùy chọn)', type: 'text', placeholder: 'https://...' }
     ],
     options: [
@@ -234,6 +235,10 @@ export function WritingPage() {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [activeTab, setActiveTab] = useState('output'); // 'output' or 'history'
+  const [uploadToConfluence, setUploadToConfluence] = useState(false);
+  const [confluenceSpace, setConfluenceSpace] = useState('');
+  const [confluenceTitle, setConfluenceTitle] = useState('');
+  const [confluenceUploading, setConfluenceUploading] = useState(false);
   const pollIntervalRef = useRef(null);
   const currentJobRef = useRef(null);
   const currentInputsRef = useRef(null);
@@ -336,6 +341,12 @@ export function WritingPage() {
         });
 
         setGenerating(false);
+
+        // Auto-upload to Confluence if checkbox is checked
+        if (uploadToConfluence && confluenceSpace) {
+          await handleConfluenceUpload(result.output);
+        }
+
         currentJobRef.current = null;
         currentInputsRef.current = null;
         currentOptionsRef.current = null;
@@ -346,6 +357,11 @@ export function WritingPage() {
   const handleGenerate = async () => {
     const job = JOB_TYPES[selectedJob];
     let finalInputs = { ...inputs };
+
+    // Auto-generate content for social if user leaves rawContent empty
+    if (selectedJob === 'social' && !inputs.rawContent) {
+      finalInputs.rawContent = `Hãy tự đề xuất một chủ đề thú vị đang trending và viết bài social media về chủ đề đó. Chọn chủ đề phù hợp với nền tảng ${options.platform || 'facebook'} và tone ${options.tone || 'engaging'}.`;
+    }
 
     // Auto-select topic for English learning if needed
     if (selectedJob === 'english_learning' && options.autoSelect && !inputs.topic) {
@@ -461,6 +477,44 @@ export function WritingPage() {
     }
   };
 
+  const handleConfluenceUpload = async (content) => {
+    if (!confluenceSpace) {
+      showToast('Vui lòng nhập Space Key cho Confluence', 'error');
+      return;
+    }
+    setConfluenceUploading(true);
+    try {
+      const title = confluenceTitle || `Writing - ${JOB_TYPES[selectedJob]?.label} - ${new Date().toLocaleString('vi-VN')}`;
+      const storageContent = textToConfluenceStorage(content);
+      const result = await createConfluencePage({
+        spaceKey: confluenceSpace,
+        title,
+        content: storageContent
+      });
+      if (result.error) {
+        showToast(`Upload Confluence thất bại: ${result.error.message}`, 'error');
+      } else {
+        showToast('Đã upload lên Confluence!', 'success');
+        if (result.page?.url) {
+          setResultMessage({
+            type: 'success',
+            text: `Đã upload lên Confluence! URL: ${result.page.url}`
+          });
+        }
+      }
+    } catch (error) {
+      showToast(`Lỗi upload Confluence: ${error.message}`, 'error');
+    } finally {
+      setConfluenceUploading(false);
+    }
+  };
+
+  const handleManualConfluenceUpload = async () => {
+    if (output?.content) {
+      await handleConfluenceUpload(output.content);
+    }
+  };
+
   const job = JOB_TYPES[selectedJob];
 
   return (
@@ -470,29 +524,24 @@ export function WritingPage() {
         <h2>
           <i class="fas fa-pen-fancy"></i> Writing Assistant
         </h2>
+        <div class="header-actions">
+          <select
+            class="job-dropdown"
+            value={selectedJob}
+            onChange={(e) => setSelectedJob(e.target.value)}
+            disabled={generating}
+          >
+            {Object.values(JOB_TYPES).map(j => (
+              <option key={j.id} value={j.id}>{j.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Main Content */}
       <div class="writing-container">
-        {/* Left Panel: Job Selector & Form */}
+        {/* Left Panel: Form */}
         <div class="writing-panel writing-input-panel">
-          {/* Job Selector */}
-          <div class="job-selector">
-            <h3>Chọn công việc:</h3>
-            <div class="job-buttons">
-              {Object.values(JOB_TYPES).map(j => (
-                <button
-                  key={j.id}
-                  class={`job-button ${selectedJob === j.id ? 'active' : ''}`}
-                  onClick={() => setSelectedJob(j.id)}
-                  disabled={generating}
-                >
-                  <i class={j.icon}></i>
-                  <span>{j.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Input Fields */}
           <div class="job-form">
@@ -591,6 +640,47 @@ export function WritingPage() {
             )}
           </button>
 
+          {/* Confluence Upload Option */}
+          <div class="confluence-upload-section">
+            <div class="input-group">
+              <label class="checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={uploadToConfluence}
+                  onChange={(e) => setUploadToConfluence(e.target.checked)}
+                  disabled={generating}
+                />
+                <i class="fab fa-confluence"></i> Upload to Confluence sau khi hoàn thành
+              </label>
+            </div>
+            {uploadToConfluence && (
+              <div class="confluence-fields">
+                <div class="input-group">
+                  <label>Space Key <span class="required">*</span></label>
+                  <input
+                    type="text"
+                    class="input-field"
+                    placeholder="VD: DEV, TEAM, DOC"
+                    value={confluenceSpace}
+                    onInput={(e) => setConfluenceSpace(e.target.value)}
+                    disabled={generating}
+                  />
+                </div>
+                <div class="input-group">
+                  <label>Tiêu đề trang (tùy chọn)</label>
+                  <input
+                    type="text"
+                    class="input-field"
+                    placeholder="Tự động sinh nếu để trống"
+                    value={confluenceTitle}
+                    onInput={(e) => setConfluenceTitle(e.target.value)}
+                    disabled={generating}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Result Message */}
           {resultMessage && (
             <div class={`result-message ${resultMessage.type}`}>
@@ -645,6 +735,18 @@ export function WritingPage() {
                         <i class="fas fa-external-link-alt"></i> Open Chat
                       </button>
                     )}
+                    <button
+                      class="btn-action"
+                      onClick={handleManualConfluenceUpload}
+                      disabled={confluenceUploading || !confluenceSpace}
+                      title={confluenceSpace ? 'Upload to Confluence' : 'Nhập Space Key trước'}
+                    >
+                      {confluenceUploading ? (
+                        <><i class="fas fa-spinner fa-spin"></i> Uploading...</>
+                      ) : (
+                        <><i class="fab fa-confluence"></i> Confluence</>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}

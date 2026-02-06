@@ -17,6 +17,11 @@ export const realtimeEnabled = signal(false);
 // ===== NUMBER SIGNAL (1 input) =====
 export const interval = signal(5); // Default 5 minutes
 
+// ===== ATLASSIAN CREDENTIALS =====
+export const atlassianBaseUrl = signal('');
+export const atlassianEmail = signal('');
+export const atlassianApiToken = signal('');
+
 // ===== UNIFIED PROMPTS SIGNALS (ALL 12 PROMPTS) =====
 // All prompts state: 6 system prompts + 6 writing templates
 // Keys: prompt.master, prompt.portfolio, prompt.stockEval, prompt.teaStock,

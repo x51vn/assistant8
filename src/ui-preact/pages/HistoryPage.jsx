@@ -46,28 +46,12 @@ function HistoryItem({ item, onDelete, onOpenChat }) {
     await onDelete(item.id);
   };
 
+  const hasLongContent = item.prompt?.length > 100 || item.response?.length > 150;
+
   return (
     <div class="history-item">
       <div class="history-item-header">
         <span class="history-date">{formatDate(item.timestamp)}</span>
-        <div class="history-actions">
-          {item.chat_url && (
-            <button
-              class="btn-icon"
-              title="Mở ChatGPT"
-              onClick={() => onOpenChat(item.chat_url)}
-            >
-              <i class="fas fa-external-link-alt"></i>
-            </button>
-          )}
-          <button
-            class="btn-icon btn-delete"
-            title="Xóa"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
       </div>
       
       <div class="history-content" onClick={() => setExpanded(!isExpanded)}>
@@ -79,12 +63,31 @@ function HistoryItem({ item, onDelete, onOpenChat }) {
             <strong>Response:</strong> {isExpanded ? item.response : truncate(item.response, 150)}
           </div>
         )}
-        {!isExpanded && (item.prompt?.length > 100 || item.response?.length > 150) && (
-          <button class="btn-expand">Xem thêm ↓</button>
+      </div>
+
+      {/* Bottom action bar */}
+      <div class="history-item-footer">
+        {hasLongContent && (
+          <button class="btn-expand" onClick={() => setExpanded(!isExpanded)}>
+            {isExpanded ? 'Thu gọn ↑' : 'Xem thêm ↓'}
+          </button>
         )}
-        {isExpanded && (
-          <button class="btn-expand">Thu gọn ↑</button>
+        {item.chat_url && (
+          <button
+            class="btn-expand"
+            title="Mở ChatGPT"
+            onClick={() => onOpenChat(item.chat_url)}
+          >
+            <i class="fas fa-external-link-alt"></i> Mở
+          </button>
         )}
+        <button
+          class="btn-expand btn-delete-subtle"
+          title="Xóa"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <i class="fas fa-trash"></i> Xóa
+        </button>
       </div>
 
       {/* Confirm Delete Dialog */}
@@ -114,7 +117,6 @@ function HistoryItem({ item, onDelete, onOpenChat }) {
 export function HistoryPage() {
   const [historyItems, setHistoryItems] = useState([]);
   const [error, setError] = useState(null);
-  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Load history on mount
@@ -131,7 +133,7 @@ export function HistoryPage() {
     setGlobalLoading(true, 'Đang tải lịch sử...');
     setError(null);
     
-    const result = await fetchHistory(100);
+    const result = await fetchHistory(50);
     
     if (result.error) {
       setError(result.error.message);
@@ -141,6 +143,15 @@ export function HistoryPage() {
         (b.timestamp || 0) - (a.timestamp || 0)
       );
       setHistoryItems(sorted);
+
+      // Auto-trim: if more than 30 items, delete the oldest ones
+      if (sorted.length > 30) {
+        const itemsToDelete = sorted.slice(30);
+        for (const old of itemsToDelete) {
+          await deleteHistory(old.id);
+        }
+        setHistoryItems(sorted.slice(0, 30));
+      }
     }
     
     hideLoading();
@@ -158,7 +169,6 @@ export function HistoryPage() {
   };
 
   const handleClearAll = async () => {
-    setConfirmClearAll(false);
     
     const result = await clearAllHistory();
     
@@ -193,15 +203,7 @@ export function HistoryPage() {
           >
             <i class="fas fa-sync-alt"></i>
           </button>
-          {historyItems.length > 0 && (
-            <button
-              class="btn-icon btn-delete"
-              title="Xóa tất cả"
-              onClick={() => setConfirmClearAll(true)}
-            >
-              <i class="fas fa-trash"></i>
-            </button>
-          )}
+
         </div>
       </div>
 
@@ -244,23 +246,7 @@ export function HistoryPage() {
         </div>
       )}
 
-      {/* Confirm Clear All Dialog */}
-      {confirmClearAll && (
-        <div class="confirm-dialog-overlay" onClick={() => setConfirmClearAll(false)}>
-          <div class="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>Xác nhận xóa tất cả</h3>
-            <p>Bạn có chắc chắn muốn xóa toàn bộ lịch sử? Hành động này không thể hoàn tác.</p>
-            <div class="confirm-buttons">
-              <button class="btn-cancel" onClick={() => setConfirmClearAll(false)}>
-                Hủy
-              </button>
-              <button class="btn-confirm-delete" onClick={handleClearAll}>
-                Xóa tất cả
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

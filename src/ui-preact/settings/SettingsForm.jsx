@@ -15,6 +15,9 @@ import {
   reviewPrompt,
   realtimeEnabled,
   interval,
+  atlassianBaseUrl,
+  atlassianEmail,
+  atlassianApiToken,
   isFormValid,
   isSaving
 } from '../state/settingsState.js';
@@ -22,6 +25,7 @@ import {
   loadAllPrompts,
   initializeAllPrompts
 } from '../api/settingsApi.js';
+import { testAtlassianConnection } from '../api/atlassianApi.js';
 
 /**
  * @param {Object} props
@@ -36,6 +40,12 @@ export function SettingsForm({ onSave }) {
   const [localRealtimeEnabled, setLocalRealtimeEnabled] = useState(false);
   const [localInterval, setLocalInterval] = useState(5);
   const [localAllPrompts, setLocalAllPrompts] = useState({});
+  // Atlassian credentials
+  const [localAtlassianBaseUrl, setLocalAtlassianBaseUrl] = useState('');
+  const [localAtlassianEmail, setLocalAtlassianEmail] = useState('');
+  const [localAtlassianApiToken, setLocalAtlassianApiToken] = useState('');
+  const [atlassianTestResult, setAtlassianTestResult] = useState(null);
+  const [atlassianTesting, setAtlassianTesting] = useState(false);
 
   // Initialize and load all prompts (12 total: 6 system + 6 writing templates) on mount
   useEffect(() => {
@@ -56,6 +66,10 @@ export function SettingsForm({ onSave }) {
         setLocalReviewPrompt(reviewPrompt.value);
         setLocalRealtimeEnabled(realtimeEnabled.value);
         setLocalInterval(interval.value);
+        // Initialize Atlassian credentials from signals
+        setLocalAtlassianBaseUrl(atlassianBaseUrl.value);
+        setLocalAtlassianEmail(atlassianEmail.value);
+        setLocalAtlassianApiToken(atlassianApiToken.value);
       } catch (error) {
         console.error('Failed to load prompts:', error);
         // Don't block UI if data fails to load
@@ -76,6 +90,10 @@ export function SettingsForm({ onSave }) {
       realtimeEnabled.value = localRealtimeEnabled;
       interval.value = localInterval;
       allPrompts.value = structuredClone(localAllPrompts);
+      // Copy Atlassian credentials to signals
+      atlassianBaseUrl.value = localAtlassianBaseUrl;
+      atlassianEmail.value = localAtlassianEmail;
+      atlassianApiToken.value = localAtlassianApiToken;
 
       // Then call the save handler
       onSave();
@@ -164,6 +182,111 @@ export function SettingsForm({ onSave }) {
           max={60}
           step={1}
         />
+      </section>
+
+      {/* Atlassian Integration */}
+      <section class="form-section">
+        <h3 class="section-title">
+          <i class="fab fa-atlassian"></i>
+          Atlassian Integration (Jira & Confluence)
+        </h3>
+        <p class="section-description">
+          Cấu hình kết nối Atlassian Cloud để tương tác với Jira tickets và Confluence pages.
+          Tạo API token tại <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Atlassian API Tokens</a>.
+        </p>
+
+        <div class="input-group">
+          <label for="atlassianBaseUrl">
+            <i class="fas fa-globe"></i> Base URL
+          </label>
+          <input
+            id="atlassianBaseUrl"
+            type="url"
+            class="input-field"
+            placeholder="https://your-domain.atlassian.net"
+            value={localAtlassianBaseUrl}
+            onInput={(e) => setLocalAtlassianBaseUrl(e.target.value)}
+          />
+        </div>
+
+        <div class="input-group">
+          <label for="atlassianEmail">
+            <i class="fas fa-envelope"></i> Email
+          </label>
+          <input
+            id="atlassianEmail"
+            type="email"
+            class="input-field"
+            placeholder="your-email@company.com"
+            value={localAtlassianEmail}
+            onInput={(e) => setLocalAtlassianEmail(e.target.value)}
+          />
+        </div>
+
+        <div class="input-group">
+          <label for="atlassianApiToken">
+            <i class="fas fa-key"></i> API Token
+          </label>
+          <input
+            id="atlassianApiToken"
+            type="password"
+            class="input-field"
+            placeholder="API token từ Atlassian"
+            value={localAtlassianApiToken}
+            onInput={(e) => setLocalAtlassianApiToken(e.target.value)}
+          />
+        </div>
+
+        <button
+          type="button"
+          class="secondary-btn"
+          onClick={async () => {
+            // Save credentials first so the test can use them
+            atlassianBaseUrl.value = localAtlassianBaseUrl;
+            atlassianEmail.value = localAtlassianEmail;
+            atlassianApiToken.value = localAtlassianApiToken;
+            // Trigger save before testing
+            onSave();
+            
+            setAtlassianTesting(true);
+            setAtlassianTestResult(null);
+            try {
+              const result = await testAtlassianConnection();
+              if (result.connected) {
+                setAtlassianTestResult({
+                  success: true,
+                  message: `Kết nối thành công! User: ${result.user?.displayName}`
+                });
+              } else {
+                setAtlassianTestResult({
+                  success: false,
+                  message: `Kết nối thất bại: ${result.error || 'Unknown error'}`
+                });
+              }
+            } catch (err) {
+              setAtlassianTestResult({
+                success: false,
+                message: `Lỗi: ${err.message}`
+              });
+            } finally {
+              setAtlassianTesting(false);
+            }
+          }}
+          disabled={atlassianTesting || !localAtlassianBaseUrl || !localAtlassianEmail || !localAtlassianApiToken}
+        >
+          {atlassianTesting ? (
+            <><i class="fas fa-spinner fa-spin"></i> Đang kiểm tra...</>
+          ) : (
+            <><i class="fas fa-plug"></i> Test Connection</>
+          )}
+        </button>
+
+        {atlassianTestResult && (
+          <div class={`status-message ${atlassianTestResult.success ? 'success' : 'error'}`}>
+            <i class={atlassianTestResult.success ? 'fas fa-check-circle' : 'fas fa-times-circle'}></i>
+            {atlassianTestResult.message}
+          </div>
+        )}
       </section>
 
       {/* Action Buttons */}

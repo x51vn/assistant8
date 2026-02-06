@@ -35,6 +35,7 @@ import './english.js'; // ✅ English learning handlers (Supabase table: english
 import './prompts.js'; // ✅ Unified Prompts handler (ALL prompts: system + writing)
 import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
 import './chatHistoryAutoSave.js'; // Option A: Auto-save ChatGPT prompt/response to chat_history
+import './atlassian.js'; // Atlassian (Jira + Confluence) integration handlers
 
 logger.info('All message handlers registered');
 

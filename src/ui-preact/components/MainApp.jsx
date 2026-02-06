@@ -11,6 +11,7 @@ import { PortfolioPage } from '../pages/PortfolioPage.jsx';
 import AssetsPage from '../pages/AssetsPage.jsx';
 import { HistoryPage } from '../pages/HistoryPage.jsx';
 import { ErrorsPage } from '../pages/ErrorsPage.jsx';
+import { JiraPage } from '../pages/JiraPage.jsx';
 import { WritingPage } from '../pages/WritingPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { currentPage, setCurrentPage } from '../state/navigationState.js';
@@ -29,6 +30,8 @@ export function MainApp() {
         return <HistoryPage />;
       case 'errors':
         return <ErrorsPage />;
+      case 'jira':
+        return <JiraPage />;
       case 'writing':
         return <WritingPage />;
       case 'settings':

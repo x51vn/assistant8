@@ -24,7 +24,8 @@
     "https://giavang.doji.vn/*",
     "https://sjc.com.vn/*",
     "https://api.coingecko.com/*",
-    "https://api.binance.com/*"
+    "https://api.binance.com/*",
+    "https://*.atlassian.net/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"

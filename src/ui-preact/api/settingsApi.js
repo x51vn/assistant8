@@ -14,7 +14,10 @@ import {
   evaluatePrevious,
   reviewPrompt,
   realtimeEnabled,
-  interval
+  interval,
+  atlassianBaseUrl,
+  atlassianEmail,
+  atlassianApiToken
 } from '../state/settingsState.js';
 
 /**
@@ -56,6 +59,12 @@ export async function loadSettings() {
   
   // Populate number signal (1 field)
   interval.value = config.interval ?? 5;
+
+  // Populate Atlassian credentials
+  const atlassian = config.atlassian || {};
+  atlassianBaseUrl.value = atlassian.baseUrl || '';
+  atlassianEmail.value = atlassian.email || '';
+  atlassianApiToken.value = atlassian.apiToken || '';
   
   console.log('[SettingsAPI] All signals populated successfully');
 }
@@ -78,7 +87,14 @@ export async function saveSettings() {
     realtimeEnabled: realtimeEnabled.value,
 
     // Number settings
-    interval: interval.value
+    interval: interval.value,
+
+    // Atlassian credentials
+    atlassian: {
+      baseUrl: atlassianBaseUrl.value,
+      email: atlassianEmail.value,
+      apiToken: atlassianApiToken.value
+    }
   };
 
   console.log('[SettingsAPI] Sending SETTINGS_UPDATE with config:', config);

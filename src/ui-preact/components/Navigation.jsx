@@ -20,6 +20,7 @@ export function Navigation({ currentPage, onPageChange }) {
     { id: 'history', label: 'History', icon: 'fas fa-history' },
     { id: 'writing', label: 'Writing', icon: 'fas fa-pen-fancy' },
     { id: 'errors', label: 'Errors', icon: 'fas fa-exclamation-triangle' },
+    { id: 'jira', label: 'Jira', icon: 'fab fa-jira' },
     { id: 'settings', label: 'Settings', icon: 'fas fa-cog' }
   ];
 

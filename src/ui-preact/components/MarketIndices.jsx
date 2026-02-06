@@ -65,33 +65,44 @@ export default function MarketIndices() {
     await updateIndicesNow();
   };
 
+  // Get primary index (VNI) for display in button
+  const primaryIndex = marketIndices.value.length > 0 ? marketIndices.value[0] : null;
+  const primaryChangeColor = primaryIndex
+    ? getChangeColor(primaryIndex.changePercent)
+    : 'stat-neutral';
+
   return (
-    <div class="market-indices-container">
+    <div class="portfolio-summary-container">
       {/* Collapse Toggle Button */}
       <button
-        class="indices-collapse-toggle"
+        class="summary-collapse-toggle"
         onClick={() => setIsCollapsed(!isCollapsed)}
         aria-expanded={!isCollapsed}
-        aria-controls="indices-content"
+        aria-controls="summary-content"
       >
         <span class="collapse-title">
           <i class="fas fa-chart-line"></i> Chỉ Số Thị Trường
         </span>
+        {primaryIndex && (
+          <span class={`collapse-value ${primaryChangeColor}`}>
+            {formatNumber(primaryIndex.value)} ({formatPercent(primaryIndex.changePercent)})
+          </span>
+        )}
         <i class={`fas fa-chevron-${isCollapsed ? 'down' : 'up'} collapse-icon`}></i>
       </button>
 
       {/* Collapsible Content */}
       {!isCollapsed && (
-        <div id="indices-content">
+        <div id="summary-content" class="summary-content">
           {/* Error State */}
           {indicesError.value && (
-            <div class="indices-error" role="alert">
-              <div class="indices-error-content">
+            <div class="summary-error" role="alert">
+              <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>{indicesError.value}</span>
               </div>
               <button
-                class="btn-retry-small"
+                class="btn-text-small"
                 onClick={handleRetry}
                 disabled={indicesLoading.value}
                 title="Thử lại"
