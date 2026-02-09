@@ -13,7 +13,8 @@ export const SYSTEM_PROMPT_KEYS = {
   STOCK_EVAL: 'prompt.stockEval',
   TEA_STOCK: 'prompt.teaStock',
   CONTEXT_MENU: 'prompt.contextMenu',
-  ENGLISH: 'prompt.english'
+  ENGLISH: 'prompt.english',
+  WATCHLIST_ENRICH: 'prompt.watchlistEnrich'
 };
 
 /**
@@ -236,7 +237,35 @@ Brief note about how native speakers use these terms:
 **7. NEXT STEPS**
 Suggest 2-3 related topics to learn next
 
-Format: Use clear sections, bullet points, and bold for emphasis. Keep explanations simple and practical for Vietnamese learners.`
+Format: Use clear sections, bullet points, and bold for emphasis. Keep explanations simple and practical for Vietnamese learners.`,
+
+  [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam.
+
+Nhiệm vụ:
+- Với từng mã trong danh sách watchlist bên dưới, hãy xác định:
+  - entry (giá vào)
+  - target (giá mục tiêu)
+  - stoploss (giá cắt lỗ)
+  - investment_thesis (luận điểm đầu tư ngắn gọn nhưng có căn cứ)
+
+Ràng buộc output:
+- CHỈ trả về JSON hợp lệ (application/json), KHÔNG markdown, KHÔNG text ngoài JSON.
+- Output là một object có shape:
+  {
+    "as_of": "YYYY-MM-DD",
+    "items": [ ... ]
+  }
+
+Quy tắc:
+- symbol phải khớp chính xác.
+- Các giá trị entry/target/stoploss là số (VND), không kèm dấu phẩy, không chuỗi.
+- Nếu bạn không chắc chắn một trường, hãy để null.
+- investment_thesis tối đa 600 ký tự.
+
+Dữ liệu watchlist:
+{WATCHLIST_ITEMS_JSON}
+
+Ngày chạy: {AS_OF_DATE}`
 };
 
 /**
@@ -295,6 +324,15 @@ export function getDefaultSystemPromptMetadata() {
       category: 'System Prompts',
       icon: 'fa-graduation-cap',
       description: 'Interactive English lessons (sử dụng {TOPIC})',
+      isSystem: true,
+      required: false
+    },
+    {
+      key: SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH,
+      title: 'Watchlist AI Enrichment',
+      category: 'System Prompts',
+      icon: 'fa-magic',
+      description: 'Tạo entry/target/stoploss/thesis cho từng mã trong watchlist. JSON-only.',
       isSystem: true,
       required: false
     }

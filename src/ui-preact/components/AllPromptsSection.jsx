@@ -60,6 +60,12 @@ const PROMPT_META = {
     color: '#f39c12',
     description: 'English teaching with {TOPIC}'
   },
+  'prompt.watchlistEnrich': {
+    name: 'Watchlist AI Enrichment',
+    icon: '🤖',
+    color: '#8e44ad',
+    description: 'Tạo entry/target/stoploss/thesis cho watchlist (JSON-only)'
+  },
 
   // Writing templates
   'writing.email': {

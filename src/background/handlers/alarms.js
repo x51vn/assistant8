@@ -6,8 +6,9 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, MARKET_OPEN_HOUR, MARKET_CLOSE_HOUR } from '../../shared/appConstants.js';
+import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, MARKET_OPEN_HOUR, MARKET_CLOSE_HOUR, ALARM_WATCHLIST_AI_ENRICH } from '../../shared/appConstants.js';
 import { generateCorrelationId } from '../../logger.js';
+import { route } from '../messageRouter.js';
 
 const logger = createLogger('Alarms');
 
@@ -108,6 +109,45 @@ export async function handleAlarm(alarm) {
       return;
     }
 
+    // WATCHLIST_PRICE_UPDATE alarm - Update X-Neews watchlist prices (market hours only)
+    // XST-744: Real-time price updates from X-Neews API
+    if (alarm.name === 'watchlistPriceUpdate') {
+      logger.info('WATCHLIST_PRICE_UPDATE alarm triggered', { correlationId });
+      
+      // Market hours check is done in the handler (for logging consistency)
+      // Alarm fires every 5 minutes regardless, handler decides to skip
+      
+      try {
+        // Send message to X-Neews price update handler
+        const response = await chrome.runtime.sendMessage({
+          v: 1,
+          type: MESSAGE_TYPES.XNEEWS_PRICE_UPDATE,
+          correlationId,
+          timestamp: Date.now()
+        });
+        
+        if (response.errorCode) {
+          logger.error('Watchlist price update failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else if (response.skipped) {
+          logger.debug('Watchlist price update skipped', {
+            correlationId,
+            reason: response.reason
+          });
+        } else {
+          logger.info('Watchlist price update completed', {
+            correlationId,
+            itemsCount: response.itemsCount
+          });
+        }
+      } catch (error) {
+        logger.error('WATCHLIST_PRICE_UPDATE alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
     // ✅ NEW: SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
     if (alarm.name === 'SESSION_CHECK') {
       logger.debug('SESSION_CHECK alarm triggered', { correlationId });
@@ -137,6 +177,40 @@ export async function handleAlarm(alarm) {
         // Expected when UI is not open - session manager will broadcast if needed
         if (!error?.message?.includes('Receiving end does not exist')) {
           logger.warn('SESSION_CHECK alarm failed', { correlationId, error: error.message });
+        }
+      }
+      return;
+    }
+
+    // WATCHLIST_AI_ENRICH alarm - Daily at 16:00 local time
+    // Triggers AI enrichment of watchlist items (entry/target/stoploss/thesis)
+    if (alarm.name === ALARM_WATCHLIST_AI_ENRICH) {
+      logger.info('WATCHLIST_AI_ENRICH alarm triggered', { correlationId });
+      
+      try {
+        // Call handler directly via route() - chrome.runtime.sendMessage()
+        // does NOT reliably deliver to the sender's own onMessage listener in MV3 SW
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN,
+          correlationId,
+          timestamp: Date.now(),
+          data: { dryRun: false }
+        }, { id: chrome.runtime.id });
+        
+        if (response?.error) {
+          logger.error('Watchlist AI enrichment failed', {
+            correlationId,
+            error: response.error?.message || response.errorMessage
+          });
+        } else if (response?.stage === 'already_running') {
+          logger.info('Watchlist AI enrichment skipped - already running', { correlationId });
+        } else {
+          logger.info('Watchlist AI enrichment started', { correlationId });
+        }
+      } catch (error) {
+        if (!error?.message?.includes('Receiving end does not exist')) {
+          logger.error('WATCHLIST_AI_ENRICH alarm failed', { correlationId, error: error.message });
         }
       }
       return;

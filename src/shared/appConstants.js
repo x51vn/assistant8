@@ -134,3 +134,29 @@ export const ALARM_UPDATE_PRICES = 'updateStockPrices';
  * @type {string}
  */
 export const ALARM_DAILY_CLEANUP = 'dailyCleanup';
+
+/**
+ * Chrome alarm name for daily Watchlist AI Enrichment (16:00 local time)
+ * @type {string}
+ */
+export const ALARM_WATCHLIST_AI_ENRICH = 'watchlistAiEnrichDaily';
+
+/**
+ * Batch size for Watchlist AI Enrichment (symbols per prompt)
+ * @type {number}
+ */
+export const WATCHLIST_AI_ENRICH_BATCH_SIZE = 10;
+
+/**
+ * Chrome storage key for Watchlist AI Enrichment run state (MV3-safe)
+ * Operational state only - NOT business data
+ * @type {string}
+ */
+export const WATCHLIST_AI_ENRICH_STATE_KEY = 'x51labs_watchlist_ai_enrich_state_v1';
+
+/**
+ * Lock expiry duration for Watchlist AI Enrichment (2 hours in ms)
+ * Prevents permanent lock if SW dies mid-run
+ * @type {number}
+ */
+export const WATCHLIST_AI_ENRICH_LOCK_EXPIRY_MS = 2 * 60 * 60 * 1000;

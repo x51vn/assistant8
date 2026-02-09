@@ -25,7 +25,8 @@
     "https://sjc.com.vn/*",
     "https://api.coingecko.com/*",
     "https://api.binance.com/*",
-    "https://*.atlassian.net/*"
+    "https://*.atlassian.net/*",
+    "https://api.x51.vn/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"

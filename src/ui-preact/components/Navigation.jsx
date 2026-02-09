@@ -16,6 +16,7 @@ export function Navigation({ currentPage, onPageChange }) {
 
   const pages = [
     { id: 'portfolio', label: 'Portfolio', icon: 'fas fa-chart-pie' },
+    { id: 'watchlist', label: 'Watchlist', icon: 'fas fa-list-check' },
     { id: 'assets', label: 'Tài sản', icon: 'fas fa-wallet' },
     { id: 'history', label: 'History', icon: 'fas fa-history' },
     { id: 'writing', label: 'Writing', icon: 'fas fa-pen-fancy' },

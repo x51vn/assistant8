@@ -36,6 +36,10 @@ import './prompts.js'; // ✅ Unified Prompts handler (ALL prompts: system + wri
 import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness registry
 import './chatHistoryAutoSave.js'; // Option A: Auto-save ChatGPT prompt/response to chat_history
 import './atlassian.js'; // Atlassian (Jira + Confluence) integration handlers
+import './xneewsAuth.js'; // XST-739: X-Neews authentication handlers (register, login, refresh)
+import './xneewsWatchlist.js'; // XST-741: X-Neews watchlist CRUD handlers (GET, CREATE, UPDATE, DELETE, TOGGLE)
+import './xneewsPriceUpdate.js'; // XST-744: X-Neews price update handler (periodic fetch + broadcast)
+import './watchlistAiEnrich.js'; // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
 
 logger.info('All message handlers registered');
 

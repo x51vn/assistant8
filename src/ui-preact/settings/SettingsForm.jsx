@@ -4,10 +4,11 @@
  */
 
 import { h } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, useCallback } from 'preact/hooks';
 import { CheckboxField } from '../components/CheckboxField.jsx';
 import { NumberField } from '../components/NumberField.jsx';
 import AllPromptsSection from '../components/AllPromptsSection.jsx';
+import { XneewsAuthForm } from '../components/xneewsAuth/XneewsAuthForm.jsx';
 import {
   allPrompts,
   autoRun,
@@ -26,6 +27,7 @@ import {
   initializeAllPrompts
 } from '../api/settingsApi.js';
 import { testAtlassianConnection } from '../api/atlassianApi.js';
+import { WatchlistAiEnrichSection } from '../components/WatchlistAiEnrichSection.jsx';
 
 /**
  * @param {Object} props
@@ -183,6 +185,21 @@ export function SettingsForm({ onSave }) {
           step={1}
         />
       </section>
+
+      {/* X-Neews Integration - Stock Watchlist */}
+      <section class="form-section">
+        <h3 class="section-title">
+          <i class="fas fa-chart-line"></i>
+          X-Neews Stock Watchlist
+        </h3>
+        <p class="section-description">
+          Kết nối với tài khoản X-Neews để quản lý danh sách giám sát cổ phiếu. Đăng ký hoặc đăng nhập để bắt đầu.
+        </p>
+        <XneewsAuthForm />
+      </section>
+
+      {/* Watchlist AI Enrichment */}
+      <WatchlistAiEnrichSection />
 
       {/* Atlassian Integration */}
       <section class="form-section">

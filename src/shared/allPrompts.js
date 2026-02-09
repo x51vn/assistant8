@@ -11,13 +11,14 @@ import { DEFAULT_WRITING_TEMPLATES, getDefaultTemplateMetadata } from './writing
  * All prompt keys (12 total)
  */
 export const ALL_PROMPT_KEYS = {
-  // System prompts (6)
+  // System prompts (7)
   MASTER: 'prompt.master',
   PORTFOLIO: 'prompt.portfolio',
   STOCK_EVAL: 'prompt.stockEval',
   TEA_STOCK: 'prompt.teaStock',
   CONTEXT_MENU: 'prompt.contextMenu',
   ENGLISH: 'prompt.english',
+  WATCHLIST_ENRICH: 'prompt.watchlistEnrich',
 
   // Writing templates (6)
   EMAIL: 'writing.email',
@@ -96,7 +97,8 @@ export function getSystemPromptKeys() {
     ALL_PROMPT_KEYS.STOCK_EVAL,
     ALL_PROMPT_KEYS.TEA_STOCK,
     ALL_PROMPT_KEYS.CONTEXT_MENU,
-    ALL_PROMPT_KEYS.ENGLISH
+    ALL_PROMPT_KEYS.ENGLISH,
+    ALL_PROMPT_KEYS.WATCHLIST_ENRICH
   ];
 }
 
