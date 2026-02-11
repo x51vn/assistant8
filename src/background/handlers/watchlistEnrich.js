@@ -2,14 +2,15 @@
  * @fileoverview Manual Watchlist Enrichment Handler
  * Handles per-symbol enrichment requested by user
  *
- * Architecture:
- * - User clicks "Đánh giá" button on watchlist item
- * - Handler prepares enrichment prompt for ChatGPT
- * - Waits for content script to capture ChatGPT response
- * - Parses response and updates Supabase
- * - Stateless handler (Service Worker can terminate anytime)
+ * Architecture (follows same pattern as prompt.js / PortfolioPage):
+ * 1. User clicks "Đánh giá" button on watchlist item
+ * 2. Handler prepares enrichment prompt
+ * 3. Opens ChatGPT tab and sends prompt (via ChatGPTSession)
+ * 4. Waits for ChatGPT response (via ChatGPTSession.getOutput)
+ * 5. Content script auto-captures response → saved to chat_history
+ * 6. Parses response JSON → extracts entry/target/stoploss/thesis
+ * 7. Updates watchlist item in Supabase
  *
- * Migration: From periodic automated enrichment to manual per-symbol enrichment
  * Ticket: XST-742
  */
 
@@ -21,29 +22,111 @@ import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { SYSTEM_PROMPT_KEYS } from '../../shared/systemPrompts.js';
 import { DEFAULT_SYSTEM_PROMPTS } from '../../shared/systemPrompts.js';
+import * as ChatGPTSession from '../../chatgptSession.js';
+import { persistPromptSafe } from './_persistPromptHelper.js';
 
 const logger = createLogger('Handlers/WatchlistEnrich');
 
 /**
- * Parse JSON from ChatGPT response
- * Extracts JSON object from response text
+ * Sanitize JSON string from ChatGPT response
+ * ChatGPT responses captured from DOM often contain literal control characters
+ * (newlines, tabs) inside JSON string values, which is invalid JSON.
+ *
+ * Strategy: Replace control characters inside JSON string literals with spaces,
+ * while preserving structural newlines between JSON tokens.
  */
-function parseJsonFromResponse(responseText) {
-  try {
-    // Try direct JSON parse first
-    return JSON.parse(responseText);
-  } catch (e) {
-    // Try extracting JSON from text
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+function sanitizeJsonString(raw) {
+  // Replace control characters (0x00-0x1F) inside JSON string values
+  // Walk through the string tracking whether we're inside a quoted string
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    const code = raw.charCodeAt(i);
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
     }
-    throw new Error('No valid JSON found in response');
+
+    if (ch === '\\' && inString) {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    // If inside a string value, replace control chars with space
+    if (inString && code < 0x20) {
+      result += ' ';
+      continue;
+    }
+
+    result += ch;
   }
+
+  return result;
 }
 
 /**
- * Validate enrichment response has required fields
+ * Parse JSON from ChatGPT response
+ * Handles: markdown code blocks, control characters, nested items array
+ */
+function parseJsonFromResponse(responseText) {
+  // Extract JSON candidate text
+  let jsonText = responseText;
+
+  // Try extracting from markdown code block first
+  const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonText = codeBlockMatch[1].trim();
+  } else {
+    // Try extracting JSON object from surrounding text
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+    }
+  }
+
+  // Sanitize control characters inside JSON string values
+  const sanitized = sanitizeJsonString(jsonText);
+
+  const parsed = JSON.parse(sanitized);
+  return parsed;
+}
+
+/**
+ * Extract enrichment item from parsed response
+ * Handles both flat format and nested { items: [...] } format
+ */
+function extractEnrichmentItem(parsed, symbol) {
+  // Format 1: Flat object with entry/target/stoploss directly
+  if ('entry' in parsed || 'target' in parsed || 'stoploss' in parsed || 'investment_thesis' in parsed) {
+    return parsed;
+  }
+
+  // Format 2: { items: [{ symbol, entry, target, ... }] }
+  if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+    // Find matching symbol or take first item
+    const match = parsed.items.find(
+      item => item.symbol?.toUpperCase() === symbol.toUpperCase()
+    );
+    return match || parsed.items[0];
+  }
+
+  return null;
+}
+
+/**
+ * Validate enrichment data has at least one field to update
  */
 function validateEnrichmentData(data) {
   return (
@@ -56,6 +139,8 @@ function validateEnrichmentData(data) {
 /**
  * Handle WATCHLIST_ENRICH_SYMBOL
  * Manually enrich a single watchlist item
+ *
+ * Flow: Prepare prompt → Open ChatGPT → Send prompt → Wait response → Parse → Update Supabase
  *
  * @param {Object} message - { symbol }
  * @returns {Object} Response with enrichment status
@@ -81,13 +166,13 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
 
     // 2. Fetch watchlist item from Supabase
     logger.info('Fetching watchlist item', { symbol: sanitizedSymbol, correlationId });
-    const { data: watchlistItems, error: fetchError } = await supabase
+    const { data: watchlistItem, error: fetchError } = await supabase
       .from('watchlist')
       .select('*')
       .eq('symbol', sanitizedSymbol)
       .single();
 
-    if (fetchError || !watchlistItems) {
+    if (fetchError || !watchlistItem) {
       logger.error('Failed to fetch watchlist item', {
         symbol: sanitizedSymbol,
         error: fetchError?.message,
@@ -117,18 +202,17 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
         }
       }
     } catch (e) {
-      // Fall back to default prompt
       logger.debug('Using default enrichment prompt', { correlationId });
     }
 
     // 4. Prepare enrichment data for ChatGPT
     const enrichmentData = [
       {
-        symbol: watchlistItems.symbol,
-        price: watchlistItems.price ?? null,
-        ediff: watchlistItems.ediff ?? null,
-        investment_thesis: watchlistItems.investment_thesis || null,
-        notes: watchlistItems.notes || null
+        symbol: watchlistItem.symbol,
+        price: watchlistItem.price ?? null,
+        ediff: watchlistItem.ediff ?? null,
+        investment_thesis: watchlistItem.investment_thesis || null,
+        notes: watchlistItem.notes || null
       }
     ];
 
@@ -138,59 +222,104 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       .replace('{WATCHLIST_ITEMS_JSON}', JSON.stringify(enrichmentData, null, 2))
       .replace('{AS_OF_DATE}', asOfDate);
 
-    // 6. Broadcast enrichment request to UI (content script will handle ChatGPT)
-    const enrichmentRunId = generateCorrelationId();
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: 'SEND_PROMPT',
-      correlationId: enrichmentRunId,
-      timestamp: Date.now(),
-      data: {
-        prompt: renderedPrompt,
-        context: {
-          type: 'enrichment',
-          symbol: sanitizedSymbol
-        }
-      }
-    }).catch(err => {
-      logger.warn('Failed to broadcast enrichment request', { error: err.message, correlationId });
+    // 6. Open ChatGPT tab (same as prompt.js handler)
+    logger.info('Opening ChatGPT tab for enrichment', { symbol: sanitizedSymbol, correlationId });
+    const tabResult = await ChatGPTSession.ensureChatGPTTab({
+      createIfNeeded: true,
+      focusTab: true
     });
 
-    logger.info('Enrichment prompt sent to ChatGPT', {
+    if (tabResult.error) {
+      logger.error('Failed to open ChatGPT tab', { error: tabResult.error, correlationId });
+      return createErrorResponse(
+        message,
+        'CHATGPT_ERROR',
+        'Không thể mở ChatGPT. Vui lòng thử lại.'
+      );
+    }
+
+    // 7. Send prompt to ChatGPT (same as prompt.js handler)
+    const enrichmentRunId = generateCorrelationId();
+    logger.info('Sending enrichment prompt to ChatGPT', {
       symbol: sanitizedSymbol,
       runId: enrichmentRunId,
+      tabId: tabResult.tabId,
+      promptLength: renderedPrompt.length,
       correlationId
     });
 
-    // 7. Wait for content script to capture ChatGPT response (15 min timeout)
-    const response = await waitForEnrichmentResponse(enrichmentRunId, 15 * 60 * 1000);
+    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, renderedPrompt.trim(), {
+      createNewChat: true,
+      runId: enrichmentRunId, // Enables content script auto-capture → chat_history
+    });
 
-    if (!response) {
-      logger.warn('Enrichment timeout - no response from ChatGPT', {
+    if (!sendResult.success) {
+      const errorMsg = sendResult.error || 'Failed to send prompt';
+      logger.error('Failed to send enrichment prompt', { error: errorMsg, correlationId });
+      return createErrorResponse(
+        message,
+        'SEND_ERROR',
+        'Không thể gửi prompt đánh giá lên ChatGPT.'
+      );
+    }
+
+    // 8. Persist prompt to chat_history (response auto-saved by content script via CONTENT_RESPONSE_CAPTURED)
+    const chatId = sendResult.data?.chatId || null;
+    const chatUrl = sendResult.data?.chatUrl || null;
+    await persistPromptSafe(enrichmentRunId, renderedPrompt, chatId, chatUrl, {
+      source: 'WATCHLIST_ENRICH',
+      symbol: sanitizedSymbol
+    });
+
+    logger.info('Enrichment prompt sent, waiting for ChatGPT response', {
+      symbol: sanitizedSymbol,
+      runId: enrichmentRunId,
+      chatId,
+      correlationId
+    });
+
+    // 9. Wait for ChatGPT response (same as ChatGPTSession.getOutput)
+    const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
+      wait: true,
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+      stableMs: 1500
+    });
+
+    if (!outputResult.success || !outputResult.data?.result) {
+      logger.warn('Enrichment: no response from ChatGPT', {
         symbol: sanitizedSymbol,
+        outputStatus: outputResult.data?.status,
         correlationId
       });
       return createErrorResponse(
         message,
         'TIMEOUT_ERROR',
-        'Hết thời gian chờ. ChatGPT chưa trả lời trong 15 phút.'
+        'Hết thời gian chờ. ChatGPT chưa trả lời.'
       );
     }
 
-    // 8. Parse enrichment response
+    const responseText = outputResult.data.result;
+
+    // 10. Parse enrichment response
     logger.info('Parsing enrichment response', {
       symbol: sanitizedSymbol,
-      responseLength: response.length,
+      responseLength: responseText.length,
       correlationId
     });
 
     let enrichmentResponse;
     try {
-      enrichmentResponse = parseJsonFromResponse(response);
+      const parsed = parseJsonFromResponse(responseText);
+      // Extract item from response (handles both flat and { items: [...] } formats)
+      enrichmentResponse = extractEnrichmentItem(parsed, sanitizedSymbol);
+      if (!enrichmentResponse) {
+        throw new Error('Could not extract enrichment data from response');
+      }
     } catch (parseError) {
       logger.error('Failed to parse enrichment response', {
         error: parseError.message,
         symbol: sanitizedSymbol,
+        responsePreview: responseText.substring(0, 200),
         correlationId
       });
       return createErrorResponse(
@@ -213,7 +342,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       );
     }
 
-    // 9. Build update data from enrichment response
+    // 11. Build update data from enrichment response
     const updateData = {};
     if (enrichmentResponse.entry !== undefined && enrichmentResponse.entry !== null) {
       updateData.entry = Number(enrichmentResponse.entry);
@@ -240,8 +369,8 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       );
     }
 
-    // 10. Update watchlist item in Supabase
-    logger.info('Updating watchlist item', {
+    // 12. Update watchlist item in Supabase
+    logger.info('Updating watchlist item with enrichment data', {
       symbol: sanitizedSymbol,
       fields: Object.keys(updateData),
       correlationId
@@ -279,7 +408,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
 
     const updatedItem = updateResult.data[0];
 
-    logger.info('✅ Enrichment completed successfully', {
+    logger.info('Enrichment completed successfully', {
       symbol: sanitizedSymbol,
       updatedFields: Object.keys(updateData),
       correlationId
@@ -315,51 +444,5 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
     );
   }
 });
-
-/**
- * Wait for content script to capture enrichment response from ChatGPT
- * Listens for CONTENT_RESPONSE_CAPTURED message (existing ChatGPT prompt flow)
- *
- * @param {string} runId - Request correlation ID
- * @param {number} timeoutMs - Timeout in milliseconds (default 15 min)
- * @returns {Promise<string|null>} Response text or null on timeout
- */
-function waitForEnrichmentResponse(runId, timeoutMs = 900000) {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timeoutId;
-
-    const handler = (message) => {
-      if (resolved) return;
-
-      // Listen for CONTENT_RESPONSE_CAPTURED (sent by content script after capturing ChatGPT response)
-      if (
-        message?.type === MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED &&
-        message?.data?.runId === runId &&
-        typeof message?.data?.response === 'string'
-      ) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        chrome.runtime.onMessage.removeListener(handler);
-        logger.info('Enrichment response captured from content script', {
-          runId,
-          responseLength: message.data.response.length
-        });
-        resolve(message.data.response);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(handler);
-
-    timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        chrome.runtime.onMessage.removeListener(handler);
-        logger.warn('Enrichment response timeout', { runId });
-        resolve(null);
-      }
-    }, timeoutMs);
-  });
-}
 
 logger.info('Manual Watchlist Enrichment handler registered');
