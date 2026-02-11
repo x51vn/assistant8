@@ -6,26 +6,20 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, MARKET_OPEN_HOUR, MARKET_CLOSE_HOUR, ALARM_WATCHLIST_AI_ENRICH } from '../../shared/appConstants.js';
+import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, ALARM_WATCHLIST_AI_ENRICH } from '../../shared/appConstants.js';
 import { generateCorrelationId } from '../../logger.js';
 import { route } from '../messageRouter.js';
+import { isMarketHours } from '../utils/marketHours.js';
+import { _performSessionCheck } from './sessionManager.js';
+import { _performXneewsCheck } from './xneewsSessionManager.js';
 
 const logger = createLogger('Alarms');
 
 // Alarm name for commodity (gold/crypto) price updates
 export const ALARM_UPDATE_COMMODITY_PRICES = 'updateCommodityPrices';
 
-/**
- * Check if current time is during market hours
- * Vietnam stock market: 9:00 AM - 3:00 PM
- */
-function isMarketHours() {
-  const now = new Date();
-  const hour = now.getHours();
-  
-  // Market hours: 9:00 - 15:00 (3:00 PM)
-  return hour >= MARKET_OPEN_HOUR && hour < MARKET_CLOSE_HOUR;
-}
+// Alarm name for X-Neews session check
+export const ALARM_XNEEWS_CHECK = 'xneewsSessionCheck';
 
 /**
  * Handle alarm event
@@ -148,36 +142,24 @@ export async function handleAlarm(alarm) {
       return;
     }
 
-    // ✅ NEW: SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
+    // ✅ SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
+    // Calls internal function directly - NO chrome.runtime.sendMessage()
+    // Guaranteed to execute even if UI closed/SW restarted
     if (alarm.name === 'SESSION_CHECK') {
       logger.debug('SESSION_CHECK alarm triggered', { correlationId });
       
       try {
-        // Send message to session manager to check session expiration
-        const response = await chrome.runtime.sendMessage({
-          v: 1,
-          type: MESSAGE_TYPES.SESSION_CHECK,
-          correlationId,
-          timestamp: Date.now()
-        });
+        // Call directly - reliable execution regardless of UI state
+        const result = await _performSessionCheck(correlationId);
         
-        if (response.errorCode) {
-          logger.warn('Session check failed', {
-            correlationId,
-            error: response.errorMessage
-          });
-        } else {
-          logger.debug('Session check completed', {
-            correlationId,
-            status: response.status,
-            minutesUntilExpiry: response.minutesUntilExpiry
-          });
-        }
+        logger.debug('Session check completed', {
+          correlationId,
+          status: result.status,
+          authenticated: result.authenticated,
+          minutesUntilExpiry: result.minutesUntilExpiry
+        });
       } catch (error) {
-        // Expected when UI is not open - session manager will broadcast if needed
-        if (!error?.message?.includes('Receiving end does not exist')) {
-          logger.warn('SESSION_CHECK alarm failed', { correlationId, error: error.message });
-        }
+        logger.error('SESSION_CHECK alarm failed', { correlationId, error: error.message });
       }
       return;
     }
@@ -212,6 +194,28 @@ export async function handleAlarm(alarm) {
         if (!error?.message?.includes('Receiving end does not exist')) {
           logger.error('WATCHLIST_AI_ENRICH alarm failed', { correlationId, error: error.message });
         }
+      }
+      return;
+    }
+
+    // ✅ XNEEWS_CHECK alarm - Check X-Neews token expiry (every 5 minutes)
+    // Calls internal function directly - NO chrome.runtime.sendMessage()  
+    // Proactive token refresh BEFORE expiry
+    if (alarm.name === ALARM_XNEEWS_CHECK) {
+      logger.debug('XNEEWS_CHECK alarm triggered', { correlationId });
+      
+      try {
+        // Call directly - reliable execution regardless of UI state
+        const result = await _performXneewsCheck(correlationId);
+        
+        logger.debug('X-Neews token check completed', {
+          correlationId,
+          status: result.status,
+          authenticated: result.authenticated,
+          minutesUntilExpiry: result.minutesUntilExpiry
+        });
+      } catch (error) {
+        logger.error('XNEEWS_CHECK alarm failed', { correlationId, error: error.message });
       }
       return;
     }

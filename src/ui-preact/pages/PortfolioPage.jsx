@@ -1,6 +1,7 @@
 import { signal, computed, effect } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { fetchPortfolio, addPortfolio, updatePortfolio, deletePortfolio } from '../api/portfolioApi.js';
+import { formatCurrency } from '../utils/formatters.js';
 import { startPricePolling, stopPricePolling, updatePricesNow, isUpdatingPrices } from '../api/portfolioPriceUpdater.js';
 import { startIndicesPolling, stopIndicesPolling } from '../api/marketIndicesUpdater.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
@@ -85,19 +86,6 @@ function calculatePortfolioTotalPL(portfolio) {
     totalPL,
     totalPLPercent
   };
-}
-
-/**
- * Helper: Format currency
- */
-function formatCurrency(value) {
-  if (typeof value !== 'number') return '-';
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(value);
 }
 
 /**

@@ -30,150 +30,116 @@ let lastSessionCheckTime = 0;
 const SESSION_CHECK_INTERVAL_MS = 60000; // Check every 1 minute
 
 // ============================================================================
-// SESSION CHECK HANDLER
+// INTERNAL SESSION CHECK (Direct alarm invocation)
 // ============================================================================
 
 /**
- * Handle SESSION_CHECK message
- * Proactively checks if session is about to expire
- * Broadcasts warnings to UI if needed
+ * INTERNAL: Perform session check without needing message response
+ * Called directly by alarms, guaranteed to execute regardless of UI state
+ * Does NOT rely on chrome.runtime.sendMessage() delivery
  * 
- * Call this from alarms or periodically to ensure session stays valid
+ * @param {string} correlationId - For logging
+ * @returns {Promise<Object>} Status result
  */
-registerHandler(MESSAGE_TYPES.SESSION_CHECK, async (message) => {
-  const correlationId = message.correlationId;
-  logger.debug('Handling SESSION_CHECK', { correlationId });
-
+export async function _performSessionCheck(correlationId) {
+  const now = Date.now();
+  
+  // Skip if checked very recently (< 30s to allow more frequent checks)
+  if (now - lastSessionCheckTime < 30000) {
+    logger.debug('Session check skipped (throttled)', { correlationId });
+    return { status: 'throttled' };
+  }
+  
+  lastSessionCheckTime = now;
+  
   try {
-    // Throttle checks to avoid excessive Supabase calls
-    const now = Date.now();
-    if (now - lastSessionCheckTime < SESSION_CHECK_INTERVAL_MS) {
-      logger.debug('Session check throttled', { 
-        correlationId,
-        timeSinceLastCheck: now - lastSessionCheckTime 
-      });
-      return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-        status: 'throttled',
-        nextCheckIn: SESSION_CHECK_INTERVAL_MS - (now - lastSessionCheckTime)
-      });
-    }
-
-    lastSessionCheckTime = now;
-
     // Get current session
     const { data: { session }, error } = await supabase.auth.getSession();
 
-    if (error) {
-      logger.warn('Failed to check session', { correlationId, error: error.message });
-      return createErrorResponse(
-        message,
-        'SESSION_CHECK_ERROR',
-        'Không thể kiểm tra phiên đăng nhập',
-        { technicalError: error.message }
-      );
+    if (error || !session) {
+      logger.warn('No session found during check', { correlationId, error: error?.message });
+      return { status: 'no_session', authenticated: false };
     }
 
-    // Case 1: No session - user needs to login
-    if (!session) {
-      logger.info('Session check: no session found', { correlationId });
-      return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-        status: 'no_session',
-        authenticated: false,
-        action: 'LOGIN_REQUIRED'
-      });
-    }
-
-    // Case 2: Session exists - check expiration
-    const expiresAt = session.expires_at * 1000; // Convert to ms
-    const now_ms = Date.now();
-    const timeUntilExpiry = expiresAt - now_ms;
+    // Session exists - check expiration
+    const expiresAt = session.expires_at * 1000;
+    const timeUntilExpiry = expiresAt - now;
     const minutesUntilExpiry = Math.floor(timeUntilExpiry / 60000);
-
-    logger.debug('Session check: session valid', {
-      correlationId,
-      userId: session.user.id,
-      minutesUntilExpiry
+    
+    logger.debug('Session health check', { 
+      correlationId, 
+      minutesUntilExpiry,
+      userId: session.user?.id 
     });
-
-    // Case 2a: Token already expired
+    
+    // Case 1: Token already expired
     if (timeUntilExpiry < 0) {
-      logger.warn('Session expired', {
-        correlationId,
-        userId: session.user.id,
-        expiredMins: Math.floor(-timeUntilExpiry / 60000)
-      });
-
-      // Attempt one final refresh
+      logger.warn('Token expired, attempting emergency refresh', { correlationId });
       const refreshResult = await attemptTokenRefresh(correlationId);
+      
       if (refreshResult.success) {
-        logger.info('Token refreshed in time', { correlationId });
-        return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-          status: 'valid_refreshed',
-          authenticated: true
-        });
+        logger.info('Emergency refresh succeeded', { correlationId });
+        return { status: 'emergency_refreshed', authenticated: true };
       }
-
-      // Refresh failed - session is dead, only then broadcast logout
+      
+      // Refresh failed - session is dead
+      logger.error('Emergency refresh failed - session expired', { correlationId });
       broadcastSessionExpired(session.user);
-      return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-        status: 'expired',
-        authenticated: false,
-        action: 'LOGIN_REQUIRED',
-        message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-      });
+      return { status: 'expired', authenticated: false };
     }
-
-    // Case 2b: Token expiring soon (within 2 minutes) - attempt silent refresh only
-    // ✅ FIX: Only refresh silently, don't warn user until token is truly expired
+    
+    // Case 2: Token expiring soon (< 2 minutes) - proactive refresh
     if (timeUntilExpiry < 2 * 60000) {
-      logger.debug('Token expiring soon - attempting silent refresh', {
+      logger.info('Token expiring soon, proactive refresh', { 
         correlationId,
-        minutesUntilExpiry
+        minutesUntilExpiry 
       });
-
-      // Attempt refresh
+      
       const refreshResult = await attemptTokenRefresh(correlationId);
       if (refreshResult.success) {
-        logger.info('Token refreshed silently', { correlationId });
-        return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-          status: 'valid_refreshed',
-          authenticated: true
-        });
+        logger.info('Proactive refresh succeeded', { correlationId });
+        return { status: 'proactive_refreshed', authenticated: true };
       }
-
-      // ⚠️ FIX: Don't broadcast SESSION_ABOUT_TO_EXPIRE
-      // Just keep session valid and let it expire naturally
-      // Only show error when token truly expires and cannot refresh
-      logger.warn('Silent refresh failed, waiting for natural expiry', {
+      
+      logger.warn('Proactive refresh failed, will retry next cycle', { 
         correlationId,
-        minutesUntilExpiry
+        minutesUntilExpiry 
       });
-
-      return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-        status: 'valid_but_expiring',
-        authenticated: true,
-        minutesUntilExpiry
-      });
+      return { status: 'refresh_pending', authenticated: true, minutesUntilExpiry };
     }
-
-    // Case 2c: Session valid with plenty of time
-    logger.debug('Session check: session valid and fresh', {
-      correlationId,
-      minutesUntilExpiry
-    });
-
-    return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
-      status: 'valid',
-      authenticated: true,
-      minutesUntilExpiry
-    });
+    
+    // Case 3: Token healthy
+    logger.debug('Session healthy', { correlationId, minutesUntilExpiry });
+    return { status: 'healthy', authenticated: true, minutesUntilExpiry };
 
   } catch (error) {
-    logger.error('Session check handler failed', {
-      correlationId,
-      error: error.message
-    });
+    logger.error('Session check failed', { correlationId, error: error.message });
+    return { status: 'error', error: error.message };
+  }
+}
 
+// ============================================================================
+// SESSION CHECK HANDLER (UI requests)
+// ============================================================================
+
+/**
+ * Handle SESSION_CHECK message from UI
+ * Delegates to internal _performSessionCheck and formats response
+ */
+registerHandler(MESSAGE_TYPES.SESSION_CHECK, async (message) => {
+  const correlationId = message.correlationId;
+  logger.debug('Handling SESSION_CHECK from UI', { correlationId });
+  
+  try {
+    const result = await _performSessionCheck(correlationId);
+    
+    // Map internal status to UI-friendly format
+    return createResponse(message, MESSAGE_TYPES.SESSION_STATUS, {
+      ...result,
+      action: result.authenticated ? null : 'LOGIN_REQUIRED'
+    });
+  } catch (error) {
+    logger.error('Session check handler failed', { correlationId, error: error.message });
     return createErrorResponse(
       message,
       'SESSION_CHECK_ERROR',

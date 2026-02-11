@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { formatCurrency, formatPercent } from '../utils/formatters.js';
 
 /**
  * Asset type labels and colors
@@ -22,31 +23,6 @@ const ASSET_TYPE_CONFIG = {
   debt: { label: 'Khoản vay', color: '#F44336', icon: '💳', isLiability: true },
   other: { label: 'Khác', color: '#9E9E9E', icon: '📦' }
 };
-
-/**
- * Format currency value
- */
-function formatCurrency(value, currency = 'VND') {
-  if (value === null || value === undefined) return '-';
-  
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  });
-  
-  return formatter.format(value);
-}
-
-/**
- * Format percentage
- */
-function formatPercent(value) {
-  if (value === null || value === undefined) return '0%';
-  return `${value.toFixed(1)}%`;
-}
-
 /**
  * NetWorthSummary component
  * @param {Object} props

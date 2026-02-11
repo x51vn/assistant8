@@ -28,31 +28,24 @@ import {
   WATCHLIST_AI_ENRICH_STATE_KEY,
   WATCHLIST_AI_ENRICH_LOCK_EXPIRY_MS
 } from '../../shared/appConstants.js';
+import { XNEEWS_API_BASE, XNEEWS_ERROR_MESSAGES } from '../../shared/xneewsConfig.js';
+import { xneewsFetch } from '../utils/xneewsFetch.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 
 const logger = createLogger('Services/WatchlistAiEnrich');
 
-// X-Neews API config (shared with xneewsWatchlist.js)
-const XNEEWS_API_BASE = import.meta.env.VITE_XNEEWS_API_URL || 'https://api.x51.vn/api';
+// Alias error messages
+const ERROR_MESSAGES = XNEEWS_ERROR_MESSAGES;
 
-const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'xneews_access_token'
-};
+// ============================================================================
+// RUNTIME STATE (IN-MEMORY)
+// ============================================================================
 
-/**
- * Vietnamese error messages
- */
-const ERROR_MESSAGES = {
-  INVALID_JSON_OUTPUT: 'ChatGPT không trả về JSON hợp lệ. Vui lòng thử lại.',
-  NO_ITEMS_TO_UPDATE: 'Không có mã nào hợp lệ để cập nhật.',
-  AUTH_ERROR: 'Phiên đăng nhập X-Neews hết hạn. Vui lòng đăng nhập lại.',
-  NETWORK_ERROR: 'Không có kết nối internet. Vui lòng kiểm tra mạng.',
-  API_ERROR: 'Lỗi kết nối API. Vui lòng thử lại.',
-  LOCK_ACTIVE: 'Đang có một lần chạy enrichment khác. Vui lòng chờ.',
-  NO_WATCHLIST: 'Watchlist trống. Không có mã nào để phân tích.',
-  PROMPT_SEND_FAILED: 'Không thể gửi prompt tới ChatGPT. Vui lòng thử lại.'
-};
+// Track if cancellation is requested for current run
+let _currentRunId = null;
+let _shouldCancel = false;
+let _currentRunState = null;
 
 // ============================================================================
 // STATE MANAGEMENT (MV3-safe, chrome.storage.local)
@@ -118,48 +111,13 @@ async function acquireLock(runId) {
 // X-NEEWS API HELPERS
 // ============================================================================
 
-/**
- * Get X-Neews access token
- * @returns {Promise<string|null>}
- */
-async function getAccessToken() {
-  const result = await chrome.storage.local.get([STORAGE_KEYS.ACCESS_TOKEN]);
-  return result[STORAGE_KEYS.ACCESS_TOKEN] || null;
-}
-
-/**
- * Fetch with retry + exponential backoff (reused from xneewsWatchlist pattern)
- */
-async function fetchWithRetry(url, options, maxRetries = 3) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-      if (response.status >= 400 && response.status < 500) return response;
-      if (!response.ok && attempt < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
-        continue;
-      }
-      return response;
-    } catch (error) {
-      if (attempt < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
-        continue;
-      }
-      throw error;
-    }
-  }
-}
+// getAccessToken, fetchWithRetry — using shared xneewsFetch (auto-refresh on 401)
 
 /**
  * Fetch ALL watchlist items from X-Neews (paginated)
  * @returns {Promise<Array>} Full list of watchlist items
  */
 async function fetchAllWatchlistItems() {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    throw new Error(ERROR_MESSAGES.AUTH_ERROR);
-  }
-
   const allItems = [];
   let page = 1;
   const size = 100; // Max page size
@@ -169,12 +127,8 @@ async function fetchAllWatchlistItems() {
     url.searchParams.set('page', page.toString());
     url.searchParams.set('size', size.toString());
 
-    const response = await fetchWithRetry(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+    const response = await xneewsFetch(url.toString(), {
+      method: 'GET'
     });
 
     if (response.status === 401) {
@@ -204,11 +158,6 @@ async function fetchAllWatchlistItems() {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 async function updateWatchlistItem(symbol, updates) {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    return { success: false, error: 'AUTH_ERROR' };
-  }
-
   // Build request body - only non-null fields
   const requestBody = {};
   if (updates.entry !== null && updates.entry !== undefined) {
@@ -226,34 +175,86 @@ async function updateWatchlistItem(symbol, updates) {
 
   // Skip if nothing to update
   if (Object.keys(requestBody).length === 0) {
+    logger.debug('No fields to update - skipping', { symbol });
     return { success: true, skipped: true };
   }
 
+  const startTime = Date.now();
+  const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
+  const url = `${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`;
+
+  logger.debug('Preparing API update request', {
+    symbol: symbolParam,
+    url,
+    updateFields: Object.keys(requestBody),
+    updateData: {
+      entry: requestBody.entry || null,
+      target: requestBody.target || null,
+      stoploss: requestBody.stoploss || null,
+      investment_thesis: requestBody.investment_thesis
+        ? `${requestBody.investment_thesis.substring(0, 50)}...`
+        : null
+    }
+  });
+
   try {
-    const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`, {
+    const response = await xneewsFetch(url, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
 
+    const elapsed = Date.now() - startTime;
+
+    logger.debug('API response received', {
+      symbol: symbolParam,
+      status: response.status,
+      statusText: response.statusText,
+      elapsed: `${elapsed}ms`
+    });
+
     if (response.status === 401) {
+      logger.warn('❌ Auth error - token may have expired', {
+        symbol: symbolParam,
+        status: response.status
+      });
       return { success: false, error: 'AUTH_ERROR' };
     }
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
+      logger.warn('❌ Update failed - non-OK response', {
+        symbol: symbolParam,
+        status: response.status,
+        errorMessage: data.detail || data.message || 'No detail provided',
+        responseKeys: Object.keys(data)
+      });
       return {
         success: false,
         error: data.detail || `HTTP ${response.status}`
       };
     }
 
+    // Parse response to validate update
+    const responseData = await response.json().catch(() => ({}));
+    logger.info('✅ Update successful', {
+      symbol: symbolParam,
+      status: response.status,
+      updatedFields: Object.keys(requestBody),
+      elapsed: `${elapsed}ms`,
+      responseSymbol: responseData.symbol || null
+    });
+
     return { success: true };
   } catch (error) {
+    const elapsed = Date.now() - startTime;
+    logger.error('❌ Update exception', {
+      symbol: symbolParam,
+      error: error.message,
+      errorName: error.name,
+      elapsed: `${elapsed}ms`,
+      stack: error.stack?.split('\n')[0]
+    });
     return {
       success: false,
       error: error.message || 'Network error'
@@ -364,10 +365,10 @@ function broadcastDone(doneData) {
  * Listens for CONTENT_RESPONSE_CAPTURED matching the given runId
  *
  * @param {string} runId - Correlation ID of the prompt
- * @param {number} [timeoutMs=120000] - Timeout in ms (default 2 min)
+ * @param {number} [timeoutMs=900000] - Timeout in ms (default 15 min, matches content script)
  * @returns {Promise<string|null>} Response text or null on timeout
  */
-function waitForResponseCapture(runId, timeoutMs = 120000) {
+function waitForResponseCapture(runId, timeoutMs = 900000) {
   return new Promise((resolve) => {
     let resolved = false;
     let timeoutId;
@@ -384,6 +385,11 @@ function waitForResponseCapture(runId, timeoutMs = 120000) {
         resolved = true;
         clearTimeout(timeoutId);
         chrome.runtime.onMessage.removeListener(handler);
+        logger.info('Response captured from content script', {
+          runId,
+          responseLength: message.data.response.length,
+          waitedMs: message.data.waitedMs
+        });
         resolve(message.data.response);
       }
     };
@@ -394,9 +400,15 @@ function waitForResponseCapture(runId, timeoutMs = 120000) {
       if (!resolved) {
         resolved = true;
         chrome.runtime.onMessage.removeListener(handler);
+        logger.error('Response capture timeout - ChatGPT may still be processing', {
+          runId,
+          timeoutMs
+        });
         resolve(null);
       }
     }, timeoutMs);
+
+    logger.debug('Waiting for response capture', { runId, timeoutMs });
   });
 }
 
@@ -409,27 +421,47 @@ function waitForResponseCapture(runId, timeoutMs = 120000) {
  * @returns {Promise<{ successCount: number, failureCount: number, errors: Array }>}
  */
 async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
+  const batchStartTime = Date.now();
   const batchResult = { successCount: 0, failureCount: 0, errors: [] };
   const symbols = batchItems.map(i => i.symbol);
 
+  logger.info('📦 BATCH START', {
+    runId,
+    batchIndex,
+    symbols,
+    itemCount: batchItems.length,
+    timestamp: new Date().toLocaleString()
+  });
+
   // 1. Render prompt for this batch
   const prompt = renderPrompt(promptTemplate, batchItems);
-  logger.info('Sending enrichment prompt', {
+  logger.info('Rendering prompt', {
     runId,
     batchIndex,
     symbolCount: symbols.length,
-    promptLength: prompt.length
+    promptLength: prompt.length,
+    templateLength: promptTemplate.length
   });
 
   // 2. Generate a unique sub-runId for this batch (for chat_history correlation)
   const batchRunId = `${runId}-batch${batchIndex}`;
 
   // 3. Set up response listener BEFORE sending prompt
+  logger.debug('Setting up response listener', { runId, batchRunId, timeoutMs: 900000 });
   const responsePromise = waitForResponseCapture(batchRunId);
 
   // 4. Send prompt to ChatGPT via SEND_PROMPT handler (direct call)
   // NOTE: chrome.runtime.sendMessage() does NOT deliver to the sender's own
   // onMessage listener in MV3 Service Workers, so we call route() directly.
+  const promptStartTime = Date.now();
+  logger.info('🚀 Sending prompt to ChatGPT', {
+    runId,
+    batchIndex,
+    batchRunId,
+    symbols,
+    promptLength: prompt.length
+  });
+
   const sendResponse = await route({
     v: 1,
     type: MESSAGE_TYPES.SEND_PROMPT,
@@ -452,12 +484,16 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     }
   }, { id: chrome.runtime.id });
 
+  const sendElapsed = Date.now() - promptStartTime;
+
   // Check if prompt was sent successfully
   if (!sendResponse?.success) {
-    logger.error('Failed to send enrichment prompt', {
+    logger.error('❌ Failed to send enrichment prompt', {
       runId,
       batchIndex,
-      error: sendResponse?.error?.message || 'Unknown error'
+      symbols,
+      error: sendResponse?.error?.message || 'Unknown error',
+      elapsed: `${sendElapsed}ms`
     });
     batchResult.failureCount = symbols.length;
     batchResult.errors.push({
@@ -466,6 +502,13 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     });
     return batchResult;
   }
+
+  logger.info('✅ Prompt sent successfully', {
+    runId,
+    batchIndex,
+    symbols,
+    elapsed: `${sendElapsed}ms`
+  });
 
   // 5. Wait for response capture from content script
   broadcastStatus({
@@ -476,10 +519,33 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     symbolCount: symbols.length
   });
 
+  logger.info('⏳ Waiting for ChatGPT response...', {
+    runId,
+    batchIndex,
+    batchRunId,
+    symbols
+  });
+
+  const responseStartTime = Date.now();
   const responseText = await responsePromise;
+  const responseElapsed = Date.now() - responseStartTime;
+
+  logger.info('✅ Response await completed', {
+    runId,
+    batchIndex,
+    hasResponse: !!responseText,
+    responseLength: responseText?.length || 0,
+    waitTotalTime: `${responseElapsed}ms`
+  });
 
   if (!responseText) {
-    logger.warn('Response capture timed out', { runId, batchIndex });
+    logger.warn('❌ Response capture timed out', {
+      runId,
+      batchIndex,
+      symbols,
+      timeoutMs: 900000,
+      elapsed: `${responseElapsed}ms`
+    });
     batchResult.failureCount = symbols.length;
     batchResult.errors.push({
       batch: batchIndex,
@@ -491,13 +557,24 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
   logger.info('Response captured', {
     runId,
     batchIndex,
-    responseLength: responseText.length
+    responseLength: responseText.length,
+    responsePreview: responseText.substring(0, 100).replace(/\n/g, ' ') + '...'
   });
 
   // 6. Parse JSON response
+  logger.info('📝 Parsing JSON response...', { runId, batchIndex });
+  const parseStartTime = Date.now();
   const parseResult = parseJsonOnlyResponse(responseText);
+  const parseElapsed = Date.now() - parseStartTime;
+
   if (!parseResult.success) {
-    logger.warn('Invalid JSON response', { runId, batchIndex, error: parseResult.error });
+    logger.warn('❌ Invalid JSON response', {
+      runId,
+      batchIndex,
+      symbols,
+      error: parseResult.error,
+      elapsed: `${parseElapsed}ms`
+    });
     batchResult.failureCount = symbols.length;
     batchResult.errors.push({
       batch: batchIndex,
@@ -506,11 +583,40 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     return batchResult;
   }
 
+  logger.info('✅ JSON parsed successfully', {
+    runId,
+    batchIndex,
+    itemsInResponse: parseResult.data?.items?.length || 0,
+    elapsed: `${parseElapsed}ms`
+  });
+
   // 7. Validate items
+  logger.info('✓ JSON parsed, validating items...', { runId, batchIndex });
+  const validateStartTime = Date.now();
   const validationResult = validateEnrichItems(parseResult.data, symbols);
+  const validateElapsed = Date.now() - validateStartTime;
+
+  logger.info('Validation completed', {
+    runId,
+    batchIndex,
+    validCount: validationResult.valid.length,
+    invalidCount: validationResult.invalid.length,
+    elapsed: `${validateElapsed}ms`
+  });
+
+  if (validationResult.invalid.length > 0) {
+    logger.warn('⚠️ Invalid items detected', {
+      runId,
+      batchIndex,
+      invalidItems: validationResult.invalid.map(i => ({
+        symbol: i.symbol,
+        reason: i.reason
+      }))
+    });
+  }
 
   if (validationResult.valid.length === 0) {
-    logger.warn('No valid items in response', { runId, batchIndex });
+    logger.warn('❌ No valid items in response', { runId, batchIndex });
     batchResult.failureCount = symbols.length;
     batchResult.errors.push({
       batch: batchIndex,
@@ -520,6 +626,13 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
   }
 
   // 8. Update each valid item sequentially (avoid rate-limit)
+  logger.info('💾 Starting watchlist updates...', {
+    runId,
+    batchIndex,
+    itemCount: validationResult.valid.length
+  });
+
+  const updateStartTime = Date.now();
   broadcastStatus({
     runId,
     stage: 'updating_watchlist',
@@ -527,6 +640,19 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
   });
 
   for (const item of validationResult.valid) {
+    const itemStartTime = Date.now();
+    logger.debug('📍 Updating item', {
+      runId,
+      batchIndex,
+      symbol: item.symbol,
+      data: {
+        entry: item.entry,
+        target: item.target,
+        stoploss: item.stoploss,
+        thesisLength: item.investment_thesis?.length || 0
+      }
+    });
+
     const updateResult = await updateWatchlistItem(item.symbol, {
       entry: item.entry,
       target: item.target,
@@ -534,18 +660,33 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
       investment_thesis: item.investment_thesis
     });
 
+    const itemElapsed = Date.now() - itemStartTime;
+
     if (updateResult.success) {
       batchResult.successCount++;
+      logger.debug('✓ Updated successfully', {
+        runId,
+        batchIndex,
+        symbol: item.symbol,
+        elapsed: `${itemElapsed}ms`
+      });
     } else {
       batchResult.failureCount++;
       batchResult.errors.push({
         symbol: item.symbol,
         error: updateResult.error
       });
+      logger.warn('✗ Update failed', {
+        runId,
+        batchIndex,
+        symbol: item.symbol,
+        error: updateResult.error,
+        elapsed: `${itemElapsed}ms`
+      });
 
       // Stop on auth error
       if (updateResult.error === 'AUTH_ERROR') {
-        logger.error('Auth error during update, stopping batch', { runId, batchIndex });
+        logger.error('🔐 Auth error during update, stopping batch', { runId, batchIndex });
         // Mark remaining as failed
         batchResult.failureCount += (validationResult.valid.length - batchResult.successCount - batchResult.failureCount);
         break;
@@ -556,6 +697,27 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     await new Promise(r => setTimeout(r, 200));
   }
 
+  const updateElapsed = Date.now() - updateStartTime;
+
+  logger.info('✅ Batch completed', {
+    runId,
+    batchIndex,
+    symbols,
+    results: {
+      successCount: batchResult.successCount,
+      failureCount: batchResult.failureCount,
+      totalProcessed: batchResult.successCount + batchResult.failureCount
+    },
+    timing: {
+      prompt: `${sendElapsed}ms`,
+      response: `${responseElapsed}ms`,
+      parse: `${parseElapsed}ms`,
+      validate: `${validateElapsed}ms`,
+      update: `${updateElapsed}ms`,
+      total: `${Date.now() - batchStartTime}ms`
+    }
+  });
+
   // Count invalid items as failures
   batchResult.failureCount += validationResult.invalid.length;
   for (const inv of validationResult.invalid) {
@@ -565,7 +727,53 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
     });
   }
 
+  logger.info('🏁 Batch processing completed', {
+    runId,
+    batchIndex,
+    successCount: batchResult.successCount,
+    failureCount: batchResult.failureCount,
+    errorCount: batchResult.errors.length,
+    totalBatchTime: `${Date.now() - batchStartTime}ms`
+  });
+
   return batchResult;
+}
+
+/**
+ * Run the full enrichment process
+ * Fetches watchlist, splits into batches, processes each batch sequentially
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.dryRun=false] - If true, skip actual updates
+ * @returns {Promise<Object>} Run result
+ */
+export async function cancelEnrichment() {
+  logger.warn('⚠️ Cancel request received', {
+    currentRunId: _currentRunId,
+    isRunning: _currentRunId !== null
+  });
+
+  if (!_currentRunId) {
+    logger.warn('No enrichment running to cancel');
+    return {
+      success: false,
+      error: 'Không có lần chạy nào'
+    };
+  }
+
+  // Set flag để batch loop check
+  _shouldCancel = true;
+
+  logger.info('🛑 Cancel flag set - enrichment will stop after current batch', {
+    runId: _currentRunId
+  });
+
+  return {
+    success: true,
+    message: 'Yêu cầu hủy đã gửi. Enrichment sẽ dừng sau batch hiện tại.',
+    successCount: _currentRunState?.successCount || 0,
+    failureCount: _currentRunState?.failureCount || 0
+  };
 }
 
 /**
@@ -579,27 +787,72 @@ async function runBatch(batchItems, promptTemplate, runId, batchIndex) {
 export async function runEnrichment(options = {}) {
   const runId = generateCorrelationId();
   const { dryRun = false } = options;
+  const overallStartTime = Date.now();
 
-  logger.info('Starting watchlist AI enrichment', { runId, dryRun });
+  // Set runtime state for cancellation
+  _currentRunId = runId;
+  _shouldCancel = false;
+  _currentRunState = {};
 
-  // 1. Acquire lock
+  logger.info('═════════════════════════════════════════════════════════════', {
+    runId,
+    action: 'START ENRICHMENT'
+  });
+  logger.info('Starting watchlist AI enrichment', {
+    runId,
+    dryRun,
+    timestamp: new Date().toLocaleString()
+  });
+
+  // 1. Proactive token refresh BEFORE long-running operation
+  // Watchlist enrichment can take 10+ minutes, so we refresh token FIRST
+  // to ensure it won't expire mid-run
+  logger.info('🔐 Proactive token validation before enrichment', { runId });
+  try {
+    // Make a simple auth check - will auto-refresh if needed via xneewsFetch
+    const testResponse = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/?page=1&size=1`, {
+      method: 'GET'
+    });
+
+    if (testResponse.status === 401) {
+      logger.error('❌ Token validation failed before enrichment', { runId });
+      return {
+        success: false,
+        runId,
+        error: ERROR_MESSAGES.AUTH_ERROR
+      };
+    }
+    logger.info('✅ Token validated successfully', { runId });
+  } catch (error) {
+    logger.error('Token validation exception', { runId, error: error.message });
+    // Continue anyway - might be network issue, not auth
+  }
+
+  // 2. Acquire lock
+  logger.info('🔒 Acquiring enrichment lock...', { runId });
   const lockAcquired = await acquireLock(runId);
   if (!lockAcquired) {
-    logger.warn('Enrichment lock active, skipping run', { runId });
+    logger.warn('⚠️ Enrichment lock active, skipping run', { runId });
     return {
       success: false,
       runId,
       error: ERROR_MESSAGES.LOCK_ACTIVE
     };
   }
+  logger.info('✅ Lock acquired', { runId });
 
   try {
-    // 2. Broadcast start
+    // 3. Broadcast start
     broadcastStatus({ runId, stage: 'fetching_watchlist' });
 
-    // 3. Fetch all watchlist items
+    // 4. Fetch all watchlist items
+    logger.info('📥 Fetching watchlist from X-Neews API...', { runId });
+    const fetchStartTime = Date.now();
     const allItems = await fetchAllWatchlistItems();
+    const fetchElapsed = Date.now() - fetchStartTime;
+
     if (allItems.length === 0) {
+      logger.warn('❌ Watchlist is empty', { runId });
       await clearRunState();
       broadcastDone({
         runId,
@@ -615,16 +868,37 @@ export async function runEnrichment(options = {}) {
       };
     }
 
-    logger.info('Watchlist fetched', { runId, totalItems: allItems.length });
+    logger.info('✅ Watchlist fetched', {
+      runId,
+      totalItems: allItems.length,
+      elapsed: `${fetchElapsed}ms`,
+      symbols: allItems.map(i => i.symbol)
+    });
 
-    // 4. Get prompt template
+    // 5. Get prompt template
+    logger.info('📋 Loading enrichment prompt template...', { runId });
     const promptTemplate = await getEnrichPromptTemplate();
+    logger.debug('Prompt template loaded', {
+      runId,
+      templateLength: promptTemplate.length
+    });
 
-    // 5. Split into batches of WATCHLIST_AI_ENRICH_BATCH_SIZE
+    // 6. Split into batches of WATCHLIST_AI_ENRICH_BATCH_SIZE
     const batches = [];
     for (let i = 0; i < allItems.length; i += WATCHLIST_AI_ENRICH_BATCH_SIZE) {
       batches.push(allItems.slice(i, i + WATCHLIST_AI_ENRICH_BATCH_SIZE));
     }
+
+    logger.info('📊 Split into batches', {
+      runId,
+      batchSize: WATCHLIST_AI_ENRICH_BATCH_SIZE,
+      totalBatches: batches.length,
+      batchBreakdown: batches.map((b, i) => ({
+        batchIndex: i,
+        itemCount: b.length,
+        symbols: b.map(x => x.symbol)
+      }))
+    });
 
     // Update run state
     await saveRunState({
@@ -646,13 +920,25 @@ export async function runEnrichment(options = {}) {
       totalBatches: batches.length
     });
 
-    // 6. Process each batch sequentially
+    // 7. Process each batch sequentially
     let totalSuccess = 0;
     let totalFailure = 0;
     const allErrors = [];
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
+
+      logger.info('═══════════════════════════════════════════════════', {
+        runId,
+        batchIndex: i,
+        totalBatches: batches.length,
+        progress: `${i + 1}/${batches.length}`
+      });
+      logger.info('🚀 Starting batch processing', {
+        runId,
+        batchIndex: i,
+        symbols: batch.map(b => b.symbol)
+      });
 
       broadcastStatus({
         runId,
@@ -670,9 +956,26 @@ export async function runEnrichment(options = {}) {
       }
 
       const batchResult = await runBatch(batch, promptTemplate, runId, i);
+
+      logger.info('🏁 Batch processing completed', {
+        runId,
+        batchIndex: i,
+        successCount: batchResult.successCount,
+        failureCount: batchResult.failureCount,
+        errorCount: batchResult.errors.length
+      });
+
       totalSuccess += batchResult.successCount;
       totalFailure += batchResult.failureCount;
       allErrors.push(...batchResult.errors);
+
+      // Update runtime state
+      _currentRunState = {
+        successCount: totalSuccess,
+        failureCount: totalFailure,
+        batchIndex: i,
+        totalBatches: batches.length
+      };
 
       // Update run state after each batch (MV3 crash recovery)
       await saveRunState({
@@ -686,6 +989,18 @@ export async function runEnrichment(options = {}) {
         failureCount: totalFailure,
         stage: i + 1 >= batches.length ? 'done' : 'running'
       });
+
+      // Check for cancel request
+      if (_shouldCancel) {
+        logger.warn('⚠️ Cancel requested - stopping enrichment after current batch', {
+          runId,
+          batchIndex: i,
+          successCount: totalSuccess,
+          failureCount: totalFailure,
+          remainingBatches: batches.length - i - 1
+        });
+        break;
+      }
 
       // Check for fatal auth error
       const hasAuthError = batchResult.errors.some(e => e.error === 'AUTH_ERROR');
@@ -701,9 +1016,16 @@ export async function runEnrichment(options = {}) {
       }
     }
 
-    // 7. Done - cleanup
+    // 8. Done - cleanup
     await clearRunState();
 
+    const overallElapsed = Date.now() - overallStartTime;
+    const cancelled = _shouldCancel;
+
+    // Reset runtime state
+    _currentRunId = null;
+    _shouldCancel = false;
+    _currentRunState = null;
     const result = {
       success: true,
       runId,
@@ -711,30 +1033,83 @@ export async function runEnrichment(options = {}) {
       failureCount: totalFailure,
       totalSymbols: allItems.length,
       totalBatches: batches.length,
+      cancelled: cancelled,
       errors: allErrors.length > 0 ? allErrors.slice(0, 20) : [] // Cap errors
     };
 
-    broadcastDone({
-      runId,
-      ...result
-    });
-
-    logger.info('Watchlist AI enrichment completed', {
-      runId,
-      successCount: totalSuccess,
-      failureCount: totalFailure,
-      totalSymbols: allItems.length
-    });
+    if (cancelled) {
+      logger.info('═════════════════════════════════════════════════════════════', {
+        runId,
+        action: 'ENRICHMENT CANCELLED'
+      });
+      logger.info('⚠️ Watchlist AI enrichment cancelled by user', {
+        runId,
+        results: {
+          successCount: totalSuccess,
+          failureCount: totalFailure,
+          totalSymbols: allItems.length,
+          totalBatches: batches.length
+        },
+        timing: {
+          overallTime: `${overallElapsed}ms`,
+          averagePerBatch: `${Math.round(overallElapsed / (batches.length))}ms`
+        },
+        timestamp: new Date().toLocaleString()
+      });
+    } else {
+      logger.info('═════════════════════════════════════════════════════════════', {
+        runId,
+        action: 'ENRICHMENT COMPLETED'
+      });
+      logger.info('✅ Watchlist AI enrichment completed successfully', {
+        runId,
+        results: {
+          successCount: totalSuccess,
+          failureCount: totalFailure,
+          totalSymbols: allItems.length,
+          totalBatches: batches.length,
+          successRate: totalSuccess > 0 ? `${Math.round((totalSuccess / (totalSuccess + totalFailure)) * 100)}%` : '0%'
+        },
+        timing: {
+          overallTime: `${overallElapsed}ms`,
+          averagePerBatch: `${Math.round(overallElapsed / batches.length)}ms`,
+          averagePerItem: `${Math.round(overallElapsed / allItems.length)}ms`
+        },
+        errorSummary: {
+          totalErrors: allErrors.length,
+          errorTypes: allErrors.slice(0, 10).map(e => ({
+            symbol: e.symbol || e.batch,
+            error: e.error
+          }))
+        },
+        timestamp: new Date().toLocaleString()
+      });
+    }
 
     return result;
 
   } catch (error) {
     // Cleanup lock on unexpected error
+    const overallElapsed = Date.now() - overallStartTime;
+
+    // Reset runtime state
+    _currentRunId = null;
+    _shouldCancel = false;
+    _currentRunState = null;
+
     await clearRunState();
 
-    logger.error('Watchlist AI enrichment failed', {
+    logger.error('═════════════════════════════════════════════════════════════', {
       runId,
-      error: error.message
+      action: 'ENRICHMENT FAILED'
+    });
+    logger.error('❌ Watchlist AI enrichment failed with exception', {
+      runId,
+      error: error.message,
+      errorName: error.name,
+      stack: error.stack?.split('\n')[0],
+      elapsed: `${overallElapsed}ms`,
+      timestamp: new Date().toLocaleString()
     });
 
     const errorMsg = error.message?.includes('Failed to fetch')
@@ -771,4 +1146,23 @@ export async function isEnrichmentRunning() {
  */
 export async function getEnrichmentStatus() {
   return loadRunState();
+}
+
+/**
+ * Force reset enrichment state (clear stuck lock)
+ * Use when enrichment is stuck and won't start
+ * @returns {Promise<void>}
+ */
+export async function resetEnrichmentState() {
+  logger.warn('🔄 Force reset enrichment state requested');
+
+  // Clear runtime state
+  _currentRunId = null;
+  _shouldCancel = false;
+  _currentRunState = null;
+
+  // Clear persisted state
+  await clearRunState();
+
+  logger.info('✅ Enrichment state reset completed');
 }

@@ -15,146 +15,55 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { XNEEWS_API_BASE, XNEEWS_ERROR_MESSAGES, XNEEWS_STORAGE_KEYS } from '../../shared/xneewsConfig.js';
+import { fetchWithRetry } from '../utils/fetchWithRetry.js';
+import { getStoredTokens, saveTokens, clearTokens } from '../utils/xneewsFetch.js';
 
 const logger = createLogger('Handlers/XneewsAuth');
 
-/**
- * Configuration for X-Neews API
- * Base URL should be loaded from environment or settings
- * For now, using fallback - can be overridden via VITE_ env vars
- * OpenAPI Docs: https://api.x51.vn/api/openapi.json
- */
-const XNEEWS_API_BASE = import.meta.env.VITE_XNEEWS_API_URL || 'https://api.x51.vn/api';
+// Alias for backward compat within this file
+const ERROR_MESSAGES_VI = XNEEWS_ERROR_MESSAGES;
+
+// getStoredTokens, saveTokens, clearTokens, fetchWithRetry — imported from shared utils
 
 /**
- * Chrome storage keys for X-Neews tokens
+ * Parse token response with defensive handling for various formats
+ * Server may return direct { access_token, refresh_token } or nested variants
+ * @param {Object} data - Response data from auth endpoints
+ * @param {string} operation - Operation name for logging (register/login/refresh)
+ * @returns {{ access_token: string, refresh_token: string, expires_in?: number } | null}
  */
-const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'xneews_access_token',
-  REFRESH_TOKEN: 'xneews_refresh_token',
-  USER_ID: 'xneews_user_id',
-  USER_EMAIL: 'xneews_user_email',
-  LAST_LOGIN: 'xneews_last_login'
-};
-
-/**
- * Vietnamese error messages for X-Neews errors
- */
-const ERROR_MESSAGES_VI = {
-  NETWORK_ERROR: 'Không có kết nối internet. Vui lòng kiểm tra mạng.',
-  API_ERROR: 'Lỗi kết nối API. Vui lòng thử lại.',
-  AUTH_ERROR: 'Lỗi xác thực. Vui lòng thử lại.',
-  INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
-  EMAIL_REQUIRED: 'Email là bắt buộc.',
-  PASSWORD_REQUIRED: 'Mật khẩu là bắt buộc.',
-  PASSWORD_WEAK: 'Mật khẩu không đạt yêu cầu (tối thiểu 8 ký tự, 1 chữ hoa, 1 chữ thường, 1 chữ số, 1 ký tự đặc biệt).',
-  EMAIL_ALREADY_REGISTERED: 'Email này đã được đăng ký.',
-  TOKEN_EXPIRED: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.',
-  TOKEN_INVALID: 'Token không hợp lệ.',
-  VALIDATION_ERROR: 'Dữ liệu không hợp lệ.'
-};
-
-/**
- * Helper: Get tokens from chrome.storage.local
- * @returns {Promise<{accessToken: string, refreshToken: string, userId: string, email: string}>}
- */
-async function getStoredTokens() {
-  const result = await chrome.storage.local.get([
-    STORAGE_KEYS.ACCESS_TOKEN,
-    STORAGE_KEYS.REFRESH_TOKEN,
-    STORAGE_KEYS.USER_ID,
-    STORAGE_KEYS.USER_EMAIL
-  ]);
-
-  return {
-    accessToken: result[STORAGE_KEYS.ACCESS_TOKEN] || null,
-    refreshToken: result[STORAGE_KEYS.REFRESH_TOKEN] || null,
-    userId: result[STORAGE_KEYS.USER_ID] || null,
-    email: result[STORAGE_KEYS.USER_EMAIL] || null
-  };
-}
-
-/**
- * Helper: Save tokens to chrome.storage.local
- * @param {string} accessToken
- * @param {string} refreshToken
- * @param {string} userId
- * @param {string} email
- */
-async function saveTokens(accessToken, refreshToken, userId, email) {
-  const data = {
-    [STORAGE_KEYS.ACCESS_TOKEN]: accessToken,
-    [STORAGE_KEYS.REFRESH_TOKEN]: refreshToken,
-    [STORAGE_KEYS.USER_ID]: userId,
-    [STORAGE_KEYS.USER_EMAIL]: email,
-    [STORAGE_KEYS.LAST_LOGIN]: new Date().toISOString()
-  };
-
-  await chrome.storage.local.set(data);
-  logger.debug('Tokens saved to chrome.storage.local', { email });
-}
-
-/**
- * Helper: Clear tokens from chrome.storage.local
- */
-async function clearTokens() {
-  await chrome.storage.local.remove([
-    STORAGE_KEYS.ACCESS_TOKEN,
-    STORAGE_KEYS.REFRESH_TOKEN,
-    STORAGE_KEYS.USER_ID,
-    STORAGE_KEYS.USER_EMAIL,
-    STORAGE_KEYS.LAST_LOGIN
-  ]);
-  logger.debug('Tokens cleared from chrome.storage.local');
-}
-
-/**
- * Helper: Fetch with retry and exponential backoff
- * @param {string} url
- * @param {Object} options - fetch options
- * @param {number} maxRetries - default 3
- * @returns {Promise<Response>}
- */
-async function fetchWithRetry(url, options, maxRetries = 3) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        timeout: 10000 // 10 second timeout
-      });
-
-      // Don't retry on client errors (4xx)
-      if (response.status >= 400 && response.status < 500) {
-        return response;
-      }
-
-      // Retry on network/server errors (5xx, timeout)
-      if (!response.ok) {
-        if (attempt < maxRetries - 1) {
-          const delay = Math.pow(2, attempt) * 1000; // exponential backoff
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-      }
-
-      return response;
-    } catch (error) {
-      // Network error - retry with backoff
-      if (attempt < maxRetries - 1) {
-        const delay = Math.pow(2, attempt) * 1000;
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-
-      logger.error('Fetch failed after retries', {
-        url,
-        error: error.message,
-        attempts: maxRetries
-      });
-
-      throw error;
-    }
+function parseTokenResponse(data, operation = 'auth') {
+  // Case 1: Direct response (correct per OpenAPI spec)
+  if (typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_in: data.expires_in
+    };
   }
+
+  // Case 2: Nested in 'data' field
+  if (data.data && typeof data.data.access_token === 'string' && typeof data.data.refresh_token === 'string') {
+    logger.warn(`${operation} response is nested in 'data' field (API mismatch)`, {
+      expectedFormat: 'flat',
+      receivedFormat: 'nested'
+    });
+    return {
+      access_token: data.data.access_token,
+      refresh_token: data.data.refresh_token,
+      expires_in: data.data.expires_in
+    };
+  }
+
+  // Case 3: Unexpected format
+  logger.error(`${operation} response has unexpected format`, {
+    responseKeys: Object.keys(data),
+    hasAccessToken: !!data.access_token,
+    typeOfAccessToken: typeof data.access_token,
+    sampleData: JSON.stringify(data).substring(0, 200)
+  });
+  return null;
 }
 
 /**
@@ -216,17 +125,31 @@ registerHandler(MESSAGE_TYPES.XNEEWS_AUTH_REGISTER, async (message) => {
     }
 
     // Register successful
-    const { access_token, refresh_token } = data;
+    const tokens = parseTokenResponse(data, 'register');
 
-    if (!access_token || !refresh_token) {
-      logger.error('Register response missing tokens', { correlationId });
+    if (!tokens) {
+      logger.error('Register response missing or invalid tokens', { correlationId });
       return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
     }
 
+    const { access_token, refresh_token, expires_in } = tokens;
+
     // Save tokens
     await saveTokens(access_token, refresh_token, email.trim(), email.trim());
+    
+    // Save token expiry (default 24h if not provided by API)
+    const expiresAtMs = expires_in 
+      ? Date.now() + (expires_in * 1000) 
+      : Date.now() + (24 * 60 * 60 * 1000);
+    await chrome.storage.local.set({
+      [XNEEWS_STORAGE_KEYS.ACCESS_TOKEN_EXPIRES_AT]: expiresAtMs
+    });
 
-    logger.info('Register successful', { correlationId, email: email.trim() });
+    logger.info('Register successful', { 
+      correlationId, 
+      email: email.trim(),
+      expiresInMinutes: Math.floor((expiresAtMs - Date.now()) / 60000)
+    });
 
     return createResponse(message, MESSAGE_TYPES.XNEEWS_AUTH_SUCCESS, {
       accessToken: access_token,
@@ -299,17 +222,31 @@ registerHandler(MESSAGE_TYPES.XNEEWS_AUTH_LOGIN, async (message) => {
     }
 
     // Login successful
-    const { access_token, refresh_token } = data;
+    const tokens = parseTokenResponse(data, 'login');
 
-    if (!access_token || !refresh_token) {
-      logger.error('Login response missing tokens', { correlationId });
+    if (!tokens) {
+      logger.error('Login response missing or invalid tokens', { correlationId });
       return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
     }
 
+    const { access_token, refresh_token, expires_in } = tokens;
+
     // Save tokens
     await saveTokens(access_token, refresh_token, email.trim(), email.trim());
+    
+    // Save token expiry (default 24h if not provided by API)
+    const expiresAtMs = expires_in 
+      ? Date.now() + (expires_in * 1000) 
+      : Date.now() + (24 * 60 * 60 * 1000);
+    await chrome.storage.local.set({
+      [XNEEWS_STORAGE_KEYS.ACCESS_TOKEN_EXPIRES_AT]: expiresAtMs
+    });
 
-    logger.info('Login successful', { correlationId, email: email.trim() });
+    logger.info('Login successful', { 
+      correlationId, 
+      email: email.trim(),
+      expiresInMinutes: Math.floor((expiresAtMs - Date.now()) / 60000)
+    });
 
     return createResponse(message, MESSAGE_TYPES.XNEEWS_AUTH_SUCCESS, {
       accessToken: access_token,
@@ -371,17 +308,31 @@ registerHandler(MESSAGE_TYPES.XNEEWS_AUTH_REFRESH, async (message) => {
     }
 
     // Refresh successful
-    const { access_token, refresh_token: newRefreshToken } = data;
+    const tokens = parseTokenResponse(data, 'refresh');
 
-    if (!access_token) {
-      logger.error('Refresh response missing tokens', { correlationId });
+    if (!tokens) {
+      logger.error('Refresh response missing or invalid tokens', { correlationId });
       return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
     }
 
+    const { access_token, refresh_token: newRefreshToken, expires_in } = tokens;
+
     // Save new tokens
     await saveTokens(access_token, newRefreshToken || refreshToken, email, email);
+    
+    // Save token expiry (default 24h if not provided by API)
+    const expiresAtMs = expires_in 
+      ? Date.now() + (expires_in * 1000) 
+      : Date.now() + (24 * 60 * 60 * 1000);
+    await chrome.storage.local.set({
+      [XNEEWS_STORAGE_KEYS.ACCESS_TOKEN_EXPIRES_AT]: expiresAtMs
+    });
 
-    logger.info('Token refresh successful', { correlationId, email });
+    logger.info('Token refresh successful', { 
+      correlationId, 
+      email,
+      expiresInMinutes: Math.floor((expiresAtMs - Date.now()) / 60000)
+    });
 
     return createResponse(message, MESSAGE_TYPES.XNEEWS_AUTH_SUCCESS, {
       accessToken: access_token,
@@ -428,7 +379,5 @@ registerHandler(MESSAGE_TYPES.XNEEWS_AUTH_LOGOUT, async (message) => {
   }
 });
 
-/**
- * Export token getters for other handlers (e.g., watchlist handler)
- */
-export { getStoredTokens, saveTokens, clearTokens };
+// Re-export from shared utils for backward compatibility
+export { getStoredTokens, saveTokens, clearTokens } from '../utils/xneewsFetch.js';

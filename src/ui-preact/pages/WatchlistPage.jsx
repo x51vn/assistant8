@@ -300,10 +300,10 @@ export default function WatchlistPage() {
     return (
       <div class="watchlist-page">
         <div class="page-header">
-          <h1>
+          <h2>
             <i class="fas fa-list-check"></i>
             Watchlist X-Neews
-          </h1>
+          </h2>
         </div>
         <div class="loading-state">
           <div class="spinner"></div>
@@ -318,10 +318,10 @@ export default function WatchlistPage() {
     return (
       <div class="watchlist-page">
         <div class="page-header">
-          <h1>
+          <h2>
             <i class="fas fa-list-check"></i>
             Watchlist X-Neews
-          </h1>
+          </h2>
         </div>
         <div class="auth-required-state">
           <i class="fas fa-lock"></i>
@@ -349,10 +349,10 @@ export default function WatchlistPage() {
     <div class="watchlist-page">
       {/* Page Header */}
       <div class="page-header">
-        <h1>
+        <h2>
           <i class="fas fa-list-check"></i>
           Watchlist X-Neews
-        </h1>
+        </h2>
         <div class="page-actions">
           <button
             class="btn-secondary"

@@ -3617,3 +3617,438 @@ textarea:disabled {
 .btn-logout-confirm:hover {
   background: #c82333;
 }
+
+
+/* ========================================
+   WATCHLIST PAGE
+   ======================================== */
+
+.watchlist-page {
+  padding: 0;
+}
+
+/* Re-use page-header h2 styling for h1 (consistency) */
+.page-header h1 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--heading-text, #333);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.page-header h1 i {
+  color: var(--primary-color, #667eea);
+  font-size: 18px;
+}
+
+/* Page Actions (header buttons) */
+.page-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Auth Required State */
+.auth-required-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted-text, #999);
+}
+
+.auth-required-state > i {
+  font-size: 48px;
+  color: var(--surface-border, #d0d0d0);
+  margin-bottom: 16px;
+}
+
+.auth-required-state h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--heading-text, #333);
+}
+
+.auth-required-state p {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: var(--muted-text, #999);
+}
+
+
+/* ========================================
+   WATCHLIST: Search Bar
+   ======================================== */
+
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper > i {
+  position: absolute;
+  left: 10px;
+  color: var(--muted-text, #999);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  border: 1px solid var(--surface-border, #d0d0d0);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--body-text, #333);
+  background: var(--surface-bg, white);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #667eea);
+  box-shadow: 0 0 0 2px var(--primary-shadow, rgba(102, 126, 234, 0.2));
+}
+
+.search-input::placeholder {
+  color: var(--muted-text, #bbb);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--muted-text, #999);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-search:hover {
+  background: var(--surface-alt, #f0f0f0);
+  color: var(--body-text, #333);
+}
+
+
+/* ========================================
+   WATCHLIST: Error Dismiss Button
+   ======================================== */
+
+.btn-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn-dismiss:hover {
+  opacity: 1;
+}
+
+
+/* ========================================
+   WATCHLIST: Table
+   ======================================== */
+
+.watchlist-table-container {
+  background: var(--surface-bg, white);
+  border-radius: 8px;
+  overflow: visible;
+  border: 1px solid var(--surface-border, #e0e0e0);
+}
+
+.watchlist-table-container .table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.watchlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.watchlist-table thead {
+  background: var(--table-header-bg, #f8f9ff);
+  border-bottom: 2px solid var(--primary-color, #667eea);
+}
+
+.watchlist-table th {
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--heading-text, #2c3e50);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.watchlist-table tbody tr {
+  border-bottom: 1px solid var(--surface-border, #e0e0e0);
+  transition: background 0.2s;
+}
+
+.watchlist-table tbody tr:hover {
+  background: var(--table-row-hover, #f8f9ff);
+}
+
+.watchlist-table td {
+  padding: 8px;
+  color: var(--body-text, #2c3e50);
+  font-weight: 500;
+}
+
+/* Column widths */
+.th-symbol, .td-symbol { min-width: 70px; }
+.th-number, .td-number { text-align: right; min-width: 55px; font-variant-numeric: tabular-nums; }
+.th-risk, .td-risk { text-align: center; min-width: 60px; }
+.th-thesis, .td-thesis { min-width: 120px; max-width: 200px; }
+.th-actions, .td-actions { text-align: center; min-width: 90px; white-space: nowrap; }
+
+/* Symbol cell */
+.td-symbol {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.td-symbol strong {
+  color: var(--heading-text, #2c3e50);
+}
+
+/* Highlighted row */
+.highlighted-row {
+  background: var(--highlight-bg, #fffbe6) !important;
+}
+
+.highlighted-row:hover {
+  background: var(--highlight-hover-bg, #fff7cc) !important;
+}
+
+/* Highlight star icon */
+.highlight-star {
+  color: #f59e0b;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+
+/* ========================================
+   WATCHLIST: Risk Badge
+   ======================================== */
+
+.risk-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.risk-badge.risk-thấp,
+.risk-badge.risk-low {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.risk-badge.risk-trung,
+.risk-badge.risk-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.risk-badge.risk-cao,
+.risk-badge.risk-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Fallback for any unrecognized risk level */
+.risk-badge:not(.risk-thấp):not(.risk-low):not(.risk-trung):not(.risk-medium):not(.risk-cao):not(.risk-high) {
+  background: var(--surface-alt, #f0f0f0);
+  color: var(--body-text, #666);
+}
+
+
+/* ========================================
+   WATCHLIST: Text Color Classes
+   ======================================== */
+
+.text-success {
+  color: #16a34a !important;
+}
+
+.text-danger {
+  color: #dc2626 !important;
+}
+
+.text-muted {
+  color: var(--muted-text, #999);
+  font-size: 12px;
+}
+
+
+/* ========================================
+   WATCHLIST: Thesis Text
+   ======================================== */
+
+.thesis-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--body-text, #555);
+}
+
+
+/* ========================================
+   WATCHLIST: Action Buttons
+   ======================================== */
+
+.td-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.btn-icon.btn-highlight {
+  color: var(--muted-text, #999);
+}
+
+.btn-icon.btn-highlight.active {
+  color: #f59e0b;
+  background: #fffbe6;
+}
+
+.btn-icon.btn-highlight:hover {
+  color: #f59e0b;
+  background: #fef3c7;
+}
+
+.btn-icon.btn-edit {
+  color: var(--primary-color, #667eea);
+}
+
+.btn-icon.btn-edit:hover {
+  background: var(--primary-light-bg, #eef0ff);
+  color: var(--primary-hover, #5568d3);
+}
+
+
+/* ========================================
+   WATCHLIST: Pagination
+   ======================================== */
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--surface-border, #e0e0e0);
+  font-size: 12px;
+  color: var(--muted-text, #999);
+}
+
+.pagination-info {
+  font-size: 12px;
+}
+
+.pagination-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--surface-border, #d0d0d0);
+  border-radius: 4px;
+  background: var(--surface-bg, white);
+  color: var(--body-text, #333);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-pagination:hover:not(:disabled) {
+  background: var(--surface-alt, #f0f0f0);
+  border-color: var(--primary-color, #667eea);
+}
+
+.btn-pagination:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-size-selector {
+  padding: 4px 8px;
+  border: 1px solid var(--surface-border, #d0d0d0);
+  border-radius: 4px;
+  background: var(--surface-bg, white);
+  color: var(--body-text, #333);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.page-size-selector:focus {
+  outline: none;
+  border-color: var(--primary-color, #667eea);
+}
+
+
+/* ========================================
+   WATCHLIST: Modal (reuse modal-content styles)
+   ======================================== */
+
+.modal {
+  background: var(--surface-bg, white);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--surface-shadow, 0 10px 40px rgba(0, 0, 0, 0.3));
+  animation: slideUp 0.3s ease;
+}
+
+.modal.watchlist-modal {
+  max-width: 480px;
+}
+
+.modal.confirm-modal {
+  max-width: 380px;
+}
+
+/* Input error state */
+.input-field.input-error {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.15);
+}

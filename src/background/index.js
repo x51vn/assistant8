@@ -19,6 +19,7 @@ import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
 import { ALARM_WATCHLIST_AI_ENRICH } from '../shared/appConstants.js';
+import { ALARM_XNEEWS_CHECK } from './handlers/alarms.js'; // X51LABS-XXX: X-Neews session check alarm
 import { flushChatHistoryOutbox } from './services/chatHistoryService.js';
 import './handlers/index.js'; // This will register all handlers
 
@@ -352,6 +353,8 @@ async function setupAlarms() {
     await chrome.alarms.clear('SESSION_CHECK');
     await chrome.alarms.clear('watchlistPriceUpdate');
     await chrome.alarms.clear(ALARM_WATCHLIST_AI_ENRICH);
+    await chrome.alarms.clear('xneewsSessionCheck');
+    await chrome.alarms.clear(ALARM_XNEEWS_CHECK);
     
     // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
@@ -383,6 +386,11 @@ async function setupAlarms() {
     // Allows graceful handling instead of sudden logout
     chrome.alarms.create('SESSION_CHECK', { periodInMinutes: 1 });
     
+    // ✅ NEW: X-Neews token check - runs every 5 minutes
+    // Proactively refreshes X-Neews tokens before expiry
+    // Prevents 401 errors when accessing watchlist
+    chrome.alarms.create(ALARM_XNEEWS_CHECK, { periodInMinutes: 5 });
+    
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
     // This avoids reading from chrome.storage.local (deprecated)
@@ -394,7 +402,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
     
-    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, AI_ENRICH: daily@16:00)');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, XNEEWS_CHECK: 5min, AI_ENRICH: daily@16:00)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }

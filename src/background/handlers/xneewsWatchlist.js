@@ -14,131 +14,15 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { XNEEWS_API_BASE, XNEEWS_ERROR_MESSAGES, mapErrorToVietnamese } from '../../shared/xneewsConfig.js';
+import { xneewsFetch, getStoredTokens } from '../utils/xneewsFetch.js';
 
 const logger = createLogger('Handlers/XneewsWatchlist');
 
-/**
- * Configuration for X-Neews API
- * Base URL loaded from environment or settings
- * OpenAPI Docs: https://api.x51.vn/api/openapi.json
- */
-const XNEEWS_API_BASE = import.meta.env.VITE_XNEEWS_API_URL || 'https://api.x51.vn/api';
+// Alias for conciseness
+const ERROR_MESSAGES_VI = XNEEWS_ERROR_MESSAGES;
 
-/**
- * Chrome storage keys for X-Neews tokens
- * @see src/background/handlers/xneewsAuth.js
- */
-const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'xneews_access_token',
-  REFRESH_TOKEN: 'xneews_refresh_token',
-  USER_ID: 'xneews_user_id',
-  USER_EMAIL: 'xneews_user_email'
-};
-
-/**
- * Vietnamese error messages for watchlist errors
- */
-const ERROR_MESSAGES_VI = {
-  NETWORK_ERROR: 'Không có kết nối internet. Vui lòng kiểm tra mạng.',
-  API_ERROR: 'Lỗi kết nối API. Vui lòng thử lại.',
-  AUTH_ERROR: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.',
-  NOT_FOUND: 'Không tìm thấy mục watchlist.',
-  INVALID_INPUT: 'Dữ liệu không hợp lệ.',
-  SYMBOL_REQUIRED: 'Mã chứng khoán là bắt buộc.',
-  CREATE_FAILED: 'Không thể tạo mục watchlist. Vui lòng thử lại.',
-  UPDATE_FAILED: 'Không thể cập nhật mục watchlist. Vui lòng thử lại.',
-  DELETE_FAILED: 'Không thể xóa mục watchlist. Vui lòng thử lại.',
-  TOGGLE_FAILED: 'Không thể thay đổi trạng thái highlight. Vui lòng thử lại.',
-  SERVER_ERROR: 'Lỗi máy chủ. Vui lòng thử lại sau.'
-};
-
-/**
- * Helper: Get X-Neews tokens from chrome.storage.local
- * @returns {Promise<{accessToken: string, refreshToken: string}>}
- */
-async function getStoredTokens() {
-  const result = await chrome.storage.local.get([
-    STORAGE_KEYS.ACCESS_TOKEN,
-    STORAGE_KEYS.REFRESH_TOKEN
-  ]);
-
-  return {
-    accessToken: result[STORAGE_KEYS.ACCESS_TOKEN] || null,
-    refreshToken: result[STORAGE_KEYS.REFRESH_TOKEN] || null
-  };
-}
-
-/**
- * Helper: Fetch with retry and exponential backoff
- * @param {string} url
- * @param {Object} options - fetch options
- * @param {number} maxRetries - default 3
- * @returns {Promise<Response>}
- */
-async function fetchWithRetry(url, options, maxRetries = 3) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        timeout: 10000 // 10 second timeout
-      });
-
-      // Don't retry on client errors (4xx)
-      if (response.status >= 400 && response.status < 500) {
-        return response;
-      }
-
-      // Retry on network/server errors (5xx, timeout)
-      if (!response.ok) {
-        if (attempt < maxRetries - 1) {
-          const delay = Math.pow(2, attempt) * 1000; // exponential backoff: 1s, 2s, 4s
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-      }
-
-      return response;
-    } catch (error) {
-      // Network error - retry with backoff
-      if (attempt < maxRetries - 1) {
-        const delay = Math.pow(2, attempt) * 1000;
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-
-      logger.error('Fetch failed after retries', {
-        url,
-        error: error.message,
-        attempts: maxRetries
-      });
-
-      throw error;
-    }
-  }
-}
-
-/**
- * Helper: Map API error to Vietnamese user-friendly message
- * @param {Response} response
- * @param {Object} data - Parsed JSON response
- * @returns {string} Vietnamese error message
- */
-function mapErrorToVietnamese(response, data) {
-  const status = response.status;
-  const errorDetail = data?.detail || '';
-
-  if (status === 401) {
-    return ERROR_MESSAGES_VI.AUTH_ERROR;
-  } else if (status === 404) {
-    return ERROR_MESSAGES_VI.NOT_FOUND;
-  } else if (status === 400 || status === 422) {
-    return ERROR_MESSAGES_VI.INVALID_INPUT;
-  } else if (status >= 500) {
-    return ERROR_MESSAGES_VI.SERVER_ERROR;
-  }
-
-  return ERROR_MESSAGES_VI.API_ERROR;
-}
+// getStoredTokens, fetchWithRetry, mapErrorToVietnamese — imported from shared utils
 
 /**
  * Handle XNEEWS_WATCHLIST_GET
@@ -156,25 +40,14 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
     const normalizedPage = Math.max(1, Number(page) || 1);
     const normalizedSize = Math.min(100, Math.max(1, Number(size) || 20));
 
-    // Get auth token
-    const { accessToken } = await getStoredTokens();
-    if (!accessToken) {
-      logger.warn('Watchlist GET failed: no access token', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-
     // Build URL with query params
     const url = new URL(`${XNEEWS_API_BASE}/watchlist/`);
     url.searchParams.set('page', normalizedPage.toString());
     url.searchParams.set('size', normalizedSize.toString());
 
-    // Call X-Neews watchlist endpoint
-    const response = await fetchWithRetry(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+    // Call X-Neews watchlist endpoint (auto-refresh on 401)
+    const response = await xneewsFetch(url.toString(), {
+      method: 'GET'
     });
 
     const data = await response.json();
@@ -253,13 +126,6 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
-    // Get auth token
-    const { accessToken } = await getStoredTokens();
-    if (!accessToken) {
-      logger.warn('Watchlist CREATE failed: no access token', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-
     // Build request body - support both camelCase and snake_case
     const requestBody = {
       symbol: symbol.trim().toUpperCase()
@@ -275,13 +141,9 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
     if (notes) requestBody.notes = notes;
     if (highlighted !== undefined) requestBody.highlighted = Boolean(highlighted);
 
-    // Call X-Neews create endpoint
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/`, {
+    // Call X-Neews create endpoint (auto-refresh on 401)
+    const response = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(requestBody)
     });
 
@@ -349,17 +211,8 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.INVALID_INPUT);
     }
 
-    // Get auth token
-    const { accessToken } = await getStoredTokens();
-    if (!accessToken) {
-      logger.warn('Watchlist UPDATE failed: no access token', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-
     // Build request body - support both camelCase and snake_case
     const requestBody = {};
-
-    // Optional update fields
     if (updates.investmentThesis !== undefined) requestBody.investment_thesis = updates.investmentThesis;
     if (updates.investment_thesis !== undefined) requestBody.investment_thesis = updates.investment_thesis;
     if (updates.risk !== undefined) requestBody.risk = updates.risk;
@@ -369,14 +222,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     if (updates.notes !== undefined) requestBody.notes = updates.notes;
     if (updates.highlighted !== undefined) requestBody.highlighted = Boolean(updates.highlighted);
 
-    // Call X-Neews update endpoint
+    // Call X-Neews update endpoint (auto-refresh on 401)
     const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`, {
+    const response = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(requestBody)
     });
 
@@ -440,21 +289,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
-    // Get auth token
-    const { accessToken } = await getStoredTokens();
-    if (!accessToken) {
-      logger.warn('Watchlist DELETE failed: no access token', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-
-    // Call X-Neews delete endpoint
+    // Call X-Neews delete endpoint (auto-refresh on 401)
     const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+    const response = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`, {
+      method: 'DELETE'
     });
 
     const responseData = await response.json();
@@ -518,21 +356,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
-    // Get auth token
-    const { accessToken } = await getStoredTokens();
-    if (!accessToken) {
-      logger.warn('Watchlist TOGGLE_HIGHLIGHT failed: no access token', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-
-    // Call X-Neews toggle-highlight endpoint
+    // Call X-Neews toggle-highlight endpoint (auto-refresh on 401)
     const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}/toggle-highlight`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+    const response = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}/toggle-highlight`, {
+      method: 'POST'
     });
 
     const responseData = await response.json();

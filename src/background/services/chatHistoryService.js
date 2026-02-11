@@ -250,7 +250,41 @@ async function upsertSupabaseRow({ userId, entry, correlationId }) {
 
   if (existing) {
     const updateData = {};
-    if (chatId && chatId !== existing.chat_id) updateData.chat_id = chatId;
+
+    // ⚠️ FIX: Check if chat_id already exists before updating
+    // Prevent duplicate key violation when updating chat_id
+    if (chatId && chatId !== existing.chat_id) {
+      // Check if another record with this chat_id already exists
+      const conflictingRow = await supabaseWithRetry(
+        async () => {
+          const { data, error } = await supabase
+            .from('chat_history')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('chat_id', chatId)
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          return data;
+        },
+        { operationName: 'chat_history.checkChatIdConflict', correlationId }
+      );
+
+      if (conflictingRow && conflictingRow.id !== existing.id) {
+        // Another record with this chat_id exists → don't update chat_id
+        logger.warn('⚠️ chat_id conflict detected, skipping chat_id update', {
+          correlationId,
+          existingId: existing.id,
+          conflictingId: conflictingRow.id,
+          chatId
+        });
+        // Continue with other updates but skip chat_id
+      } else {
+        // Safe to update chat_id
+        updateData.chat_id = chatId;
+      }
+    }
+
     if (chatUrl) updateData.chat_url = chatUrl;
     if (response != null) updateData.response = response;
 

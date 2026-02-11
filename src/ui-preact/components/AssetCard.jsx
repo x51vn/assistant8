@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'preact/hooks';
 import { getGoldPrices, getPricePerUnit, convertGoldUnit } from '../api/commodityApi.js';
+import { formatCurrency } from '../utils/formatters.js';
 
 /**
  * Asset type config with Font Awesome icons
@@ -39,22 +40,6 @@ const RISK_LABELS = {
   high: { label: 'Cao', severity: 'high', icon: 'fa-exclamation-circle' },
   very_high: { label: 'Rất cao', severity: 'critical', icon: 'fa-skull' }
 };
-
-/**
- * Format currency
- */
-function formatCurrency(value, currency = 'VND') {
-  if (value === null || value === undefined) return '-';
-  
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: currency === 'VND' ? 0 : 2
-  });
-  
-  return formatter.format(value);
-}
 
 /**
  * Get Vietnamese label for gold unit

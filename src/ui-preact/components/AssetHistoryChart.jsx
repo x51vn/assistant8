@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { formatCurrency } from '../utils/formatters.js';
 
 /**
  * Date range options
@@ -18,22 +19,6 @@ const DATE_RANGES = [
   { value: '1y', label: '1 năm' },
   { value: 'all', label: 'Tất cả' }
 ];
-
-/**
- * Format currency
- */
-function formatCurrency(value, currency = 'VND') {
-  if (value === null || value === undefined) return '-';
-  
-  const formatter = new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  });
-  
-  return formatter.format(value);
-}
 
 /**
  * Format date

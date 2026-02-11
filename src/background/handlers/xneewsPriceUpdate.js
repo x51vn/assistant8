@@ -16,107 +16,17 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
-import { getStoredTokens } from './xneewsAuth.js';
 import { registerHandler } from '../messageRouter.js';
+import { XNEEWS_API_BASE, XNEEWS_ERROR_MESSAGES } from '../../shared/xneewsConfig.js';
+import { xneewsFetch } from '../utils/xneewsFetch.js';
+import { isMarketHours } from '../utils/marketHours.js';
 
 const logger = createLogger('Handlers/XneewsPriceUpdate');
 
-/**
- * X-Neews API base URL
- * Default: https://api.x51.vn/api
- * OpenAPI Docs: https://api.x51.vn/api/openapi.json
- */
-const XNEEWS_API_BASE = import.meta.env.VITE_XNEEWS_API_URL || 'https://api.x51.vn/api';
+// Alias for conciseness
+const ERROR_MESSAGES_VI = XNEEWS_ERROR_MESSAGES;
 
-/**
- * Vietnamese error messages for user-facing errors
- */
-const ERROR_MESSAGES_VI = {
-  NETWORK_ERROR: 'Không có kết nối internet. Vui lòng kiểm tra mạng.',
-  AUTH_ERROR: 'Phiên đăng nhập X-Neews hết hạn. Vui lòng đăng nhập lại.',
-  API_ERROR: 'Lỗi khi lấy giá cổ phiếu. Vui lòng thử lại sau.',
-  RATE_LIMIT: 'Đạt giới hạn API. Vui lòng chờ {seconds} giây.',
-  TIMEOUT: 'Timeout khi lấy giá cổ phiếu. Vui lòng thử lại.'
-};
-
-/**
- * Fetch with retry and exponential backoff
- * Pattern: 1s → 2s → 4s (max 3 attempts)
- * 
- * @param {string} url - API endpoint URL
- * @param {Object} options - fetch options
- * @param {number} maxRetries - Max retry attempts (default 3)
- * @returns {Promise<Response>} Fetch response
- */
-async function fetchWithRetry(url, options, maxRetries = 3) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-      
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Don't retry client errors (4xx) - likely permanent
-      if (response.status >= 400 && response.status < 500) {
-        return response;
-      }
-      
-      // Retry server errors (5xx) and network errors with exponential backoff
-      if (!response.ok && attempt < maxRetries - 1) {
-        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-        logger.warn('Fetch failed, retrying', { 
-          attempt: attempt + 1, 
-          delay,
-          status: response.status 
-        });
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-      
-      return response;
-      
-    } catch (error) {
-      // Last attempt - throw error
-      if (attempt === maxRetries - 1) {
-        throw error;
-      }
-      
-      // Retry with exponential backoff
-      const delay = Math.pow(2, attempt) * 1000;
-      logger.warn('Fetch error, retrying', { 
-        attempt: attempt + 1, 
-        delay, 
-        error: error.message 
-      });
-      await new Promise(r => setTimeout(r, delay));
-    }
-  }
-}
-
-/**
- * Check if current time is during market hours
- * Vietnam stock market: 9:00 AM - 3:00 PM (Mon-Fri)
- * 
- * @returns {boolean} True if current time is during market hours
- */
-function isMarketHours() {
-  const now = new Date();
-  const hour = now.getHours();
-  const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-  
-  // Weekend check
-  if (day === 0 || day === 6) {
-    return false;
-  }
-  
-  // Market hours: 9:00 AM - 3:00 PM (15:00)
-  return hour >= 9 && hour < 15;
-}
+// fetchWithRetry, isMarketHours — imported from shared utils
 
 /**
  * Handle XNEEWS_PRICE_UPDATE request (from alarm)
@@ -154,26 +64,9 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
       });
     }
     
-    // Get auth tokens from chrome.storage.local
-    const tokens = await getStoredTokens();
-    if (!tokens?.access_token) {
-      logger.warn('No X-Neews auth token found', { correlationId });
-      return createErrorResponse(message, 'AUTH_ERROR', ERROR_MESSAGES_VI.AUTH_ERROR);
-    }
-    
-    // AC-2: Fetch /watchlist endpoint (returns price + ediff fields)
-    logger.info('Fetching watchlist prices from X-Neews API', { 
-      correlationId,
-      endpoint: `${XNEEWS_API_BASE}/watchlist/`
-    });
-    
-    // AC-4: Network failure → retry max 3x with exponential backoff
-    const response = await fetchWithRetry(`${XNEEWS_API_BASE}/watchlist/`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${tokens.access_token}`,
-        'Content-Type': 'application/json'
-      }
+    // Fetch prices with auto-refresh on 401 (no manual token management needed)
+    const response = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/`, {
+      method: 'GET'
     });
     
     // AC-5: Handle rate limit (429) - pause alarm temporarily

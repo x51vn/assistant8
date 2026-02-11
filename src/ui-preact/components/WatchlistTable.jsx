@@ -8,6 +8,7 @@
  */
 
 import {h} from 'preact';
+import { formatNumber, formatPercent } from '../utils/formatters.js';
 import {
   filteredItems,
   hasFilteredItems,
@@ -22,22 +23,8 @@ import {
 import { toggleHighlight } from '../api/watchlistApi.js';
 import { toggleItemHighlight, updateWatchlistItem } from '../state/watchlistState.js';
 
-/**
- * Format number as Vietnamese currency (no decimals)
- */
-function formatCurrency(value) {
-  if (value === null || value === undefined || isNaN(value)) return '-';
-  return new Intl.NumberFormat('vi-VN').format(Math.round(value));
-}
-
-/**
- * Format percentage with color
- */
-function formatPercent(value) {
-  if (value === null || value === undefined || isNaN(value)) return '-';
-  const formatted = (value * 100).toFixed(2);
-  return `${formatted}%`;
-}
+/** @see formatters.js - formatNumber used for watchlist (no currency symbol) */
+const formatCurrency = formatNumber;
 
 /**
  * Get color class for ediff value
@@ -105,7 +92,7 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete }) {
 
       {/* EDiff (performance indicator) */}
       <td class={`td-number ${ediffColorClass}`}>
-        {item.ediff !== null && item.ediff !== undefined ? formatPercent(item.ediff) : '-'}
+        {item.ediff !== null && item.ediff !== undefined ? formatPercent(item.ediff, { fromDecimal: true, decimals: 2 }) : '-'}
       </td>
 
       {/* Investment Thesis */}
