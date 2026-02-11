@@ -11,15 +11,11 @@ import { generateCorrelationId } from '../../logger.js';
 import { route } from '../messageRouter.js';
 import { isMarketHours } from '../utils/marketHours.js';
 import { _performSessionCheck } from './sessionManager.js';
-import { _performXneewsCheck } from './xneewsSessionManager.js';
 
 const logger = createLogger('Alarms');
 
 // Alarm name for commodity (gold/crypto) price updates
 export const ALARM_UPDATE_COMMODITY_PRICES = 'updateCommodityPrices';
-
-// Alarm name for X-Neews session check
-export const ALARM_XNEEWS_CHECK = 'xneewsSessionCheck';
 
 /**
  * Handle alarm event
@@ -194,28 +190,6 @@ export async function handleAlarm(alarm) {
         if (!error?.message?.includes('Receiving end does not exist')) {
           logger.error('WATCHLIST_AI_ENRICH alarm failed', { correlationId, error: error.message });
         }
-      }
-      return;
-    }
-
-    // ✅ XNEEWS_CHECK alarm - Check X-Neews token expiry (every 5 minutes)
-    // Calls internal function directly - NO chrome.runtime.sendMessage()  
-    // Proactive token refresh BEFORE expiry
-    if (alarm.name === ALARM_XNEEWS_CHECK) {
-      logger.debug('XNEEWS_CHECK alarm triggered', { correlationId });
-      
-      try {
-        // Call directly - reliable execution regardless of UI state
-        const result = await _performXneewsCheck(correlationId);
-        
-        logger.debug('X-Neews token check completed', {
-          correlationId,
-          status: result.status,
-          authenticated: result.authenticated,
-          minutesUntilExpiry: result.minutesUntilExpiry
-        });
-      } catch (error) {
-        logger.error('XNEEWS_CHECK alarm failed', { correlationId, error: error.message });
       }
       return;
     }
