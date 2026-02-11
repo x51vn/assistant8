@@ -99,16 +99,16 @@ export async function handleAlarm(alarm) {
       return;
     }
 
-    // WATCHLIST_PRICE_UPDATE alarm - Update X-Neews watchlist prices (market hours only)
-    // XST-744: Real-time price updates from X-Neews API
+    // WATCHLIST_PRICE_UPDATE alarm - Update Supabase watchlist prices (market hours only)
+    // XST-744: Real-time price updates from Supabase
     if (alarm.name === 'watchlistPriceUpdate') {
       logger.info('WATCHLIST_PRICE_UPDATE alarm triggered', { correlationId });
-      
+
       // Market hours check is done in the handler (for logging consistency)
       // Alarm fires every 5 minutes regardless, handler decides to skip
-      
+
       try {
-        // Send message to X-Neews price update handler
+        // Send message to Supabase price update handler
         const response = await chrome.runtime.sendMessage({
           v: 1,
           type: MESSAGE_TYPES.XNEEWS_PRICE_UPDATE,

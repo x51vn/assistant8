@@ -1,7 +1,7 @@
 /**
  * @fileoverview Market Hours Utility
  * Consolidated check for Vietnam stock market trading hours
- * Used by: xneewsPriceUpdate, alarms
+ * Used by: supabasePriceUpdate, alarms
  */
 
 import { MARKET_OPEN_HOUR, MARKET_CLOSE_HOUR } from '../../shared/appConstants.js';

@@ -613,7 +613,7 @@ export function SupabaseAuthForm() {
               </button>
             </div>
             <div class="modal-body">
-              <p>Bạn có chắc chắn muốn đăng xuất khỏi X-Neews không?</p>
+              <p>Bạn có chắc chắn muốn đăng xuất không?</p>
             </div>
             <div class="modal-footer">
               <button

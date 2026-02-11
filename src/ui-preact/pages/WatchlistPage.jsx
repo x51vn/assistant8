@@ -482,7 +482,7 @@ export default function WatchlistPage() {
         <div class="empty-state">
           <i class="fas fa-list-ul"></i>
           <h3>Chưa có mục watchlist nào</h3>
-          <p>Bạn chưa có mục nào trong watchlist X-Neews</p>
+          <p>Bạn chưa có mục nào trong watchlist</p>
           <button
             class="btn-primary"
             onClick={handleAdd}
