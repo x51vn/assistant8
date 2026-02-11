@@ -6,7 +6,7 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, ALARM_WATCHLIST_AI_ENRICH } from '../../shared/appConstants.js';
+import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP } from '../../shared/appConstants.js';
 import { generateCorrelationId } from '../../logger.js';
 import { route } from '../messageRouter.js';
 import { isMarketHours } from '../utils/marketHours.js';
@@ -156,40 +156,6 @@ export async function handleAlarm(alarm) {
         });
       } catch (error) {
         logger.error('SESSION_CHECK alarm failed', { correlationId, error: error.message });
-      }
-      return;
-    }
-
-    // WATCHLIST_AI_ENRICH alarm - Daily at 16:00 local time
-    // Triggers AI enrichment of watchlist items (entry/target/stoploss/thesis)
-    if (alarm.name === ALARM_WATCHLIST_AI_ENRICH) {
-      logger.info('WATCHLIST_AI_ENRICH alarm triggered', { correlationId });
-      
-      try {
-        // Call handler directly via route() - chrome.runtime.sendMessage()
-        // does NOT reliably deliver to the sender's own onMessage listener in MV3 SW
-        const response = await route({
-          v: 1,
-          type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN,
-          correlationId,
-          timestamp: Date.now(),
-          data: { dryRun: false }
-        }, { id: chrome.runtime.id });
-        
-        if (response?.error) {
-          logger.error('Watchlist AI enrichment failed', {
-            correlationId,
-            error: response.error?.message || response.errorMessage
-          });
-        } else if (response?.stage === 'already_running') {
-          logger.info('Watchlist AI enrichment skipped - already running', { correlationId });
-        } else {
-          logger.info('Watchlist AI enrichment started', { correlationId });
-        }
-      } catch (error) {
-        if (!error?.message?.includes('Receiving end does not exist')) {
-          logger.error('WATCHLIST_AI_ENRICH alarm failed', { correlationId, error: error.message });
-        }
       }
       return;
     }

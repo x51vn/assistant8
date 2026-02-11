@@ -18,7 +18,6 @@ import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
-import { ALARM_WATCHLIST_AI_ENRICH } from '../shared/appConstants.js';
 import { flushChatHistoryOutbox } from './services/chatHistoryService.js';
 import './handlers/index.js'; // This will register all handlers
 
@@ -351,33 +350,18 @@ async function setupAlarms() {
     await chrome.alarms.clear('updateCommodityPrices');
     await chrome.alarms.clear('SESSION_CHECK');
     await chrome.alarms.clear('watchlistPriceUpdate');
-    await chrome.alarms.clear(ALARM_WATCHLIST_AI_ENRICH);
 
     // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
-    
+
     // ✅ NEW: Commodity (gold/crypto) price updates - runs 24/7, every 15 minutes
     // Gold and crypto markets operate 24/7, not restricted to VN market hours
     chrome.alarms.create('updateCommodityPrices', { periodInMinutes: 15 });
-    
-    // ✅ XST-744: X-Neews watchlist price updates - runs every 5 minutes (market hours only)
+
+    // ✅ XST-744: Watchlist price updates - runs every 5 minutes (market hours only)
     // Handler checks market hours before fetching (9:00-15:00 VN weekdays)
     chrome.alarms.create('watchlistPriceUpdate', { periodInMinutes: 5 });
-    
-    // ✅ Watchlist AI Enrichment - daily at 16:00 local time
-    // Calculates delay to next 16:00 then repeats every 24h
-    const now = new Date();
-    const next16h = new Date(now);
-    next16h.setHours(16, 0, 0, 0);
-    if (now >= next16h) {
-      // Already past 16:00 today, schedule for tomorrow
-      next16h.setDate(next16h.getDate() + 1);
-    }
-    chrome.alarms.create(ALARM_WATCHLIST_AI_ENRICH, {
-      when: next16h.getTime(),
-      periodInMinutes: 1440 // 24 hours
-    });
-    
+
     // ✅ NEW: Session expiration check - runs every 1 minute
     // Proactively checks if session is about to expire
     // Allows graceful handling instead of sudden logout
@@ -394,7 +378,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
 
-    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, AI_ENRICH: daily@16:00)');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }

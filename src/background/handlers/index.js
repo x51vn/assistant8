@@ -39,7 +39,7 @@ import './atlassian.js'; // Atlassian (Jira + Confluence) integration handlers
 // REMOVED XST-739: import './xneewsAuth.js'; // X-Neews auth handlers - migrated to Supabase auth
 import './xneewsWatchlist.js'; // XST-741: Watchlist CRUD handlers (migrated to Supabase)
 import './xneewsPriceUpdate.js'; // XST-744: Price update handler (migrated to Supabase)
-import './watchlistAiEnrich.js'; // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
+import './watchlistEnrich.js'; // XST-742: Manual per-symbol watchlist enrichment
 
 logger.info('All message handlers registered');
 
