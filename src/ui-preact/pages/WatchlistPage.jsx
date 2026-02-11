@@ -388,7 +388,7 @@ export default function WatchlistPage() {
       <div class="page-header">
         <h2>
           <i class="fas fa-list-check"></i>
-          Watchlist X-Neews
+          Stock Watchlist
         </h2>
         <div class="page-actions">
           <button
