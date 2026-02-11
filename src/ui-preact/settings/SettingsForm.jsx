@@ -8,7 +8,6 @@ import { useEffect, useState, useCallback } from 'preact/hooks';
 import { CheckboxField } from '../components/CheckboxField.jsx';
 import { NumberField } from '../components/NumberField.jsx';
 import AllPromptsSection from '../components/AllPromptsSection.jsx';
-import { SupabaseAuthForm } from '../components/supabaseAuth/SupabaseAuthForm.jsx';
 import {
   allPrompts,
   autoRun,
@@ -183,18 +182,6 @@ export function SettingsForm({ onSave }) {
           max={60}
           step={1}
         />
-      </section>
-
-      {/* Stock Watchlist Integration */}
-      <section class="form-section">
-        <h3 class="section-title">
-          <i class="fas fa-chart-line"></i>
-          Stock Watchlist
-        </h3>
-        <p class="section-description">
-          Quản lý danh sách giám sát cổ phiếu. Đăng ký hoặc đăng nhập để bắt đầu.
-        </p>
-        <SupabaseAuthForm />
       </section>
 
       {/* Atlassian Integration */}
