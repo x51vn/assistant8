@@ -40,7 +40,7 @@ import {
 } from '../state/watchlistState.js';
 import {
   fetchWatchlist,
-  checkXneewsAuth,
+  checkSupabaseAuth,
   addWatchlistItem,
   updateWatchlistItem,
   deleteWatchlistItem
@@ -60,11 +60,11 @@ export default function WatchlistPage() {
   const [selectedItem, setSelectedItem] = useState(null);
 
   /**
-   * Check X-Neews authentication on mount
+   * Check Supabase authentication on mount
    */
   useEffect(() => {
     const checkAuth = async () => {
-      const hasAuth = await checkXneewsAuth();
+      const hasAuth = await checkSupabaseAuth();
       setIsAuthenticated(hasAuth);
       setAuthChecked(true);
     };

@@ -17,7 +17,7 @@ import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { registerHandler } from '../messageRouter.js';
 import { supabase } from '../../supabaseConfig.js';
-import { supabaseWithRetry } from '../utils/supabaseWithRetry.js';
+import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { isMarketHours } from '../utils/marketHours.js';
 
 const logger = createLogger('Handlers/PriceUpdate');

@@ -29,7 +29,7 @@ import {
   WATCHLIST_AI_ENRICH_LOCK_EXPIRY_MS
 } from '../../shared/appConstants.js';
 import { supabase } from '../../supabaseConfig.js';
-import { supabaseWithRetry } from '../utils/supabaseWithRetry.js';
+import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 
 const logger = createLogger('Services/WatchlistAiEnrich');
 
