@@ -318,7 +318,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
 
 /**
  * Wait for content script to capture enrichment response from ChatGPT
- * Listens for CONTENT_ENRICHMENT_RESPONSE message
+ * Listens for CONTENT_RESPONSE_CAPTURED message (existing ChatGPT prompt flow)
  *
  * @param {string} runId - Request correlation ID
  * @param {number} timeoutMs - Timeout in milliseconds (default 15 min)
@@ -332,8 +332,9 @@ function waitForEnrichmentResponse(runId, timeoutMs = 900000) {
     const handler = (message) => {
       if (resolved) return;
 
+      // Listen for CONTENT_RESPONSE_CAPTURED (sent by content script after capturing ChatGPT response)
       if (
-        message?.type === 'CONTENT_ENRICHMENT_RESPONSE' &&
+        message?.type === MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED &&
         message?.data?.runId === runId &&
         typeof message?.data?.response === 'string'
       ) {
