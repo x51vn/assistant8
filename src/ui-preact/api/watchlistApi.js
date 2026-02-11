@@ -154,13 +154,20 @@ export async function toggleHighlight(symbol) {
 }
 
 /**
- * Check if user has X-Neews authentication token
- * @returns {Promise<boolean>} - True if token exists, false otherwise
+ * checkXneewsAuth is deprecated - use Supabase auth instead
+ * Auth state is managed via supabaseAuth handler
  */
-export async function checkXneewsAuth() {
+export async function checkSupabaseAuth() {
   try {
-    const result = await chrome.storage.local.get(['xneews_access_token']);
-    return Boolean(result.xneews_access_token);
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: 'SUPABASE_AUTH_CHECK',
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: {}
+    });
+
+    return response.authenticated === true;
   } catch (error) {
     console.error('[WatchlistAPI] Failed to check auth:', error);
     return false;

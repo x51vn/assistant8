@@ -28,15 +28,19 @@ import {
   WATCHLIST_AI_ENRICH_STATE_KEY,
   WATCHLIST_AI_ENRICH_LOCK_EXPIRY_MS
 } from '../../shared/appConstants.js';
-import { XNEEWS_API_BASE, XNEEWS_ERROR_MESSAGES } from '../../shared/xneewsConfig.js';
-import { xneewsFetch } from '../utils/xneewsFetch.js';
 import { supabase } from '../../supabaseConfig.js';
-import { supabaseWithRetry } from '../utils/supabaseRetry.js';
+import { supabaseWithRetry } from '../utils/supabaseWithRetry.js';
 
 const logger = createLogger('Services/WatchlistAiEnrich');
 
-// Alias error messages
-const ERROR_MESSAGES = XNEEWS_ERROR_MESSAGES;
+// Vietnamese error messages
+const ERROR_MESSAGES = {
+  AUTH_ERROR: 'Lỗi xác thực. Vui lòng đăng nhập.',
+  API_ERROR: 'Lỗi kết nối dữ liệu. Vui lòng thử lại.',
+  NETWORK_ERROR: 'Không thể kết nối. Vui lòng kiểm tra mạng.',
+  NO_WATCHLIST: 'Watchlist của bạn trống. Hãy thêm mục trước khi sử dụng tính năng này.',
+  LOCK_ACTIVE: 'Enrichment đang chạy. Vui lòng đợi hoàn thành trước khi chạy lại.'
+};
 
 // ============================================================================
 // RUNTIME STATE (IN-MEMORY)
@@ -108,148 +112,137 @@ async function acquireLock(runId) {
 }
 
 // ============================================================================
-// X-NEEWS API HELPERS
+// SUPABASE HELPERS (migrated from x51.vn)
 // ============================================================================
 
-// getAccessToken, fetchWithRetry — using shared xneewsFetch (auto-refresh on 401)
-
 /**
- * Fetch ALL watchlist items from X-Neews (paginated)
+ * Fetch ALL watchlist items from Supabase (paginated)
  * @returns {Promise<Array>} Full list of watchlist items
  */
 async function fetchAllWatchlistItems() {
   const allItems = [];
-  let page = 1;
-  const size = 100; // Max page size
+  const pageSize = 100; // Batch fetch size
+  let hasMore = true;
+  let offset = 0;
 
-  while (true) {
-    const url = new URL(`${XNEEWS_API_BASE}/watchlist/`);
-    url.searchParams.set('page', page.toString());
-    url.searchParams.set('size', size.toString());
+  while (hasMore) {
+    const result = await supabaseWithRetry(
+      async () => {
+        const response = await supabase
+          .from('watchlist')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
-    const response = await xneewsFetch(url.toString(), {
-      method: 'GET'
-    });
+        if (response.error) throw response.error;
+        return response;
+      },
+      {
+        operationName: 'watchlist.fetch-all-for-enrichment',
+        maxRetries: 2
+      }
+    );
 
-    if (response.status === 401) {
-      throw new Error(ERROR_MESSAGES.AUTH_ERROR);
-    }
-
-    if (!response.ok) {
-      throw new Error(ERROR_MESSAGES.API_ERROR);
-    }
-
-    const data = await response.json();
-    const items = data.data || [];
-    allItems.push(...items);
-
-    const totalPages = data.total_pages || 1;
-    if (page >= totalPages) break;
-    page++;
+    allItems.push(...(result.data || []));
+    hasMore = (result.data?.length || 0) === pageSize;
+    offset += pageSize;
   }
 
   return allItems;
 }
 
 /**
- * Update a single watchlist item via X-Neews API
+ * Update a single watchlist item via Supabase
  * @param {string} symbol
  * @param {Object} updates - { entry, target, stoploss, investment_thesis }
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 async function updateWatchlistItem(symbol, updates) {
-  // Build request body - only non-null fields
-  const requestBody = {};
+  // Build update data - only non-null fields
+  const updateData = {};
   if (updates.entry !== null && updates.entry !== undefined) {
-    requestBody.entry = Number(updates.entry);
+    updateData.entry = Number(updates.entry);
   }
   if (updates.target !== null && updates.target !== undefined) {
-    requestBody.target = Number(updates.target);
+    updateData.target = Number(updates.target);
   }
   if (updates.stoploss !== null && updates.stoploss !== undefined) {
-    requestBody.stoploss = Number(updates.stoploss);
+    updateData.stoploss = Number(updates.stoploss);
   }
   if (updates.investment_thesis !== null && updates.investment_thesis !== undefined) {
-    requestBody.investment_thesis = updates.investment_thesis;
+    updateData.investment_thesis = updates.investment_thesis;
   }
 
   // Skip if nothing to update
-  if (Object.keys(requestBody).length === 0) {
+  if (Object.keys(updateData).length === 0) {
     logger.debug('No fields to update - skipping', { symbol });
     return { success: true, skipped: true };
   }
 
   const startTime = Date.now();
-  const symbolParam = encodeURIComponent(symbol.trim().toUpperCase());
-  const url = `${XNEEWS_API_BASE}/watchlist/symbol/${symbolParam}`;
+  const sanitizedSymbol = symbol.trim().toUpperCase();
 
-  logger.debug('Preparing API update request', {
-    symbol: symbolParam,
-    url,
-    updateFields: Object.keys(requestBody),
+  logger.debug('Preparing Supabase update request', {
+    symbol: sanitizedSymbol,
+    updateFields: Object.keys(updateData),
     updateData: {
-      entry: requestBody.entry || null,
-      target: requestBody.target || null,
-      stoploss: requestBody.stoploss || null,
-      investment_thesis: requestBody.investment_thesis
-        ? `${requestBody.investment_thesis.substring(0, 50)}...`
+      entry: updateData.entry || null,
+      target: updateData.target || null,
+      stoploss: updateData.stoploss || null,
+      investment_thesis: updateData.investment_thesis
+        ? `${updateData.investment_thesis.substring(0, 50)}...`
         : null
     }
   });
 
   try {
-    const response = await xneewsFetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
+    const result = await supabaseWithRetry(
+      async () => {
+        const response = await supabase
+          .from('watchlist')
+          .update(updateData)
+          .eq('symbol', sanitizedSymbol)
+          .select();
+
+        if (response.error) throw response.error;
+        return response;
+      },
+      {
+        operationName: 'watchlist.update-for-enrichment',
+        maxRetries: 2
+      }
+    );
 
     const elapsed = Date.now() - startTime;
 
-    logger.debug('API response received', {
-      symbol: symbolParam,
-      status: response.status,
-      statusText: response.statusText,
+    logger.debug('Database update completed', {
+      symbol: sanitizedSymbol,
+      updated: result.data?.length > 0,
       elapsed: `${elapsed}ms`
     });
 
-    if (response.status === 401) {
-      logger.warn('❌ Auth error - token may have expired', {
-        symbol: symbolParam,
-        status: response.status
-      });
-      return { success: false, error: 'AUTH_ERROR' };
-    }
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      logger.warn('❌ Update failed - non-OK response', {
-        symbol: symbolParam,
-        status: response.status,
-        errorMessage: data.detail || data.message || 'No detail provided',
-        responseKeys: Object.keys(data)
+    if (!result.data || result.data.length === 0) {
+      logger.warn('❌ Update failed - symbol not found', {
+        symbol: sanitizedSymbol
       });
       return {
         success: false,
-        error: data.detail || `HTTP ${response.status}`
+        error: 'SYMBOL_NOT_FOUND'
       };
     }
 
-    // Parse response to validate update
-    const responseData = await response.json().catch(() => ({}));
     logger.info('✅ Update successful', {
-      symbol: symbolParam,
-      status: response.status,
-      updatedFields: Object.keys(requestBody),
-      elapsed: `${elapsed}ms`,
-      responseSymbol: responseData.symbol || null
+      symbol: sanitizedSymbol,
+      updatedFields: Object.keys(updateData),
+      elapsed: `${elapsed}ms`
     });
 
     return { success: true };
+
   } catch (error) {
     const elapsed = Date.now() - startTime;
     logger.error('❌ Update exception', {
-      symbol: symbolParam,
+      symbol: sanitizedSymbol,
       error: error.message,
       errorName: error.name,
       elapsed: `${elapsed}ms`,
@@ -804,28 +797,27 @@ export async function runEnrichment(options = {}) {
     timestamp: new Date().toLocaleString()
   });
 
-  // 1. Proactive token refresh BEFORE long-running operation
-  // Watchlist enrichment can take 10+ minutes, so we refresh token FIRST
-  // to ensure it won't expire mid-run
-  logger.info('🔐 Proactive token validation before enrichment', { runId });
+  // 1. Supabase auth check - ensure user is authenticated before starting
+  logger.info('🔐 Checking Supabase authentication before enrichment', { runId });
   try {
-    // Make a simple auth check - will auto-refresh if needed via xneewsFetch
-    const testResponse = await xneewsFetch(`${XNEEWS_API_BASE}/watchlist/?page=1&size=1`, {
-      method: 'GET'
-    });
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (testResponse.status === 401) {
-      logger.error('❌ Token validation failed before enrichment', { runId });
+    if (authError || !user) {
+      logger.error('❌ Not authenticated - cannot proceed with enrichment', { runId });
       return {
         success: false,
         runId,
-        error: ERROR_MESSAGES.AUTH_ERROR
+        error: 'Vui lòng đăng nhập trước khi sử dụng tính năng này.'
       };
     }
-    logger.info('✅ Token validated successfully', { runId });
+    logger.info('✅ Authentication verified', { runId, userId: user.id });
   } catch (error) {
-    logger.error('Token validation exception', { runId, error: error.message });
-    // Continue anyway - might be network issue, not auth
+    logger.error('Auth check exception', { runId, error: error.message });
+    return {
+      success: false,
+      runId,
+      error: 'Lỗi xác thực. Vui lòng thử lại.'
+    };
   }
 
   // 2. Acquire lock
@@ -845,8 +837,8 @@ export async function runEnrichment(options = {}) {
     // 3. Broadcast start
     broadcastStatus({ runId, stage: 'fetching_watchlist' });
 
-    // 4. Fetch all watchlist items
-    logger.info('📥 Fetching watchlist from X-Neews API...', { runId });
+    // 4. Fetch all watchlist items from Supabase
+    logger.info('📥 Fetching watchlist from Supabase...', { runId });
     const fetchStartTime = Date.now();
     const allItems = await fetchAllWatchlistItems();
     const fetchElapsed = Date.now() - fetchStartTime;
