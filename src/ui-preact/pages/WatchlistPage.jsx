@@ -43,7 +43,8 @@ import {
   checkSupabaseAuth,
   addWatchlistItem,
   updateWatchlistItem,
-  deleteWatchlistItem
+  deleteWatchlistItem,
+  enrichWatchlistItem
 } from '../api/watchlistApi.js';
 
 /**
@@ -52,12 +53,16 @@ import {
 export default function WatchlistPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(null); // null = checking
   const [authChecked, setAuthChecked] = useState(false);
-  
+
   // Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // Enrichment state
+  const [enrichingSymbol, setEnrichingSymbol] = useState(null); // Symbol being enriched
+  const [enrichmentError, setEnrichmentError] = useState(null);
 
   /**
    * Check Supabase authentication on mount
@@ -295,6 +300,38 @@ export default function WatchlistPage() {
     }
   };
 
+  /**
+   * Handle enrichment request for a watchlist item
+   * User clicks "Đánh giá" button -> triggers ChatGPT analysis -> updates Supabase
+   */
+  const handleEnrich = async (item) => {
+    if (!item || !item.symbol) return;
+
+    setEnrichingSymbol(item.symbol);
+    setEnrichmentError(null);
+
+    try {
+      const result = await enrichWatchlistItem(item.symbol);
+
+      if (result.error) {
+        setEnrichmentError(result.error);
+        console.error('[WatchlistPage] Enrichment error:', result.error);
+      } else if (result.success && result.item) {
+        // Update UI with enriched data
+        updateItemInState(result.item);
+        console.log('[WatchlistPage] Enrichment completed for', item.symbol);
+      }
+    } catch (err) {
+      setEnrichmentError({
+        code: 'ENRICHMENT_ERROR',
+        message: 'Đánh giá thất bại, vui lòng thử lại'
+      });
+      console.error('[WatchlistPage] Enrichment exception:', err);
+    } finally {
+      setEnrichingSymbol(null);
+    }
+  };
+
   // Auth check in progress
   if (!authChecked) {
     return (
@@ -417,6 +454,21 @@ export default function WatchlistPage() {
         </div>
       )}
 
+      {/* Enrichment Error State */}
+      {enrichmentError && (
+        <div class="error-banner">
+          <i class="fas fa-warning"></i>
+          <span>{enrichmentError.message || 'Đánh giá thất bại'}</span>
+          <button
+            class="btn-dismiss"
+            onClick={() => setEnrichmentError(null)}
+            type="button"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading.value && (
         <div class="loading-state">
@@ -447,6 +499,8 @@ export default function WatchlistPage() {
         <WatchlistTable
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onEnrich={handleEnrich}
+          enrichingSymbol={enrichingSymbol}
         />
       )}
 

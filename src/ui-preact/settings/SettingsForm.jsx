@@ -27,7 +27,6 @@ import {
   initializeAllPrompts
 } from '../api/settingsApi.js';
 import { testAtlassianConnection } from '../api/atlassianApi.js';
-import { WatchlistAiEnrichSection } from '../components/WatchlistAiEnrichSection.jsx';
 
 /**
  * @param {Object} props
@@ -197,9 +196,6 @@ export function SettingsForm({ onSave }) {
         </p>
         <XneewsAuthForm />
       </section>
-
-      {/* Watchlist AI Enrichment */}
-      <WatchlistAiEnrichSection />
 
       {/* Atlassian Integration */}
       <section class="form-section">

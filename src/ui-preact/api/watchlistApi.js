@@ -175,6 +175,54 @@ export async function checkSupabaseAuth() {
 }
 
 /**
+ * Enrich a single watchlist item using ChatGPT
+ * @param {string} symbol - Stock symbol to enrich
+ * @returns {Promise<{success: boolean, item?: Object, error?: Object}>}
+ */
+export async function enrichWatchlistItem(symbol) {
+  try {
+    if (!symbol) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Mã cổ phiếu là bắt buộc'
+        }
+      };
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: 'WATCHLIST_ENRICH_SYMBOL',
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { symbol }
+    });
+
+    const error = extractError(response);
+    if (error) {
+      console.error('[WatchlistAPI] Enrichment failed:', error);
+      return { success: false, error };
+    }
+
+    return {
+      success: response.success === true,
+      item: response.item || null,
+      message: response.message || 'Đã cập nhật thông tin'
+    };
+  } catch (error) {
+    console.error('[WatchlistAPI] Failed to enrich watchlist item:', error);
+    return {
+      success: false,
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'Không thể gửi yêu cầu đánh giá. Vui lòng thử lại.'
+      }
+    };
+  }
+}
+
+/**
  * Add new watchlist item
  * @param {Object} data - Watchlist item data
  * @param {string} data.symbol - Stock symbol (required)
