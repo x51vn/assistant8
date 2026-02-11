@@ -1,9 +1,8 @@
 /**
- * @fileoverview Watchlist Price Update Handler (migrated from x51.vn)
+ * @fileoverview Watchlist Price Update Handler
  * Fetches latest watchlist prices from Supabase and broadcasts to UI
  * Runs periodically via chrome.alarms (every 5 minutes during market hours)
  *
- * Migration: x51.vn → Supabase (2026-02-11)
  * Ticket: XST-744
  *
  * Features:

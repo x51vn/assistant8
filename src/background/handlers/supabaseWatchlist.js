@@ -1,5 +1,5 @@
 /**
- * @fileoverview Supabase Watchlist Handler (migrated from x51.vn)
+ * @fileoverview Supabase Watchlist Handler
  * Manages watchlist CRUD operations via Supabase
  *
  * Architecture:
@@ -7,7 +7,6 @@
  * - Uses Supabase client with RLS for auth
  * - Background = Middleware: UI → Background → Supabase
  *
- * Migration: x51.vn → Supabase (2026-02-11)
  * Ticket: XST-741
  */
 
