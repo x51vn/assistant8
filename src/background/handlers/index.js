@@ -37,8 +37,8 @@ import './contentScriptReady.js'; // X51LABS-157-001: Content script readiness r
 import './chatHistoryAutoSave.js'; // Option A: Auto-save ChatGPT prompt/response to chat_history
 import './atlassian.js'; // Atlassian (Jira + Confluence) integration handlers
 // REMOVED XST-739: import './xneewsAuth.js'; // X-Neews auth handlers - migrated to Supabase auth
-import './xneewsWatchlist.js'; // XST-741: Watchlist CRUD handlers (migrated to Supabase)
-import './xneewsPriceUpdate.js'; // XST-744: Price update handler (migrated to Supabase)
+import './supabaseWatchlist.js'; // XST-741: Watchlist CRUD handlers (migrated to Supabase)
+import './supabasePriceUpdate.js'; // XST-744: Price update handler (migrated to Supabase)
 import './watchlistEnrich.js'; // XST-742: Manual per-symbol watchlist enrichment
 
 logger.info('All message handlers registered');

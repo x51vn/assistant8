@@ -11,7 +11,7 @@ import { signal, computed } from '@preact/signals';
 export const watchlistItems = signal([]);
 
 /**
- * Watchlist item structure (from X-Neews API):
+ * Watchlist item structure (from Supabase):
  * {
  *   symbol: string (e.g., "VNM", "FPT")
  *   investment_thesis: string

@@ -1,6 +1,6 @@
 /**
- * XneewsAuthForm.jsx - X-Neews Authentication Component
- * 
+ * SupabaseAuthForm.jsx - Supabase Authentication Component
+ *
  * Features:
  * - Login form (email, password)
  * - Register form (email, password, name, language, timezone)
@@ -9,8 +9,8 @@
  * - User profile section (email, name, last login, user status)
  * - Logout button with confirmation modal
  * - Error message display (Vietnamese)
- * - TOken persistence via chrome.storage.local
- * 
+ * - Token persistence via chrome.storage.local
+ *
  * XST-740: Build Settings Authentication UI Page
  */
 
@@ -25,7 +25,7 @@ const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]
 /**
  * Validate email format
  */
-function validateXneewsEmail(email) {
+function validateEmail(email) {
   if (!email || email.trim().length === 0) {
     return 'Email là bắt buộc';
   }
@@ -38,7 +38,7 @@ function validateXneewsEmail(email) {
 /**
  * Validate password strength (min 8 chars, 1 upper, 1 lower, 1 digit, 1 special)
  */
-function validateXneewsPassword(password) {
+function validatePassword(password) {
   if (!password || password.length === 0) {
     return 'Mật khẩu là bắt buộc';
   }
@@ -78,9 +78,9 @@ async function sendMessage(type, data) {
 }
 
 /**
- * XneewsAuthForm - X-Neews authentication UI component
+ * SupabaseAuthForm - Supabase authentication UI component
  */
-export function XneewsAuthForm() {
+export function SupabaseAuthForm() {
   // Tab state (login vs register)
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -154,7 +154,7 @@ export function XneewsAuthForm() {
     
     // Client-side validation
     const errors = {};
-    const emailErr = validateXneewsEmail(loginEmail);
+    const emailErr = validateEmail(loginEmail);
     if (emailErr) errors.email = emailErr;
     if (!loginPassword) errors.password = 'Mật khẩu là bắt buộc';
     
@@ -202,10 +202,10 @@ export function XneewsAuthForm() {
     
     // Client-side validation
     const errors = {};
-    const emailErr = validateXneewsEmail(regEmail);
+    const emailErr = validateEmail(regEmail);
     if (emailErr) errors.email = emailErr;
-    
-    const passwordErr = validateXneewsPassword(regPassword);
+
+    const passwordErr = validatePassword(regPassword);
     if (passwordErr) errors.password = passwordErr;
     
     if (regPassword !== regPasswordConfirm) {

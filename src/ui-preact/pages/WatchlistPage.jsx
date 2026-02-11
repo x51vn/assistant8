@@ -1,9 +1,9 @@
 /**
  * WatchlistPage.jsx - Watchlist display page
- * Main page for displaying X-Neews watchlist items
- * 
+ * Main page for displaying Stock Watchlist items
+ *
  * Features:
- * - Auth check (X-Neews token required)
+ * - Auth check (Supabase authentication required)
  * - Search by symbol
  * - Loading/empty states
  * - Table display with pagination
@@ -339,7 +339,7 @@ export default function WatchlistPage() {
         <div class="page-header">
           <h2>
             <i class="fas fa-list-check"></i>
-            Watchlist X-Neews
+            Stock Watchlist
           </h2>
         </div>
         <div class="loading-state">
@@ -357,13 +357,13 @@ export default function WatchlistPage() {
         <div class="page-header">
           <h2>
             <i class="fas fa-list-check"></i>
-            Watchlist X-Neews
+            Stock Watchlist
           </h2>
         </div>
         <div class="auth-required-state">
           <i class="fas fa-lock"></i>
           <h3>Yêu cầu đăng nhập</h3>
-          <p>Vui lòng đăng nhập X-Neews trong tab Cài đặt để xem watchlist</p>
+          <p>Vui lòng đăng nhập trong tab Cài đặt để xem watchlist</p>
           <button
             class= "btn-primary"
             onClick={() => {

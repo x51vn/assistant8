@@ -1,7 +1,7 @@
 /**
  * watchlistApi.js - Watchlist API layer
- * Routes watchlist operations to X-Neews background handlers
- * 
+ * Routes watchlist operations to Supabase backend via background handlers
+ *
  * Ticket: XST-742
  */
 
