@@ -143,8 +143,20 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      logger.warn('Watchlist CREATE failed: not authenticated', { correlationId });
+      return createErrorResponse(
+        message,
+        'AUTH_ERROR',
+        'Bạn cần đăng nhập để thêm watchlist.'
+      );
+    }
+
     // Build insert data - support both camelCase and snake_case
     const insertData = {
+      user_id: user.id,
       symbol: symbol.trim().toUpperCase()
     };
 

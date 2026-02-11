@@ -2,11 +2,10 @@
 -- Watchlist Table Migration
 -- Version: 1.0
 -- Date: February 11, 2026
--- Description: Create watchlist table (migrated from x51.vn)
+-- Description: Create watchlist table with Supabase backend
 -- ============================================
 
 -- This script creates the watchlist table for tracking stock watch items
--- Previously this data was stored on x51.vn API, now it's stored in Supabase
 
 -- ============================================
 -- 1. WATCHLIST TABLE
@@ -28,16 +27,23 @@ CREATE TABLE IF NOT EXISTS public.watchlist (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
-  -- Constraint: each user can have only one entry per symbol
-  CONSTRAINT unique_symbol_per_user UNIQUE(user_id, symbol),
-
   -- Constraints for prices
   CONSTRAINT entry_non_negative CHECK (entry IS NULL OR entry > 0),
   CONSTRAINT target_non_negative CHECK (target IS NULL OR target > 0),
   CONSTRAINT stoploss_non_negative CHECK (stoploss IS NULL OR stoploss > 0)
 );
 
-COMMENT ON TABLE public.watchlist IS 'Stock watchlist (migrated from x51.vn)';
+-- Add unique constraint only if not exists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'unique_symbol_per_user'
+  ) THEN
+    ALTER TABLE public.watchlist ADD CONSTRAINT unique_symbol_per_user UNIQUE(user_id, symbol);
+  END IF;
+END $$;
+
+COMMENT ON TABLE public.watchlist IS 'Stock watchlist for investment tracking';
 COMMENT ON COLUMN public.watchlist.symbol IS 'Stock ticker symbol (e.g., VNM, FPT)';
 COMMENT ON COLUMN public.watchlist.investment_thesis IS 'Investment rationale and thesis';
 COMMENT ON COLUMN public.watchlist.risk IS 'Risk level assessment (Thấp, Trung bình, Cao)';
