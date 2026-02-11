@@ -15,7 +15,6 @@
 
 import { h } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import WatchlistTable from '../components/WatchlistTable.jsx';
 import {
   AddWatchlistModal,
@@ -46,6 +45,10 @@ import {
   deleteWatchlistItem,
   enrichWatchlistItem
 } from '../api/watchlistApi.js';
+import {
+  startPricePolling,
+  stopPricePolling
+} from '../api/watchlistPriceUpdater.js';
 
 /**
  * WatchlistPage - Main watchlist page component
@@ -78,7 +81,7 @@ export default function WatchlistPage() {
   }, []);
 
   /**
-   * Fetch watchlist data when authenticated
+   * Fetch watchlist data when authenticated, then start price polling
    */
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -101,12 +104,19 @@ export default function WatchlistPage() {
           result.total || 0,
           result.totalPages || 0
         );
+        // Start price polling after data is loaded (mirrors PortfolioPage pattern)
+        startPricePolling();
       }
 
       loading.value = false;
     };
 
     loadWatchlist();
+
+    // Cleanup: stop polling on unmount or auth change
+    return () => {
+      stopPricePolling();
+    };
   }, [isAuthenticated, currentPage.value, pageSize.value]);
 
   /**
@@ -114,69 +124,10 @@ export default function WatchlistPage() {
    */
   useEffect(() => {
     return () => {
+      stopPricePolling();
       resetWatchlistState();
     };
   }, []);
-
-  /**
-   * Listen for real-time price updates from background (XST-744)
-   * Broadcasts sent via chrome.runtime.sendMessage every 5 minutes during market hours
-   */
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    const handlePriceUpdate = (message, sender, sendResponse) => {
-      // Only handle XNEEWS_PRICES_UPDATED messages
-      if (message.type !== MESSAGE_TYPES.XNEEWS_PRICES_UPDATED) {
-        return; // Ignore other messages
-      }
-      
-      // ⚠️ CRITICAL: Direct property access (createResponse spreads payload)
-      // NOT message.data.items - that doesn't exist!
-      const updatedItems = message.items || [];
-      
-      if (updatedItems.length === 0) {
-        console.log('[WatchlistPage] Price update received but no items');
-        return; // No items to update
-      }
-      
-      // Merge updated prices into current state
-      // Only update price/ediff fields (preserve user edits to other fields)
-      let updateCount = 0;
-      updatedItems.forEach(apiItem => {
-        const currentItem = watchlistItems.value.find(i => i.symbol === apiItem.symbol);
-        if (currentItem) {
-          // Selective merge: only price/ediff from API, preserve rest
-          const merged = {
-            ...currentItem,
-            price: apiItem.price,
-            ediff: apiItem.ediff,
-            // Preserve highlighted status (controlled by user, not API)
-            highlighted: currentItem.highlighted
-          };
-          updateItemInState(merged);
-          updateCount++;
-        }
-      });
-      
-      console.log('[WatchlistPage] Price update applied', { 
-        totalUpdated: updatedItems.length,
-        matchedItems: updateCount,
-        correlationId: message.correlationId 
-      });
-    };
-    
-    // Register listener
-    chrome.runtime.onMessage.addListener(handlePriceUpdate);
-    
-    console.log('[WatchlistPage] Price update listener registered');
-    
-    // Cleanup on unmount
-    return () => {
-      chrome.runtime.onMessage.removeListener(handlePriceUpdate);
-      console.log('[WatchlistPage] Price update listener removed');
-    };
-  }, [isAuthenticated]);
 
   /**
    * Handle search input change

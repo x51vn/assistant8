@@ -1,9 +1,9 @@
 /**
  * WatchlistTable.jsx - Watchlist table display component
  * Renders watchlist items in table format with pagination
- * 
- * Columns: Symbol, Price, Entry, Target, StopLoss, Risk, Thesis, Actions
- * 
+ *
+ * Columns: Symbol, Price, Entry, Target, StopLoss, PProfit, EDiff, Thesis, Actions
+ *
  * Ticket: XST-742
  */
 
@@ -59,6 +59,11 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
 
   const ediffColorClass = getEdiffColorClass(item.ediff);
 
+  // pprofit = (target - entry) / entry
+  const pprofit = (item.target && item.entry)
+    ? (item.target - item.entry) / item.entry
+    : null;
+
   return (
     <tr class={item.highlighted ? 'highlighted-row' : ''}>
       {/* Symbol with highlight star */}
@@ -81,13 +86,9 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       {/* StopLoss */}
       <td class="td-number">{formatCurrency(item.stoploss)}</td>
 
-      {/* Risk */}
-      <td class="td-risk">
-        {item.risk && (
-          <span class={`risk-badge risk-${item.risk.toLowerCase()}`}>
-            {item.risk}
-          </span>
-        )}
+      {/* PProfit - potential profit: (target - entry) / entry */}
+      <td class={`td-number ${pprofit !== null && pprofit > 0 ? 'text-success' : ''}`}>
+        {pprofit !== null ? formatPercent(pprofit, { fromDecimal: true, decimals: 2 }) : '-'}
       </td>
 
       {/* EDiff (performance indicator) */}
@@ -226,7 +227,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
               <th class="th-number">Entry</th>
               <th class="th-number">Target</th>
               <th class="th-number">StopLoss</th>
-              <th class="th-risk">Rủi ro</th>
+              <th class="th-number">PProfit %</th>
               <th class="th-number">EDiff %</th>
               <th class="th-thesis">Luận điểm</th>
               <th class="th-actions">Hành động</th>

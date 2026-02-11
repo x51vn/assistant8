@@ -41,20 +41,32 @@ export const searchQuery = signal('');
 // ===== COMPUTED SIGNALS =====
 
 /**
- * Filtered watchlist items by search query (symbol contains search)
- * Applied AFTER backend pagination
+ * Filtered and sorted watchlist items
+ * - Filtered by search query (symbol contains search)
+ * - Sorted by ediff ascending (smallest first)
+ * - Items without ediff are placed at the end
  */
 export const filteredItems = computed(() => {
-  const items = watchlistItems.value;
+  let items = watchlistItems.value;
   const query = searchQuery.value.trim().toUpperCase();
-  
-  if (!query) {
-    return items;
+
+  if (query) {
+    items = items.filter(item =>
+      item.symbol.toUpperCase().includes(query)
+    );
   }
-  
-  return items.filter(item => 
-    item.symbol.toUpperCase().includes(query)
-  );
+
+  // Sort by ediff ascending (null/undefined at the end)
+  return [...items].sort((a, b) => {
+    const aVal = a.ediff;
+    const bVal = b.ediff;
+    const aNull = aVal === null || aVal === undefined || isNaN(aVal);
+    const bNull = bVal === null || bVal === undefined || isNaN(bVal);
+    if (aNull && bNull) return 0;
+    if (aNull) return 1;
+    if (bNull) return -1;
+    return aVal - bVal;
+  });
 });
 
 /**
