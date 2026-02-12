@@ -267,6 +267,9 @@ export const MESSAGE_TYPES = {
   WATCHLIST_AI_ENRICH_DONE: 'WATCHLIST_AI_ENRICH_DONE',         // Background → UI: run completed
   WATCHLIST_AI_ENRICH_RESET: 'WATCHLIST_AI_ENRICH_RESET',       // UI → Background: force reset stuck state
 
+  // Unified Prompt Queue (p-queue based, concurrency=1)
+  PROMPT_QUEUE_STATUS: 'PROMPT_QUEUE_STATUS',                   // Background → UI: generic queue job status update
+
   // Error
   ERROR: 'ERROR'
 };
@@ -301,6 +304,12 @@ export function createResponse(originalMessage, responseType, payload = {}) {
     correlationId: originalMessage.correlationId, // Keep same correlation ID
     timestamp: Date.now(),
     inResponseTo: originalMessage.type,
+    /**
+     * CRITICAL: payload is SPREAD directly into the response object.
+     * 
+     * ✅ CORRECT: response.items / response.config / response.success
+     * ❌ WRONG:   response.data?.items (there is no nested .data by default)
+     */
     ...payload
   };
 }
@@ -317,9 +326,13 @@ export function createErrorResponse(originalMessage, errorCode, errorMessage, de
   return {
     v: MESSAGE_VERSION,
     type: MESSAGE_TYPES.ERROR,
-    correlationId: originalMessage.correlationId,
+    // Backward-compatible aliases used by older handler patterns
+    // (many handlers check `if (error.errorCode) return error;`)
+    errorCode,
+    errorMessage,
+    correlationId: originalMessage?.correlationId || generateCorrelationId(),
     timestamp: Date.now(),
-    inResponseTo: originalMessage.type,
+    inResponseTo: originalMessage?.type || null,
     error: {
       code: errorCode,
       message: errorMessage,

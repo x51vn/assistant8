@@ -71,8 +71,7 @@ export async function requireAuth(message) {
       {
         operationName: 'supabase.auth.getUser',
         maxRetries: 2,
-        correlationId,
-        willRetry: false // Don't retry auth errors (400 status)
+        correlationId
       }
     );
     

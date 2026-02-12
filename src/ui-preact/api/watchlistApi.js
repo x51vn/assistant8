@@ -175,9 +175,12 @@ export async function checkSupabaseAuth() {
 }
 
 /**
- * Enrich a single watchlist item using ChatGPT
+ * Enqueue a watchlist item for AI enrichment via background queue
+ * Returns immediately with queue position — does NOT block until ChatGPT responds.
+ * Background will process the job and emit WATCHLIST_AI_ENRICH_DONE when complete.
+ *
  * @param {string} symbol - Stock symbol to enrich
- * @returns {Promise<{success: boolean, item?: Object, error?: Object}>}
+ * @returns {Promise<{success: boolean, correlationId?: string, position?: number, duplicate?: boolean, error?: Object}>}
  */
 export async function enrichWatchlistItem(symbol) {
   try {
@@ -193,7 +196,7 @@ export async function enrichWatchlistItem(symbol) {
 
     const response = await chrome.runtime.sendMessage({
       v: 1,
-      type: 'WATCHLIST_ENRICH_SYMBOL',
+      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
       data: { symbol }
@@ -201,22 +204,57 @@ export async function enrichWatchlistItem(symbol) {
 
     const error = extractError(response);
     if (error) {
-      console.error('[WatchlistAPI] Enrichment failed:', error);
+      console.error('[WatchlistAPI] Enrichment enqueue failed:', error);
       return { success: false, error };
     }
 
     return {
       success: response.success === true,
-      item: response.item || null,
-      message: response.message || 'Đã cập nhật thông tin'
+      correlationId: response.correlationId || null,
+      position: response.position || 0,
+      duplicate: response.duplicate || false,
+      message: response.message || 'Đã thêm vào hàng đợi đánh giá'
     };
   } catch (error) {
-    console.error('[WatchlistAPI] Failed to enrich watchlist item:', error);
+    console.error('[WatchlistAPI] Failed to enqueue enrichment:', error);
     return {
       success: false,
       error: {
         code: 'NETWORK_ERROR',
         message: 'Không thể gửi yêu cầu đánh giá. Vui lòng thử lại.'
+      }
+    };
+  }
+}
+
+/**
+ * Cancel a pending enrichment job
+ * @param {string} correlationId - Job correlationId to cancel
+ * @returns {Promise<{success: boolean, error?: Object}>}
+ */
+export async function cancelEnrichment(correlationId) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { correlationId }
+    });
+
+    const error = extractError(response);
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[WatchlistAPI] Failed to cancel enrichment:', error);
+    return {
+      success: false,
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'Không thể hủy tác vụ đánh giá.'
       }
     };
   }

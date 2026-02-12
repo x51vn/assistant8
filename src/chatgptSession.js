@@ -4,9 +4,9 @@
 
 import { 
   ERROR_CODES, 
-  createSuccessResponse, 
-  createErrorResponse, 
-  exceptionToErrorResponse 
+  createDataResponse, 
+  createApiErrorResponse, 
+  exceptionToApiErrorResponse 
 } from './types.js';
 import { createLogger } from './logger.js';
 import {
@@ -248,7 +248,7 @@ export async function createNewSession(tabId) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'createNewSession'
@@ -265,18 +265,18 @@ export async function createNewSession(tabId) {
         chatUrl: response.chatUrl || null
       };
       logger.endOperation(correlationId, 'success');
-      return createSuccessResponse(data);
+      return createDataResponse(data);
     }
     
     logger.endOperation(correlationId, 'error', 'No success response');
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.SESSION_CREATE_FAILED,
       'Failed to create new session',
       'createNewSession'
     );
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'createNewSession');
+    return exceptionToApiErrorResponse(error, 'createNewSession');
   }
 }
 
@@ -296,7 +296,7 @@ export async function sendInput(tabId, prompt, options = {}) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'sendInput'
@@ -304,7 +304,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     }
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.EMPTY_PROMPT,
         'Prompt cannot be empty',
         'sendInput'
@@ -336,7 +336,7 @@ export async function sendInput(tabId, prompt, options = {}) {
             status: response.status
           };
           logger.endOperation(correlationId, 'success');
-          return createSuccessResponse(data);
+          return createDataResponse(data);
         }
         
         // Invalid status - retry if attempts remain
@@ -370,7 +370,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     
     // All retries exhausted
     logger.endOperation(correlationId, 'error', `Max retries exhausted: ${lastError}`);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.INPUT_SEND_FAILED,
       `Failed after ${maxRetries + 1} attempts`,
       'sendInput',
@@ -378,7 +378,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     );
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'sendInput');
+    return exceptionToApiErrorResponse(error, 'sendInput');
   }
 }
 
@@ -399,7 +399,7 @@ export async function getOutput(tabId, options = {}) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'getOutput'
@@ -452,7 +452,7 @@ export async function getOutput(tabId, options = {}) {
           }
           
           logger.endOperation(correlationId, 'success', { attempt });
-          return createSuccessResponse(data);
+          return createDataResponse(data);
         }
         
         // X51LABS-62: If no result but response exists, might be transient
@@ -473,7 +473,7 @@ export async function getOutput(tabId, options = {}) {
             cachedResult = data.lastResult;
             if (cachedResult && Date.now() - cachedResult.timestamp < 60 * 60 * 1000) { // 1 hour TTL
               logger.info(`[getOutput] Using cached result fallback (age: ${Math.round((Date.now() - cachedResult.timestamp) / 1000)}s)`, { correlationId });
-              return createSuccessResponse({
+              return createDataResponse({
                 result: cachedResult.result,
                 chatId: cachedResult.chatId,
                 chatUrl: cachedResult.chatUrl,
@@ -488,7 +488,7 @@ export async function getOutput(tabId, options = {}) {
           
           // Return error with partial if available
           logger.endOperation(correlationId, 'error', 'No result after retries');
-          return createErrorResponse(
+          return createApiErrorResponse(
             ERROR_CODES.OUTPUT_FETCH_FAILED,
             lastPartialResult 
               ? `Timeout: partial result available (${lastPartialResult.length} chars)` 
@@ -525,7 +525,7 @@ export async function getOutput(tabId, options = {}) {
     
     // Should not reach here, but fallback
     logger.endOperation(correlationId, 'error', 'Retry loop exhausted');
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.OUTPUT_FETCH_FAILED,
       'Failed to get output after all retries',
       'getOutput',
@@ -534,7 +534,7 @@ export async function getOutput(tabId, options = {}) {
     
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'getOutput');
+    return exceptionToApiErrorResponse(error, 'getOutput');
   }
 }
 

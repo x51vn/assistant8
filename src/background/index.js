@@ -344,12 +344,14 @@ async function restoreSessionOnStartup() {
  */
 async function setupAlarms() {
   try {
-    // IMPORTANT: Only clear specific alarms, not all
-    await chrome.alarms.clear('CHECK');
-    await chrome.alarms.clear('AUTORUN');
-    await chrome.alarms.clear('updateCommodityPrices');
-    await chrome.alarms.clear('SESSION_CHECK');
-    await chrome.alarms.clear('watchlistPriceUpdate');
+    // Clean up legacy/unknown alarms before (re)creating known alarms
+    await cleanupLegacyAlarms([
+      'CHECK',
+      'AUTORUN',
+      'updateCommodityPrices',
+      'watchlistPriceUpdate',
+      'SESSION_CHECK'
+    ]);
 
     // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
@@ -370,9 +372,6 @@ async function setupAlarms() {
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
     // This avoids reading from chrome.storage.local (deprecated)
-
-    // Clean up legacy/unknown alarms
-    await cleanupLegacyAlarms();
 
     // X51LABS-66: HEARTBEAT removed - MV3 service workers should be allowed to sleep
     // Service worker will restart on-demand when needed (alarms, messages, events)
@@ -447,13 +446,15 @@ async function restoreSessionOnServiceWorkerStart() {
  * Clean up legacy alarms from old versions
  * Known alarms: CHECK, AUTORUN, POLL
  */
-async function cleanupLegacyAlarms() {
+async function cleanupLegacyAlarms(knownAlarms = null) {
   try {
-    const knownAlarms = ['CHECK', 'AUTORUN', 'POLL'];
+    const known = Array.isArray(knownAlarms)
+      ? knownAlarms
+      : ['CHECK', 'AUTORUN', 'updateCommodityPrices', 'watchlistPriceUpdate', 'SESSION_CHECK'];
     const allAlarms = await chrome.alarms.getAll();
     
     for (const alarm of allAlarms) {
-      if (!knownAlarms.includes(alarm.name)) {
+      if (!known.includes(alarm.name)) {
         await chrome.alarms.clear(alarm.name);
         logger.info('Cleared legacy alarm', { name: alarm.name });
       }

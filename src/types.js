@@ -94,12 +94,12 @@ export const ERROR_CODES = {
 };
 
 /**
- * Create a standardized success response
+ * Create a standardized data response
  * @template T
  * @param {T} data - The response data
  * @returns {ApiResponse}
  */
-export function createSuccessResponse(data) {
+export function createDataResponse(data) {
   return {
     success: true,
     data
@@ -107,14 +107,14 @@ export function createSuccessResponse(data) {
 }
 
 /**
- * Create a standardized error response
+ * Create a standardized API error response
  * @param {string} code - Error code from ERROR_CODES
  * @param {string} message - Human-readable error message
  * @param {string} [context] - Additional context
  * @param {*} [details] - Additional details
  * @returns {ApiResponse}
  */
-export function createErrorResponse(code, message, context, details) {
+export function createApiErrorResponse(code, message, context, details) {
   return {
     success: false,
     error: {
@@ -132,9 +132,9 @@ export function createErrorResponse(code, message, context, details) {
  * @param {string} [context] - Where the error occurred
  * @returns {ApiResponse}
  */
-export function exceptionToErrorResponse(error, context) {
+export function exceptionToApiErrorResponse(error, context) {
   const message = error?.message || String(error);
-  return createErrorResponse(
+  return createApiErrorResponse(
     ERROR_CODES.UNKNOWN_ERROR,
     message,
     context,

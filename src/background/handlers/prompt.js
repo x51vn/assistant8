@@ -9,11 +9,15 @@ import { createLogger } from '../../logger.js';
 import { ERROR_CODES } from '../../types.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import { enqueue } from '../services/promptQueue.js';
 
 const logger = createLogger('PromptHandler');
 
 /**
- * SEND_PROMPT - Send prompt to ChatGPT
+ * SEND_PROMPT - Send prompt to ChatGPT (via unified prompt queue)
+ *
+ * All prompt sends are serialized through p-queue (concurrency=1).
+ * The handler awaits its turn in the queue before sending.
  */
 registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
   const correlationId = logger.startOperation('sendPrompt', message.correlationId);
@@ -28,62 +32,66 @@ registerHandler(MESSAGE_TYPES.SEND_PROMPT, async (message, sender) => {
       return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Missing or invalid prompt');
     }
 
-    logger.info('Sending prompt', { correlationId, promptLength: prompt.length });
+    logger.info('Sending prompt (queued)', { correlationId, promptLength: prompt.length });
 
-    // Ensure ChatGPT tab is ready
-    const tabResult = await ChatGPTSession.ensureChatGPTTab({ 
-      createIfNeeded: true,
-      focusTab: options?.focusTab !== false // Default true
-    });
+    // ===== QUEUE: All ChatGPT sends go through p-queue =====
+    const result = await enqueue(async () => {
+      // Ensure ChatGPT tab is ready
+      const tabResult = await ChatGPTSession.ensureChatGPTTab({ 
+        createIfNeeded: true,
+        focusTab: options?.focusTab !== false // Default true
+      });
 
-    if (tabResult.error) {
-      const errorMsg = typeof tabResult.error === 'string' ? tabResult.error : 'Failed to ensure ChatGPT tab';
-      throw new Error(errorMsg);
-    }
+      if (tabResult.error) {
+        const errorMsg = typeof tabResult.error === 'string' ? tabResult.error : 'Failed to ensure ChatGPT tab';
+        throw new Error(errorMsg);
+      }
 
-    // Send prompt
-    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt.trim(), {
-      createNewChat: options?.createNewChat !== false,
-      runId, // propagate to content script for capture correlation
-      reviewOnly: options?.reviewOnly || false
-    });
+      // Send prompt
+      const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt.trim(), {
+        createNewChat: options?.createNewChat !== false,
+        runId, // propagate to content script for capture correlation
+        reviewOnly: options?.reviewOnly || false
+      });
 
-    if (!sendResult.success) {
-      throw new Error(`Failed to send prompt: ${sendResult.error}`);
-    }
+      if (!sendResult.success) {
+        throw new Error(`Failed to send prompt: ${sendResult.error}`);
+      }
 
-    logger.info('Prompt sent successfully', { correlationId });
+      logger.info('Prompt sent successfully', { correlationId });
 
-    const chatId = sendResult.data?.chatId || null;
-    const chatUrl = sendResult.data?.chatUrl || null;
+      const chatId = sendResult.data?.chatId || null;
+      const chatUrl = sendResult.data?.chatUrl || null;
 
-    // Phase 1: Persist prompt to chat_history (response will be captured by content script)
-    // IMPORTANT: Never fail prompt sending if persistence fails.
-    if (options?.saveToHistory !== false) {
-      const baseMetadata = {
-        source: 'SEND_PROMPT',
+      // Persist prompt to chat_history (response will be captured by content script)
+      // IMPORTANT: Never fail prompt sending if persistence fails.
+      if (options?.saveToHistory !== false) {
+        const baseMetadata = {
+          source: 'SEND_PROMPT',
+          status: sendResult.data?.status || null
+        };
+
+        const fullMetadata = {
+          ...baseMetadata,
+          ...(options?.metadata || {})
+        };
+
+        await persistPromptSafe(runId, prompt, chatId, chatUrl, fullMetadata);
+      }
+
+      return {
+        tabId: tabResult.tabId,
+        success: true,
+        chatId,
+        chatUrl,
+        runId,
         status: sendResult.data?.status || null
       };
-
-      // Merge with custom metadata (e.g., for Writing Assistant module)
-      const fullMetadata = {
-        ...baseMetadata,
-        ...(options?.metadata || {})
-      };
-
-      await persistPromptSafe(runId, prompt, chatId, chatUrl, fullMetadata);
-    }
+    });
+    // ===== END QUEUE =====
 
     logger.endOperation(correlationId, 'success');
-
-    return createResponse(message, MESSAGE_TYPES.PROMPT_SENT, {
-      tabId: tabResult.tabId,
-      success: true,
-      chatId,
-      chatUrl,
-      runId,
-      status: sendResult.data?.status || null
-    });
+    return createResponse(message, MESSAGE_TYPES.PROMPT_SENT, result);
 
   } catch (error) {
     logger.error('Send prompt failed', { correlationId, error });

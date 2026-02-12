@@ -50,3 +50,6 @@ dist/
 *.tmp
 *.temp
 .cache/
+
+# Claude/AI agent temp folders (repo pollution)
+tmpclaude-*-cwd/

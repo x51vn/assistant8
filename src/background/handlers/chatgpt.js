@@ -8,50 +8,59 @@ import { MESSAGE_TYPES, createResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import { enqueue } from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/ChatGPT');
 
 /**
- * Handle CHATGPT_SEND_INPUT
- * Sends input to ChatGPT
+ * Handle CHATGPT_SEND_INPUT (via unified prompt queue)
+ *
+ * All prompt sends are serialized through p-queue (concurrency=1).
+ * The handler awaits its turn in the queue before sending.
  */
 registerHandler(MESSAGE_TYPES.CHATGPT_SEND_INPUT, async (message, sender) => {
   const { prompt, options = {} } = message;
   const runId = message.correlationId;
   
-  logger.info('Handling CHATGPT_SEND_INPUT', { 
+  logger.info('Handling CHATGPT_SEND_INPUT (queued)', { 
     correlationId: message.correlationId,
     promptLength: prompt?.length 
   });
   
-  // Ensure ChatGPT tab is ready
-  const tabResult = await ChatGPTSession.ensureChatGPTTab(options);
-  
-  if (tabResult.error) {
-    return createResponse(message, MESSAGE_TYPES.ERROR, {
-      error: tabResult.error
-    });
-  }
-  
-  // Send input (Option A: always propagate runId for correlation)
-  const mergedOptions = { ...options, runId: options.runId || runId };
-  const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt, mergedOptions);
-  
-  if (!sendResult.success) {
-    return createResponse(message, MESSAGE_TYPES.ERROR, {
-      error: sendResult.error
-    });
-  }
-  
-  // Phase 1: Persist prompt to chat_history (response will be captured by content script)
-  if (mergedOptions.saveToHistory !== false) {
-    await persistPromptSafe(mergedOptions.runId, prompt, sendResult.data?.chatId, sendResult.data?.chatUrl, {
-      source: 'CHATGPT_SEND_INPUT'
-    });
+  // ===== QUEUE: All ChatGPT sends go through p-queue =====
+  const result = await enqueue(async () => {
+    // Ensure ChatGPT tab is ready
+    const tabResult = await ChatGPTSession.ensureChatGPTTab(options);
+    
+    if (tabResult.error) {
+      return { error: tabResult.error };
+    }
+    
+    // Send input (Option A: always propagate runId for correlation)
+    const mergedOptions = { ...options, runId: options.runId || runId };
+    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, prompt, mergedOptions);
+    
+    if (!sendResult.success) {
+      return { error: sendResult.error };
+    }
+    
+    // Persist prompt to chat_history (response will be captured by content script)
+    if (mergedOptions.saveToHistory !== false) {
+      await persistPromptSafe(mergedOptions.runId, prompt, sendResult.data?.chatId, sendResult.data?.chatUrl, {
+        source: 'CHATGPT_SEND_INPUT'
+      });
+    }
+
+    return { success: true, data: { ...sendResult.data, runId: mergedOptions.runId } };
+  });
+  // ===== END QUEUE =====
+
+  if (result.error) {
+    return createResponse(message, MESSAGE_TYPES.ERROR, { error: result.error });
   }
 
   return createResponse(message, MESSAGE_TYPES.CHATGPT_INPUT_SENT, {
-    data: { ...sendResult.data, runId: mergedOptions.runId }
+    data: result.data
   });
 });
 

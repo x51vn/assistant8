@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from '../logger.js';
-import { createSuccessResponse, createErrorResponse, ERROR_CODES } from '../types.js';
+import { createDataResponse, createApiErrorResponse, ERROR_CODES } from '../types.js';
 
 const logger = createLogger('Platform/Storage');
 
@@ -35,7 +35,7 @@ export async function storageGet(keys = null, area = StorageArea.LOCAL) {
   try {
     const storage = chrome.storage[area];
     if (!storage) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.UNKNOWN_ERROR,
         `Invalid storage area: ${area}`,
         'storageGet'
@@ -44,10 +44,10 @@ export async function storageGet(keys = null, area = StorageArea.LOCAL) {
     
     const data = await storage.get(keys);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse(data);
+    return createDataResponse(data);
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage get failed',
       'storageGet',
@@ -68,7 +68,7 @@ export async function storageSet(items, area = StorageArea.LOCAL) {
   try {
     const storage = chrome.storage[area];
     if (!storage) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.UNKNOWN_ERROR,
         `Invalid storage area: ${area}`,
         'storageSet'
@@ -77,10 +77,10 @@ export async function storageSet(items, area = StorageArea.LOCAL) {
     
     await storage.set(items);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ keysSet: Object.keys(items).length });
+    return createDataResponse({ keysSet: Object.keys(items).length });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage set failed',
       'storageSet',
@@ -101,7 +101,7 @@ export async function storageRemove(keys, area = StorageArea.LOCAL) {
   try {
     const storage = chrome.storage[area];
     if (!storage) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.UNKNOWN_ERROR,
         `Invalid storage area: ${area}`,
         'storageRemove'
@@ -110,10 +110,10 @@ export async function storageRemove(keys, area = StorageArea.LOCAL) {
     
     await storage.remove(keys);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ keysRemoved: Array.isArray(keys) ? keys.length : 1 });
+    return createDataResponse({ keysRemoved: Array.isArray(keys) ? keys.length : 1 });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage remove failed',
       'storageRemove',
@@ -133,7 +133,7 @@ export async function storageClear(area = StorageArea.LOCAL) {
   try {
     const storage = chrome.storage[area];
     if (!storage) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.UNKNOWN_ERROR,
         `Invalid storage area: ${area}`,
         'storageClear'
@@ -142,10 +142,10 @@ export async function storageClear(area = StorageArea.LOCAL) {
     
     await storage.clear();
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ message: 'Storage cleared' });
+    return createDataResponse({ message: 'Storage cleared' });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Storage clear failed',
       'storageClear',
@@ -164,7 +164,7 @@ export async function storageGetBytesInUse(keys = null, area = StorageArea.LOCAL
   try {
     const storage = chrome.storage[area];
     if (!storage || !storage.getBytesInUse) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.UNKNOWN_ERROR,
         'getBytesInUse not supported in this storage area',
         'storageGetBytesInUse'
@@ -172,9 +172,9 @@ export async function storageGetBytesInUse(keys = null, area = StorageArea.LOCAL
     }
     
     const bytes = await storage.getBytesInUse(keys);
-    return createSuccessResponse({ bytes });
+    return createDataResponse({ bytes });
   } catch (error) {
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Get bytes in use failed',
       'storageGetBytesInUse',

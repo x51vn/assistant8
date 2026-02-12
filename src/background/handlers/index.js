@@ -50,4 +50,4 @@ logger.info('All message handlers registered');
 // import './health.js'; // Unused: PING demo handler only, never called
 // import './migration.js'; // Unused: one-time migration, never called after launch
 
-logger.info('All message handlers registered');
+// (intentionally logged once)

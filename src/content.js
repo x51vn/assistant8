@@ -609,34 +609,79 @@ function getLatestAssistantMessage() {
   return text || null;
 }
 
+/**
+ * Remove ChatGPT web-search noise elements from a cloned DOM node.
+ * These include: source cards (favicon rows, "+N" badges), citation
+ * superscripts, images, and action buttons that pollute innerText.
+ */
+function removeSearchNoise(container) {
+  // 1. Citation superscripts (e.g., [1], [2])
+  container.querySelectorAll('sup').forEach(el => el.remove());
+
+  // 2. Images — favicons, avatars, thumbnails shown in source cards
+  container.querySelectorAll('img').forEach(el => el.remove());
+
+  // 3. Buttons — copy, like/dislike, "show more" etc.
+  container.querySelectorAll('button').forEach(el => el.remove());
+
+  // 4. Known noise class fragments
+  container.querySelectorAll(
+    '[class*="citation"], [class*="source"], [class*="metadata"], ' +
+    '[class*="favicon"], [class*="footnote"], [data-testid*="citation"]'
+  ).forEach(el => el.remove());
+
+  // 5. Source-card rows: containers of multiple external links
+  //    ChatGPT renders "Sources" as a flex row of <a target="_blank"> cards.
+  //    Detect parent containers where most children are outbound links.
+  container.querySelectorAll('a[target="_blank"]').forEach(link => {
+    const parent = link.parentElement;
+    if (!parent || parent === container) return;
+    const childCount = parent.children.length;
+    if (childCount < 2) return;
+    const linkCount = parent.querySelectorAll('a[target="_blank"]').length;
+    // If ≥50 % of children are outbound links → source card row → remove parent
+    if (linkCount / childCount >= 0.5) {
+      parent.remove();
+    }
+  });
+
+  // 6. Standalone "+N" badges (e.g., "+2", "+5")
+  container.querySelectorAll('span, div').forEach(el => {
+    const t = (el.textContent || '').trim();
+    if (/^\+\d{1,2}$/.test(t) && el.children.length === 0) {
+      el.remove();
+    }
+  });
+}
+
 function getLatestAssistantMessageMeta() {
   const nodes = document.querySelectorAll('div[data-message-author-role="assistant"]');
   if (!nodes || nodes.length === 0) return { text: null, messageId: null };
   const last = nodes[nodes.length - 1];
-  
-  // Try to get clean content without citations/metadata
-  // ChatGPT structure: main content is usually in .markdown or prose container
+
+  // Try to get clean content without web-search source cards & citations
   let text = null;
-  
-  // Strategy 1: Look for markdown/prose content wrapper
+
+  // Strategy 1: Look for markdown/prose content wrapper → clone & strip noise
   const markdownContent = last.querySelector('.markdown, .prose, [class*="markdown"], [class*="prose"]');
   if (markdownContent) {
-    text = (markdownContent.innerText || markdownContent.textContent || '').trim();
-  }
-  
-  // Strategy 2: If no markdown wrapper, clone the node and remove known noise elements
-  if (!text) {
-    const clone = last.cloneNode(true);
-    // Remove citation links, metadata, and other noise
-    clone.querySelectorAll('a[href*="f319.com"], a[href*="vietstock"], button, [class*="citation"], [class*="metadata"]').forEach(el => el.remove());
+    const clone = markdownContent.cloneNode(true);
+    removeSearchNoise(clone);
     text = (clone.innerText || clone.textContent || '').trim();
   }
-  
-  // Strategy 3: Fallback to original behavior
+
+  // Strategy 2: If no markdown wrapper, clone entire message & strip noise
+  if (!text) {
+    const clone = last.cloneNode(true);
+    removeSearchNoise(clone);
+    text = (clone.innerText || clone.textContent || '').trim();
+  }
+
+  // Strategy 3: Fallback to raw innerText
   if (!text) {
     text = (last.innerText || last.textContent || '').trim();
   }
-  
+
   const messageId = last.getAttribute('data-message-id') || null;
   return { text: text || null, messageId };
 }

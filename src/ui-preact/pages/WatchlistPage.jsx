@@ -43,7 +43,8 @@ import {
   addWatchlistItem,
   updateWatchlistItem,
   deleteWatchlistItem,
-  enrichWatchlistItem
+  enrichWatchlistItem,
+  cancelEnrichment
 } from '../api/watchlistApi.js';
 import {
   startPricePolling,
@@ -63,9 +64,10 @@ export default function WatchlistPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // Enrichment state
-  const [enrichingSymbol, setEnrichingSymbol] = useState(null); // Symbol being enriched
+  // Enrichment state (queue-based)
+  const [enrichingSymbol, setEnrichingSymbol] = useState(null); // Symbol currently being enriched
   const [enrichmentError, setEnrichmentError] = useState(null);
+  const [enrichmentCorrelationId, setEnrichmentCorrelationId] = useState(null);
 
   /**
    * Check Supabase authentication on mount
@@ -79,6 +81,101 @@ export default function WatchlistPage() {
 
     checkAuth();
   }, []);
+
+  /**
+   * Listen for background enrichment status messages
+   * This enables UI-independent processing: background emits done/failed,
+   * UI updates if mounted, ignores if not (data is already in Supabase)
+   */
+  useEffect(() => {
+    const handleMessage = (message) => {
+      if (!message || !message.type) return;
+
+      const { type, symbol, item, error: msgError, status, correlationId: msgCorrId } = message;
+
+      switch (type) {
+        case 'WATCHLIST_AI_ENRICH_STATUS':
+          if (status === 'running' && symbol) {
+            setEnrichingSymbol(symbol);
+            setEnrichmentError(null);
+          }
+          break;
+
+        case 'WATCHLIST_AI_ENRICH_DONE':
+          if (item) {
+            // Update UI with enriched data from Supabase
+            updateItemInState(item);
+            console.log('[WatchlistPage] Enrichment done (from background)', symbol);
+          }
+          if (enrichingSymbol === symbol) {
+            setEnrichingSymbol(null);
+            setEnrichmentCorrelationId(null);
+          }
+          break;
+
+        case 'WATCHLIST_AI_ENRICH_CANCELLED':
+          if (enrichingSymbol === symbol) {
+            setEnrichingSymbol(null);
+            setEnrichmentCorrelationId(null);
+          }
+          break;
+
+        default:
+          // Check for failed status
+          if (type === 'WATCHLIST_AI_ENRICH_STATUS' && status === 'failed') {
+            setEnrichmentError({
+              code: 'ENRICHMENT_ERROR',
+              message: msgError || 'Đánh giá thất bại'
+            });
+            if (enrichingSymbol === symbol) {
+              setEnrichingSymbol(null);
+              setEnrichmentCorrelationId(null);
+            }
+          }
+          break;
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [enrichingSymbol]);
+
+  /**
+   * Restore enrichment state on mount from chrome.storage.local
+   * If a job was running/queued when user left, restore the indicator
+   */
+  useEffect(() => {
+    const restoreEnrichmentState = async () => {
+      try {
+        const result = await chrome.storage.local.get(['enrichment_queue']);
+        const queueData = result.enrichment_queue;
+        if (queueData?.jobs) {
+          const activeJob = queueData.jobs.find(
+            j => j.state === 'running' || j.state === 'queued'
+          );
+          if (activeJob) {
+            setEnrichingSymbol(activeJob.payload?.symbol || null);
+            setEnrichmentCorrelationId(activeJob.correlationId);
+            console.log('[WatchlistPage] Restored enrichment state', activeJob.payload?.symbol);
+          }
+
+          // Check for recently completed jobs and update UI
+          const recentDone = queueData.jobs.filter(
+            j => j.state === 'done' && j.result?.item && (Date.now() - j.finishedAt) < 60000
+          );
+          for (const doneJob of recentDone) {
+            updateItemInState(doneJob.result.item);
+          }
+        }
+      } catch (err) {
+        console.warn('[WatchlistPage] Failed to restore enrichment state', err);
+      }
+    };
+
+    if (isAuthenticated) {
+      restoreEnrichmentState();
+    }
+  }, [isAuthenticated]);
 
   /**
    * Fetch watchlist data when authenticated, then start price polling
@@ -252,8 +349,9 @@ export default function WatchlistPage() {
   };
 
   /**
-   * Handle enrichment request for a watchlist item
-   * User clicks "Đánh giá" button -> triggers ChatGPT analysis -> updates Supabase
+   * Handle enrichment request for a watchlist item (queue-based)
+   * Enqueues job → returns immediately → background processes independently
+   * UI observes via chrome.runtime.onMessage listener above
    */
   const handleEnrich = async (item) => {
     if (!item || !item.symbol) return;
@@ -266,20 +364,22 @@ export default function WatchlistPage() {
 
       if (result.error) {
         setEnrichmentError(result.error);
-        console.error('[WatchlistPage] Enrichment error:', result.error);
-      } else if (result.success && result.item) {
-        // Update UI with enriched data
-        updateItemInState(result.item);
-        console.log('[WatchlistPage] Enrichment completed for', item.symbol);
+        setEnrichingSymbol(null);
+        console.error('[WatchlistPage] Enrichment enqueue error:', result.error);
+      } else if (result.success) {
+        // Job queued — keep enrichingSymbol active
+        // Background will emit WATCHLIST_AI_ENRICH_DONE when complete
+        setEnrichmentCorrelationId(result.correlationId);
+        console.log('[WatchlistPage] Enrichment queued for', item.symbol,
+          result.duplicate ? '(duplicate)' : `(position ${result.position})`);
       }
     } catch (err) {
       setEnrichmentError({
         code: 'ENRICHMENT_ERROR',
         message: 'Đánh giá thất bại, vui lòng thử lại'
       });
-      console.error('[WatchlistPage] Enrichment exception:', err);
-    } finally {
       setEnrichingSymbol(null);
+      console.error('[WatchlistPage] Enrichment exception:', err);
     }
   };
 

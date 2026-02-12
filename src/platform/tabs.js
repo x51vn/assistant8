@@ -5,7 +5,7 @@
  */
 
 import { createLogger } from '../logger.js';
-import { createSuccessResponse, createErrorResponse, ERROR_CODES } from '../types.js';
+import { createDataResponse, createApiErrorResponse, ERROR_CODES } from '../types.js';
 
 const logger = createLogger('Platform/Tabs');
 
@@ -20,10 +20,10 @@ export async function queryTabs(queryInfo = {}) {
   try {
     const tabs = await chrome.tabs.query(queryInfo);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ tabs, count: tabs.length });
+    return createDataResponse({ tabs, count: tabs.length });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Query tabs failed',
       'queryTabs',
@@ -43,10 +43,10 @@ export async function getTab(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ tab });
+    return createDataResponse({ tab });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.TAB_NOT_FOUND,
       error?.message || 'Tab not found',
       'getTab',
@@ -66,10 +66,10 @@ export async function createTab(createProperties) {
   try {
     const tab = await chrome.tabs.create(createProperties);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ tab });
+    return createDataResponse({ tab });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Create tab failed',
       'createTab',
@@ -90,10 +90,10 @@ export async function updateTab(tabId, updateProperties) {
   try {
     const tab = await chrome.tabs.update(tabId, updateProperties);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ tab });
+    return createDataResponse({ tab });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Update tab failed',
       'updateTab',
@@ -113,12 +113,12 @@ export async function closeTabs(tabIds) {
   try {
     await chrome.tabs.remove(tabIds);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ 
+    return createDataResponse({ 
       closed: Array.isArray(tabIds) ? tabIds.length : 1 
     });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Close tabs failed',
       'closeTabs',
@@ -139,10 +139,10 @@ export async function reloadTab(tabId, reloadProperties = {}) {
   try {
     await chrome.tabs.reload(tabId, reloadProperties);
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ message: 'Tab reloaded' });
+    return createDataResponse({ message: 'Tab reloaded' });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Reload tab failed',
       'reloadTab',
@@ -166,10 +166,10 @@ export async function executeScript(tabId, injection) {
       ...injection
     });
     logger.endOperation(correlationId, 'success');
-    return createSuccessResponse({ results });
+    return createDataResponse({ results });
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.UNKNOWN_ERROR,
       error?.message || 'Execute script failed',
       'executeScript',

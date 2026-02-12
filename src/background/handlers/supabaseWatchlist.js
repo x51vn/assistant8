@@ -15,6 +15,7 @@ import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared
 import { createLogger } from '../../logger.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
+import { requireAuth } from '../utils/auth.js';
 
 const logger = createLogger('Handlers/WatchlistSupabase');
 
@@ -42,6 +43,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
   logger.info('Handling XNEEWS_WATCHLIST_GET', { correlationId });
 
   try {
+    const userId = await requireAuth(message);
     const { page = 1, size = 20 } = message.data || {};
     const normalizedPage = Math.max(1, Number(page) || 1);
     const normalizedSize = Math.min(100, Math.max(1, Number(size) || 20));
@@ -55,7 +57,8 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
         // Count total items
         const countResult = await supabase
           .from('watchlist')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId);
 
         if (countResult.error) throw countResult.error;
 
@@ -63,6 +66,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
         const dataResult = await supabase
           .from('watchlist')
           .select('*', { count: 'exact' })
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .range(offset, offset + normalizedSize - 1);
 
@@ -100,8 +104,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
     });
 
   } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
     logger.error('Watchlist GET exception', {
-      error: error.message,
+      error: error?.message || error?.error?.message || String(error),
       correlationId
     });
 
@@ -125,6 +133,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
   logger.info('Handling XNEEWS_WATCHLIST_CREATE', { correlationId });
 
   try {
+    const userId = await requireAuth(message);
     const data = message.data || {};
     const {
       symbol,
@@ -143,20 +152,9 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
-    // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      logger.warn('Watchlist CREATE failed: not authenticated', { correlationId });
-      return createErrorResponse(
-        message,
-        'AUTH_ERROR',
-        'Bạn cần đăng nhập để thêm watchlist.'
-      );
-    }
-
     // Build insert data - support both camelCase and snake_case
     const insertData = {
-      user_id: user.id,
+      user_id: userId,
       symbol: symbol.trim().toUpperCase()
     };
 
@@ -201,8 +199,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
     });
 
   } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
     logger.error('Watchlist CREATE exception', {
-      error: error.message,
+      error: error?.message || error?.error?.message || String(error),
       correlationId
     });
 
@@ -235,6 +237,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
   logger.info('Handling XNEEWS_WATCHLIST_UPDATE', { correlationId });
 
   try {
+    const userId = await requireAuth(message);
     const { symbol, updates } = message.data || {};
 
     // Validation
@@ -265,6 +268,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
         const response = await supabase
           .from('watchlist')
           .update(updateData)
+          .eq('user_id', userId)
           .eq('symbol', symbol.trim().toUpperCase())
           .select();
 
@@ -304,8 +308,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     });
 
   } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
     logger.error('Watchlist UPDATE exception', {
-      error: error.message,
+      error: error?.message || error?.error?.message || String(error),
       correlationId
     });
 
@@ -329,6 +337,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
   logger.info('Handling XNEEWS_WATCHLIST_DELETE', { correlationId });
 
   try {
+    const userId = await requireAuth(message);
     const { symbol } = message.data || {};
 
     // Validation
@@ -343,6 +352,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
         const response = await supabase
           .from('watchlist')
           .delete()
+          .eq('user_id', userId)
           .eq('symbol', symbol.trim().toUpperCase())
           .select();
 
@@ -382,8 +392,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
     });
 
   } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
     logger.error('Watchlist DELETE exception', {
-      error: error.message,
+      error: error?.message || error?.error?.message || String(error),
       correlationId
     });
 
@@ -407,6 +421,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
   logger.info('Handling XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT', { correlationId });
 
   try {
+    const userId = await requireAuth(message);
     const { symbol } = message.data || {};
 
     // Validation
@@ -424,6 +439,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
         const getResponse = await supabase
           .from('watchlist')
           .select('highlighted')
+          .eq('user_id', userId)
           .eq('symbol', sanitizedSymbol)
           .single();
 
@@ -436,6 +452,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
         const updateResponse = await supabase
           .from('watchlist')
           .update({ highlighted: newHighlighted })
+          .eq('user_id', userId)
           .eq('symbol', sanitizedSymbol)
           .select();
 
@@ -477,8 +494,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
     });
 
   } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
     logger.error('Watchlist TOGGLE_HIGHLIGHT exception', {
-      error: error.message,
+      error: error?.message || error?.error?.message || String(error),
       correlationId
     });
 

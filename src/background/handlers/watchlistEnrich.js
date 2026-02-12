@@ -1,15 +1,15 @@
 /**
- * @fileoverview Manual Watchlist Enrichment Handler
- * Handles per-symbol enrichment requested by user
+ * @fileoverview Watchlist Enrichment Handler (Unified Queue)
  *
- * Architecture (follows same pattern as prompt.js / PortfolioPage):
- * 1. User clicks "Đánh giá" button on watchlist item
- * 2. Handler prepares enrichment prompt
- * 3. Opens ChatGPT tab and sends prompt (via ChatGPTSession)
- * 4. Waits for ChatGPT response (via ChatGPTSession.getOutput)
- * 5. Content script auto-captures response → saved to chat_history
- * 6. Parses response JSON → extracts entry/target/stoploss/thesis
- * 7. Updates watchlist item in Supabase
+ * Architecture:
+ * 1. UI sends WATCHLIST_AI_ENRICH_RUN → handler enqueues background job
+ * 2. Unified PromptQueue (p-queue, concurrency=1) processes jobs sequentially
+ * 3. For each job: prepare prompt → ChatGPT → parse → persist Supabase
+ * 4. Background broadcasts status/done/error — UI observes via listener
+ * 5. Job state persisted in chrome.storage.local (survives SW restart)
+ *
+ * All ChatGPT operations go through the unified prompt queue to prevent
+ * concurrent ChatGPT interactions.
  *
  * Ticket: XST-742
  */
@@ -24,6 +24,14 @@ import { SYSTEM_PROMPT_KEYS } from '../../shared/systemPrompts.js';
 import { DEFAULT_SYSTEM_PROMPTS } from '../../shared/systemPrompts.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import {
+  enqueueBackgroundJob,
+  cancelJob,
+  getQueueInfo,
+  resetQueue,
+  resumeOnStartup,
+  isJobCancelled
+} from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/WatchlistEnrich');
 
@@ -89,10 +97,19 @@ function parseJsonFromResponse(responseText) {
   if (codeBlockMatch) {
     jsonText = codeBlockMatch[1].trim();
   } else {
-    // Try extracting JSON object from surrounding text
+    // Try extracting JSON object from surrounding text.
+    // Use a greedy match from the FIRST '{' to the LAST '}' — this skips
+    // leading noise like ChatGPT web-search source cards (site names, "+N" badges)
+    // that can prepend the actual JSON content.
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       jsonText = jsonMatch[0];
+    } else {
+      // Try JSON array format [{ ... }]
+      const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        jsonText = arrayMatch[0];
+      }
     }
   }
 
@@ -137,35 +154,34 @@ function validateEnrichmentData(data) {
 }
 
 /**
- * Handle WATCHLIST_ENRICH_SYMBOL
- * Manually enrich a single watchlist item
+ * Handle WATCHLIST_ENRICH_SYMBOL (legacy) and WATCHLIST_AI_ENRICH_RUN (new queue-based)
  *
- * Flow: Prepare prompt → Open ChatGPT → Send prompt → Wait response → Parse → Update Supabase
- *
- * @param {Object} message - { symbol }
- * @returns {Object} Response with enrichment status
+ * Legacy: direct call, blocks until complete (backward compat)
+ * New: enqueues job, returns immediately, background processes async
  */
-registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
-  const { correlationId } = message;
-  const { symbol } = message.data || {};
 
-  logger.info('Starting manual enrichment', { symbol, correlationId });
+// ===== Core Processor Function (used by queue worker) =====
+
+/**
+ * Process a single enrichment job
+ * This runs in background context — UI-independent
+ *
+ * @param {Object} job - { correlationId, payload: { symbol }, attempt }
+ * @returns {Promise<{success: boolean, item?: Object, error?: string}>}
+ */
+export async function processEnrichmentJob(job) {
+  const { correlationId, payload } = job;
+  const symbol = payload?.symbol;
+
+  logger.info('Processing enrichment job', { symbol, correlationId, attempt: job.attempt });
 
   try {
-    // 1. Validate symbol
-    if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
-      logger.warn('Enrichment failed: missing symbol', { correlationId });
-      return createErrorResponse(
-        message,
-        'INVALID_INPUT',
-        'Mã cổ phiếu là bắt buộc'
-      );
+    const sanitizedSymbol = symbol?.trim().toUpperCase();
+    if (!sanitizedSymbol) {
+      return { success: false, error: 'Mã cổ phiếu là bắt buộc' };
     }
 
-    const sanitizedSymbol = symbol.trim().toUpperCase();
-
-    // 2. Fetch watchlist item from Supabase
-    logger.info('Fetching watchlist item', { symbol: sanitizedSymbol, correlationId });
+    // 1. Fetch watchlist item from Supabase
     const { data: watchlistItem, error: fetchError } = await supabase
       .from('watchlist')
       .select('*')
@@ -173,19 +189,10 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       .single();
 
     if (fetchError || !watchlistItem) {
-      logger.error('Failed to fetch watchlist item', {
-        symbol: sanitizedSymbol,
-        error: fetchError?.message,
-        correlationId
-      });
-      return createErrorResponse(
-        message,
-        'NOT_FOUND_ERROR',
-        `Mã ${sanitizedSymbol} không tồn tại trong watchlist`
-      );
+      return { success: false, error: `Mã ${sanitizedSymbol} không tồn tại trong watchlist` };
     }
 
-    // 3. Get enrichment prompt template
+    // 2. Get enrichment prompt template
     let promptTemplate = DEFAULT_SYSTEM_PROMPTS[SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH];
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -205,7 +212,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       logger.debug('Using default enrichment prompt', { correlationId });
     }
 
-    // 4. Prepare enrichment data for ChatGPT
+    // 3. Prepare enrichment data
     const enrichmentData = [
       {
         symbol: watchlistItem.symbol,
@@ -216,54 +223,38 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       }
     ];
 
-    // 5. Render prompt with watchlist data
     const asOfDate = new Date().toISOString().split('T')[0];
     const renderedPrompt = promptTemplate
       .replace('{WATCHLIST_ITEMS_JSON}', JSON.stringify(enrichmentData, null, 2))
       .replace('{AS_OF_DATE}', asOfDate);
 
-    // 6. Open ChatGPT tab (same as prompt.js handler)
-    logger.info('Opening ChatGPT tab for enrichment', { symbol: sanitizedSymbol, correlationId });
+    // 4. Check cancellation before ChatGPT call
+    if (await isJobCancelled(correlationId)) {
+      return { success: false, error: 'Job cancelled by user' };
+    }
+
+    // 5. Open ChatGPT tab
     const tabResult = await ChatGPTSession.ensureChatGPTTab({
       createIfNeeded: true,
       focusTab: true
     });
 
     if (tabResult.error) {
-      logger.error('Failed to open ChatGPT tab', { error: tabResult.error, correlationId });
-      return createErrorResponse(
-        message,
-        'CHATGPT_ERROR',
-        'Không thể mở ChatGPT. Vui lòng thử lại.'
-      );
+      return { success: false, error: 'Không thể mở ChatGPT. Vui lòng thử lại.' };
     }
 
-    // 7. Send prompt to ChatGPT (same as prompt.js handler)
+    // 6. Send prompt to ChatGPT
     const enrichmentRunId = generateCorrelationId();
-    logger.info('Sending enrichment prompt to ChatGPT', {
-      symbol: sanitizedSymbol,
-      runId: enrichmentRunId,
-      tabId: tabResult.tabId,
-      promptLength: renderedPrompt.length,
-      correlationId
-    });
-
     const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, renderedPrompt.trim(), {
       createNewChat: true,
-      runId: enrichmentRunId, // Enables content script auto-capture → chat_history
+      runId: enrichmentRunId,
     });
 
     if (!sendResult.success) {
-      const errorMsg = sendResult.error || 'Failed to send prompt';
-      logger.error('Failed to send enrichment prompt', { error: errorMsg, correlationId });
-      return createErrorResponse(
-        message,
-        'SEND_ERROR',
-        'Không thể gửi prompt đánh giá lên ChatGPT.'
-      );
+      return { success: false, error: 'Không thể gửi prompt đánh giá lên ChatGPT.' };
     }
 
-    // 8. Persist prompt to chat_history (response auto-saved by content script via CONTENT_RESPONSE_CAPTURED)
+    // 7. Persist prompt to chat_history
     const chatId = sendResult.data?.chatId || null;
     const chatUrl = sendResult.data?.chatUrl || null;
     await persistPromptSafe(enrichmentRunId, renderedPrompt, chatId, chatUrl, {
@@ -271,46 +262,28 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       symbol: sanitizedSymbol
     });
 
-    logger.info('Enrichment prompt sent, waiting for ChatGPT response', {
-      symbol: sanitizedSymbol,
-      runId: enrichmentRunId,
-      chatId,
-      correlationId
-    });
+    // 8. Check cancellation before waiting for response
+    if (await isJobCancelled(correlationId)) {
+      return { success: false, error: 'Job cancelled by user' };
+    }
 
-    // 9. Wait for ChatGPT response (same as ChatGPTSession.getOutput)
+    // 9. Wait for ChatGPT response
     const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
       wait: true,
-      timeoutMs: 15 * 60 * 1000, // 15 minutes
+      timeoutMs: 15 * 60 * 1000,
       stableMs: 1500
     });
 
     if (!outputResult.success || !outputResult.data?.result) {
-      logger.warn('Enrichment: no response from ChatGPT', {
-        symbol: sanitizedSymbol,
-        outputStatus: outputResult.data?.status,
-        correlationId
-      });
-      return createErrorResponse(
-        message,
-        'TIMEOUT_ERROR',
-        'Hết thời gian chờ. ChatGPT chưa trả lời.'
-      );
+      return { success: false, error: 'Hết thời gian chờ. ChatGPT chưa trả lời.' };
     }
 
     const responseText = outputResult.data.result;
 
     // 10. Parse enrichment response
-    logger.info('Parsing enrichment response', {
-      symbol: sanitizedSymbol,
-      responseLength: responseText.length,
-      correlationId
-    });
-
     let enrichmentResponse;
     try {
       const parsed = parseJsonFromResponse(responseText);
-      // Extract item from response (handles both flat and { items: [...] } formats)
       enrichmentResponse = extractEnrichmentItem(parsed, sanitizedSymbol);
       if (!enrichmentResponse) {
         throw new Error('Could not extract enrichment data from response');
@@ -322,27 +295,14 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
         responsePreview: responseText.substring(0, 200),
         correlationId
       });
-      return createErrorResponse(
-        message,
-        'PARSE_ERROR',
-        'ChatGPT trả lời không đúng định dạng JSON'
-      );
+      return { success: false, error: 'ChatGPT trả lời không đúng định dạng JSON' };
     }
 
     if (!validateEnrichmentData(enrichmentResponse)) {
-      logger.error('Invalid enrichment data from ChatGPT', {
-        data: enrichmentResponse,
-        symbol: sanitizedSymbol,
-        correlationId
-      });
-      return createErrorResponse(
-        message,
-        'VALIDATION_ERROR',
-        'Dữ liệu từ ChatGPT không hợp lệ'
-      );
+      return { success: false, error: 'Dữ liệu từ ChatGPT không hợp lệ' };
     }
 
-    // 11. Build update data from enrichment response
+    // 11. Build update data
     const updateData = {};
     if (enrichmentResponse.entry !== undefined && enrichmentResponse.entry !== null) {
       updateData.entry = Number(enrichmentResponse.entry);
@@ -358,18 +318,10 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
     }
 
     if (Object.keys(updateData).length === 0) {
-      logger.warn('No fields to update in enrichment response', {
-        symbol: sanitizedSymbol,
-        correlationId
-      });
-      return createErrorResponse(
-        message,
-        'EMPTY_UPDATE',
-        'ChatGPT không cung cấp thông tin cần cập nhật'
-      );
+      return { success: false, error: 'ChatGPT không cung cấp thông tin cần cập nhật' };
     }
 
-    // 12. Update watchlist item in Supabase
+    // 12. Update watchlist item in Supabase (background-only, UI-independent)
     logger.info('Updating watchlist item with enrichment data', {
       symbol: sanitizedSymbol,
       fields: Object.keys(updateData),
@@ -383,7 +335,6 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
           .update(updateData)
           .eq('symbol', sanitizedSymbol)
           .select();
-
         if (response.error) throw response.error;
         return response;
       },
@@ -395,15 +346,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
     );
 
     if (!updateResult.data || updateResult.data.length === 0) {
-      logger.error('Watchlist update failed', {
-        symbol: sanitizedSymbol,
-        correlationId
-      });
-      return createErrorResponse(
-        message,
-        'UPDATE_ERROR',
-        'Không thể cập nhật watchlist'
-      );
+      return { success: false, error: 'Không thể cập nhật watchlist' };
     }
 
     const updatedItem = updateResult.data[0];
@@ -414,35 +357,135 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       correlationId
     });
 
-    return createResponse(message, 'WATCHLIST_ENRICHED', {
-      success: true,
-      symbol: sanitizedSymbol,
-      item: updatedItem,
-      message: `Đã cập nhật thông tin đánh giá cho ${sanitizedSymbol}`
-    });
+    return { success: true, item: updatedItem };
 
   } catch (error) {
-    logger.error('Enrichment handler exception', {
+    logger.error('Enrichment processor exception', {
       error: error.message,
-      symbol: symbol?.toUpperCase(),
+      symbol,
       correlationId,
       stack: error.stack
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(
-        message,
-        'NETWORK_ERROR',
-        'Không thể kết nối. Vui lòng kiểm tra mạng.'
-      );
+      return { success: false, error: 'Không thể kết nối. Vui lòng kiểm tra mạng.' };
     }
 
-    return createErrorResponse(
-      message,
-      'UNKNOWN_ERROR',
-      'Lỗi khi đánh giá. Vui lòng thử lại.'
-    );
+    return { success: false, error: 'Lỗi khi đánh giá. Vui lòng thử lại.' };
+  }
+}
+
+// ===== Message Handlers =====
+
+/**
+ * WATCHLIST_AI_ENRICH_RUN — Unified queue-based handler
+ * UI → Background: enqueue enrichment as background job, return immediately
+ */
+registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN, async (message) => {
+  const { correlationId } = message;
+  const { symbol } = message.data || {};
+
+  logger.info('Enqueue enrichment request', { symbol, correlationId });
+
+  try {
+    if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
+      return createErrorResponse(message, 'INVALID_INPUT', 'Mã cổ phiếu là bắt buộc');
+    }
+
+    const result = await enqueueBackgroundJob({
+      type: 'WATCHLIST_ENRICH',
+      payload: { symbol: symbol.trim().toUpperCase() },
+      processor: processEnrichmentJob
+    });
+
+    return createResponse(message, MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS, {
+      success: true,
+      correlationId: result.jobId,
+      position: result.position,
+      duplicate: result.duplicate || false,
+      message: result.duplicate
+        ? `${symbol.toUpperCase()} đã có trong hàng đợi`
+        : `Đã thêm ${symbol.toUpperCase()} vào hàng đợi (vị trí ${result.position})`
+    });
+  } catch (error) {
+    logger.error('Enqueue failed', { error: error.message, correlationId });
+    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
   }
 });
 
-logger.info('Manual Watchlist Enrichment handler registered');
+/**
+ * WATCHLIST_AI_ENRICH_CANCEL — Cancel a pending/running job
+ */
+registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL, async (message) => {
+  const { correlationId: jobId } = message.data || {};
+  const { correlationId } = message;
+
+  const targetId = jobId || correlationId;
+  const cancelled = await cancelJob(targetId);
+
+  if (cancelled) {
+    return createResponse(message, MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCELLED, {
+      success: true,
+      correlationId: targetId,
+      message: 'Đã hủy tác vụ đánh giá'
+    });
+  }
+
+  return createErrorResponse(message, 'NOT_FOUND', 'Không tìm thấy tác vụ để hủy');
+});
+
+/**
+ * WATCHLIST_AI_ENRICH_RESET — Force reset stuck queue
+ */
+registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RESET, async (message) => {
+  await resetQueue();
+  return createResponse(message, 'WATCHLIST_AI_ENRICH_RESET_DONE', {
+    success: true,
+    message: 'Đã reset hàng đợi'
+  });
+});
+
+/**
+ * WATCHLIST_ENRICH_SYMBOL — Legacy handler (backward compat)
+ * Enqueues the job via unified queue and returns immediately with queue info
+ */
+registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
+  const { correlationId } = message;
+  const { symbol } = message.data || {};
+
+  logger.info('Legacy WATCHLIST_ENRICH_SYMBOL → delegating to unified queue', { symbol, correlationId });
+
+  try {
+    if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
+      return createErrorResponse(message, 'INVALID_INPUT', 'Mã cổ phiếu là bắt buộc');
+    }
+
+    const result = await enqueueBackgroundJob({
+      type: 'WATCHLIST_ENRICH',
+      payload: { symbol: symbol.trim().toUpperCase() },
+      processor: processEnrichmentJob
+    });
+
+    return createResponse(message, 'WATCHLIST_ENRICHED', {
+      success: true,
+      queued: true,
+      correlationId: result.jobId,
+      position: result.position,
+      duplicate: result.duplicate || false,
+      message: `Đã thêm ${symbol.toUpperCase()} vào hàng đợi đánh giá`
+    });
+  } catch (error) {
+    logger.error('Legacy enqueue failed', { error: error.message, correlationId });
+    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
+  }
+});
+
+// ===== Resume on SW startup =====
+// Check for pending enrichment jobs from previous SW lifecycle
+resumeOnStartup({
+  WATCHLIST_ENRICH: processEnrichmentJob
+}).catch(err => {
+  logger.warn('Failed to resume queue on startup', { error: err.message });
+});
+
+logger.info('Watchlist Enrichment handlers registered (unified queue)');

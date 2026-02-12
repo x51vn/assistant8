@@ -19,6 +19,7 @@ import { createLogger } from '../../logger.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { supabase } from '../../supabaseConfig.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import { enqueue } from '../services/promptQueue.js';
 
 const logger = createLogger('ContextMenu');
 
@@ -612,7 +613,9 @@ async function extractContent(info, tab, correlationId) {
 // ========== SEND FUNCTIONS ==========
 
 /**
- * Send prompt to ChatGPT tab.
+ * Send prompt to ChatGPT tab (via unified prompt queue).
+ * All ChatGPT sends are serialized through p-queue (concurrency=1).
+ *
  * @param {string} finalPrompt
  * @param {Object} modeConfig
  * @param {{ useSidePanel: boolean, continueChat: boolean }} prefs
@@ -622,57 +625,61 @@ async function extractContent(info, tab, correlationId) {
  * @param {{ truncated: boolean, originalLength: number }} truncation
  */
 async function sendToChatGPT(finalPrompt, modeConfig, prefs, info, tab, correlationId, truncation) {
-  logger.info('Ensuring ChatGPT tab is ready', { correlationId });
-  const tabResult = await ChatGPTSession.ensureChatGPTTab({
-    createIfNeeded: true,
-    focusTab: true
-  });
-
-  if (tabResult.error) {
-    logger.error('Failed to ensure ChatGPT tab', { correlationId, error: tabResult.error });
-    logger.endOperation(correlationId, 'error');
-    return;
-  }
-
-  const createNewChat = !prefs.continueChat;
-  logger.info('Sending prompt to ChatGPT', {
-    correlationId,
-    tabId: tabResult.tabId,
-    createNewChat,
-    mode: modeConfig.label
-  });
-
-  const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, finalPrompt, {
-    createNewChat,
-    runId: correlationId,
-    reviewOnly: false
-  });
-
-  const chatId = sendResult.data?.chatId || null;
-  const chatUrl = sendResult.data?.chatUrl || null;
-
-  if (sendResult.success) {
-    logger.info('Prompt sent successfully', { correlationId });
-
-    // Persist to chat history with enhanced source labels
-    await persistPromptSafe(correlationId, finalPrompt, chatId, chatUrl, {
-      source: 'CONTEXT_MENU',
-      mode: modeConfig.label,
-      pageTitle: tab?.title || null,
-      pageUrl: tab?.url || null,
-      selectionLength: info.selectionText?.length || 0,
-      linkUrl: info.linkUrl || null,
-      srcUrl: info.srcUrl || null,
-      contentTruncated: truncation.truncated,
-      originalContentLength: truncation.originalLength,
-      createNewChat
+  // ===== QUEUE: All ChatGPT sends go through p-queue =====
+  await enqueue(async () => {
+    logger.info('Ensuring ChatGPT tab is ready (queued)', { correlationId });
+    const tabResult = await ChatGPTSession.ensureChatGPTTab({
+      createIfNeeded: true,
+      focusTab: true
     });
 
-    logger.endOperation(correlationId, 'success');
-  } else {
-    logger.error('Failed to send prompt', { correlationId, error: sendResult.error });
-    logger.endOperation(correlationId, 'error');
-  }
+    if (tabResult.error) {
+      logger.error('Failed to ensure ChatGPT tab', { correlationId, error: tabResult.error });
+      logger.endOperation(correlationId, 'error');
+      return;
+    }
+
+    const createNewChat = !prefs.continueChat;
+    logger.info('Sending prompt to ChatGPT', {
+      correlationId,
+      tabId: tabResult.tabId,
+      createNewChat,
+      mode: modeConfig.label
+    });
+
+    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, finalPrompt, {
+      createNewChat,
+      runId: correlationId,
+      reviewOnly: false
+    });
+
+    const chatId = sendResult.data?.chatId || null;
+    const chatUrl = sendResult.data?.chatUrl || null;
+
+    if (sendResult.success) {
+      logger.info('Prompt sent successfully', { correlationId });
+
+      // Persist to chat history with enhanced source labels
+      await persistPromptSafe(correlationId, finalPrompt, chatId, chatUrl, {
+        source: 'CONTEXT_MENU',
+        mode: modeConfig.label,
+        pageTitle: tab?.title || null,
+        pageUrl: tab?.url || null,
+        selectionLength: info.selectionText?.length || 0,
+        linkUrl: info.linkUrl || null,
+        srcUrl: info.srcUrl || null,
+        contentTruncated: truncation.truncated,
+        originalContentLength: truncation.originalLength,
+        createNewChat
+      });
+
+      logger.endOperation(correlationId, 'success');
+    } else {
+      logger.error('Failed to send prompt', { correlationId, error: sendResult.error });
+      logger.endOperation(correlationId, 'error');
+    }
+  });
+  // ===== END QUEUE =====
 }
 
 /**
