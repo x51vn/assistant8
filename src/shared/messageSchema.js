@@ -269,6 +269,10 @@ export const MESSAGE_TYPES = {
 
   // Unified Prompt Queue (p-queue based, concurrency=1)
   PROMPT_QUEUE_STATUS: 'PROMPT_QUEUE_STATUS',                   // Background → UI: generic queue job status update
+  PROMPT_QUEUE_GET_INFO: 'PROMPT_QUEUE_GET_INFO',               // UI → Background: request queue state
+  PROMPT_QUEUE_INFO: 'PROMPT_QUEUE_INFO',                       // Background → UI: queue state response
+  PROMPT_QUEUE_CLEAR_DONE: 'PROMPT_QUEUE_CLEAR_DONE',           // UI → Background: clear terminal jobs
+  PROMPT_QUEUE_CLEARED: 'PROMPT_QUEUE_CLEARED',                 // Background → UI: cleared confirmation
 
   // Error
   ERROR: 'ERROR'

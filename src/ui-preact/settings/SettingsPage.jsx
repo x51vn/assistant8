@@ -16,6 +16,7 @@ import { SettingsForm } from './SettingsForm.jsx';
 import { StatusMessage } from '../components/StatusMessage.jsx';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.jsx';
 import { UserSection } from '../components/UserSection.jsx';
+import { PromptQueueSection } from '../components/PromptQueueSection.jsx';
 import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.js';
 import { clearTemplateCache } from '../api/writingApi.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
@@ -167,6 +168,7 @@ export function SettingsPage() {
       <ConfirmationDialog />
       <div class="settings-layout">
         <SettingsForm onSave={handleSave} />
+        <PromptQueueSection />
         <UserSection />
       </div>
     </div>

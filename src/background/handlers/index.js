@@ -40,6 +40,7 @@ import './atlassian.js'; // Atlassian (Jira + Confluence) integration handlers
 import './supabaseWatchlist.js'; // XST-741: Watchlist CRUD handlers (migrated to Supabase)
 import './supabasePriceUpdate.js'; // XST-744: Price update handler (migrated to Supabase)
 import './watchlistEnrich.js'; // XST-742: Manual per-symbol watchlist enrichment
+import './promptQueueInfo.js'; // Prompt queue info for Settings UI
 
 logger.info('All message handlers registered');
 
