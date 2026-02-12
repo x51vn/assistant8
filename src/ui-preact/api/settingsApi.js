@@ -10,10 +10,6 @@ import { generateCorrelationId } from '../../logger.js';
 import { clearTemplateCache } from './writingApi.js';
 import {
   allPrompts,
-  autoRun,
-  evaluatePrevious,
-  reviewPrompt,
-  realtimeEnabled,
   interval,
   atlassianBaseUrl,
   atlassianEmail,
@@ -43,20 +39,13 @@ export async function loadSettings() {
   }
   
   // ⚠️ CRITICAL: createResponse spreads payload directly (not nested in .data)
-  // Response structure: { config: { autoRun, evaluatePrevious, ... } }
+  // Response structure: { config: { interval, ... } }
   const config = response.config || {};
 
   console.log('[SettingsAPI] Parsed config:', {
-    autoRun: config.autoRun,
     interval: config.interval
   });
 
-  // Populate boolean signals (4 fields)
-  autoRun.value = config.autoRun ?? false;
-  evaluatePrevious.value = config.evaluatePrevious ?? false;
-  reviewPrompt.value = config.reviewPrompt ?? false;
-  realtimeEnabled.value = config.realtimeEnabled ?? false;
-  
   // Populate number signal (1 field)
   interval.value = config.interval ?? 5;
 
@@ -80,12 +69,6 @@ export async function saveSettings() {
 
   // Build config object matching background handler expectations
   const config = {
-    // Boolean settings
-    autoRun: autoRun.value,
-    evaluatePrevious: evaluatePrevious.value,
-    reviewPrompt: reviewPrompt.value,
-    realtimeEnabled: realtimeEnabled.value,
-
     // Number settings
     interval: interval.value,
 

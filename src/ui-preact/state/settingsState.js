@@ -8,12 +8,6 @@
 import { signal, computed } from '@preact/signals';
 import { getAllDefaultPrompts, getAllPromptMetadata } from '../../shared/allPrompts.js';
 
-// ===== BOOLEAN SIGNALS (4 checkboxes) =====
-export const autoRun = signal(false);
-export const evaluatePrevious = signal(false);
-export const reviewPrompt = signal(false);
-export const realtimeEnabled = signal(false);
-
 // ===== NUMBER SIGNAL (1 input) =====
 export const interval = signal(5); // Default 5 minutes
 
@@ -174,12 +168,6 @@ export function resetAllFields() {
   const defaults = buildDefaultPrompts();
   allPrompts.value = defaults;
   allPromptsExpanded.value = {};
-
-  // Booleans
-  autoRun.value = false;
-  evaluatePrevious.value = false;
-  reviewPrompt.value = false;
-  realtimeEnabled.value = false;
 
   // Number
   interval.value = 5;
