@@ -46,7 +46,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
     const userId = await requireAuth(message);
     const { page = 1, size = 20 } = message.data || {};
     const normalizedPage = Math.max(1, Number(page) || 1);
-    const normalizedSize = Math.min(100, Math.max(1, Number(size) || 20));
+    const normalizedSize = Math.min(200, Math.max(1, Number(size) || 20));
 
     // Calculate offset for pagination
     const offset = (normalizedPage - 1) * normalizedSize;

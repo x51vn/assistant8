@@ -29,7 +29,7 @@ export const watchlistItems = signal([]);
 
 // ===== PAGINATION SIGNALS =====
 export const currentPage = signal(1);
-export const pageSize = signal(20);
+export const pageSize = signal(100);
 export const totalItems = signal(0);
 export const totalPages = signal(0);
 
@@ -240,7 +240,7 @@ export function removeWatchlistItem(symbol) {
 export function resetWatchlistState() {
   watchlistItems.value = [];
   currentPage.value = 1;
-  pageSize.value = 20;
+  pageSize.value = 100;
   totalItems.value = 0;
   totalPages.value = 0;
   loading.value = false;

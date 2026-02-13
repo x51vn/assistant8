@@ -182,10 +182,9 @@ function PaginationControls() {
           value={pageSize.value}
           onChange={handlePageSizeChange}
         >
-          <option value="10">10/trang</option>
-          <option value="20">20/trang</option>
           <option value="50">50/trang</option>
           <option value="100">100/trang</option>
+          <option value="200">200/trang</option>
         </select>
 
         <button
