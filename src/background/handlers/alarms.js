@@ -49,7 +49,9 @@ export async function handleAlarm(alarm) {
           timestamp: Date.now()
         });
         
-        if (response.errorCode) {
+        if (!response) {
+          logger.warn('No response from portfolio price update handler', { correlationId });
+        } else if (response.errorCode) {
           logger.error('Price update failed', {
             correlationId,
             error: response.errorMessage
@@ -80,7 +82,9 @@ export async function handleAlarm(alarm) {
           timestamp: Date.now()
         });
         
-        if (response.errorCode) {
+        if (!response) {
+          logger.warn('No response from commodity price update handler', { correlationId });
+        } else if (response.errorCode) {
           logger.error('Commodity price update failed', {
             correlationId,
             error: response.errorMessage
@@ -116,7 +120,9 @@ export async function handleAlarm(alarm) {
           timestamp: Date.now()
         });
         
-        if (response.errorCode) {
+        if (!response) {
+          logger.warn('No response from watchlist price update handler', { correlationId });
+        } else if (response.errorCode) {
           logger.error('Watchlist price update failed', {
             correlationId,
             error: response.errorMessage
