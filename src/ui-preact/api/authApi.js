@@ -1,6 +1,11 @@
 /**
  * Auth API - Background communication layer
  * X51LABS-151: User Section authentication integration
+ * XST-754: Change Password
+ * XST-751: Password Reset
+ * XST-752: Registration & Email Verification
+ * XST-753: Google OAuth
+ * XST-755: Account Deletion
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
@@ -126,4 +131,198 @@ export function listenAuthStateChanges(callback) {
   return () => {
     chrome.runtime.onMessage.removeListener(handleAuthChange);
   };
+}
+
+// ============================================================================
+// Change Password (XST-754)
+// ============================================================================
+
+/**
+ * Change password for currently authenticated user
+ * @param {string} currentPassword - Current password for verification
+ * @param {string} newPassword - New password (8+ chars, upper, lower, digit, special)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function changePassword(currentPassword, newPassword) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_CHANGE_PASSWORD,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { currentPassword, newPassword }
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Change password failed:', error);
+      return { success: false, error: error || 'Đổi mật khẩu thất bại' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AuthAPI] Change password request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+// ============================================================================
+// Password Reset (XST-751)
+// ============================================================================
+
+/**
+ * Request password reset email
+ * @param {string} email - Email address to send reset link
+ * @returns {Promise<{success: boolean, message?: string, error?: string}>}
+ */
+export async function resetPasswordRequest(email) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_RESET_PASSWORD_REQUEST,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { email }
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Reset password request failed:', error);
+      return { success: false, error: error || 'Gửi email thất bại' };
+    }
+
+    return { success: true, message: response.message };
+  } catch (error) {
+    console.error('[AuthAPI] Reset password request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+// ============================================================================
+// Registration (XST-752)
+// ============================================================================
+
+/**
+ * Register new user account
+ * @param {string} email - Email address
+ * @param {string} password - Password (8+ chars with complexity requirements)
+ * @param {string} [name] - Optional display name
+ * @returns {Promise<{success: boolean, user?: Object, needsEmailVerification?: boolean, error?: string}>}
+ */
+export async function register(email, password, name) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_REGISTER,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { email, password, name }
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Registration failed:', error);
+      return { success: false, error: error || 'Đăng ký thất bại' };
+    }
+
+    return {
+      success: true,
+      user: response.user || null,
+      needsEmailVerification: response.needsEmailVerification || false
+    };
+  } catch (error) {
+    console.error('[AuthAPI] Registration request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+/**
+ * Resend email confirmation
+ * @param {string} email - Email to resend confirmation to
+ * @returns {Promise<{success: boolean, message?: string, error?: string}>}
+ */
+export async function resendConfirmation(email) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_RESEND_CONFIRMATION,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { email }
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Resend confirmation failed:', error);
+      return { success: false, error: error || 'Gửi lại email thất bại' };
+    }
+
+    return { success: true, message: response.message };
+  } catch (error) {
+    console.error('[AuthAPI] Resend confirmation request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+// ============================================================================
+// Google OAuth (XST-753)
+// ============================================================================
+
+/**
+ * Sign in with Google OAuth
+ * @returns {Promise<{authenticated: boolean, user?: Object, error?: string}>}
+ */
+export async function signInWithGoogle() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.SUPABASE_AUTH_GOOGLE_LOGIN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now()
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Google login failed:', error);
+      return { authenticated: false, user: null, error: error || 'Đăng nhập Google thất bại' };
+    }
+
+    const user = response.user || null;
+    return { authenticated: !!user, user };
+  } catch (error) {
+    console.error('[AuthAPI] Google login request failed:', error);
+    return { authenticated: false, user: null, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
+}
+
+// ============================================================================
+// Account Deletion (XST-755)
+// ============================================================================
+
+/**
+ * Request account deletion with confirmation
+ * @param {string} confirmText - Must be exactly "XÓA TÀI KHOẢN"
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteAccount(confirmText) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.ACCOUNT_DELETE_REQUEST,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { confirmText }
+    });
+
+    const error = response.error?.message || response.errorMessage;
+    if (response.error || response.errorCode || error) {
+      console.error('[AuthAPI] Account deletion failed:', error);
+      return { success: false, error: error || 'Xóa tài khoản thất bại' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AuthAPI] Account deletion request failed:', error);
+    return { success: false, error: 'Không thể kết nối. Vui lòng thử lại.' };
+  }
 }
