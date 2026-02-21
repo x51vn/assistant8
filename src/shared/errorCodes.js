@@ -27,6 +27,9 @@ export const ERROR_CODES = {
   AUTH_LOGOUT_FAILED: 'AUTH_LOGOUT_FAILED',
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_NOT_CONFIRMED: 'AUTH_EMAIL_NOT_CONFIRMED',
+  AUTH_PASSWORD_SAME: 'AUTH_PASSWORD_SAME',
+  AUTH_PASSWORD_WEAK: 'AUTH_PASSWORD_WEAK',
+  AUTH_ACCOUNT_DELETE_FAILED: 'AUTH_ACCOUNT_DELETE_FAILED',
   
   // ===== Validation Errors =====
   INVALID_INPUT: 'INVALID_INPUT',
@@ -82,6 +85,9 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.AUTH_LOGOUT_FAILED]: 'Không thể đăng xuất. Vui lòng thử lại.',
   [ERROR_CODES.AUTH_INVALID_CREDENTIALS]: 'Email hoặc mật khẩu không đúng.',
   [ERROR_CODES.AUTH_EMAIL_NOT_CONFIRMED]: 'Email chưa được xác nhận. Vui lòng kiểm tra hộp thư.',
+  [ERROR_CODES.AUTH_PASSWORD_SAME]: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
+  [ERROR_CODES.AUTH_PASSWORD_WEAK]: 'Mật khẩu phải có ít nhất 8 ký tự bao gồm: chữ hoa, chữ thường, chữ số và ký tự đặc biệt.',
+  [ERROR_CODES.AUTH_ACCOUNT_DELETE_FAILED]: 'Không thể xóa tài khoản. Vui lòng thử lại sau.',
   
   // Validation
   [ERROR_CODES.INVALID_INPUT]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
