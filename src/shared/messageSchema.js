@@ -286,6 +286,25 @@ export const MESSAGE_TYPES = {
   PROMPT_QUEUE_CLEAR_DONE: 'PROMPT_QUEUE_CLEAR_DONE',           // UI → Background: clear terminal jobs
   PROMPT_QUEUE_CLEARED: 'PROMPT_QUEUE_CLEARED',                 // Background → UI: cleared confirmation
 
+  // Billing & Subscription (XST-758..XST-763)
+  SUBSCRIPTION_GET: 'SUBSCRIPTION_GET',                         // UI → Background: get current plan + subscription
+  SUBSCRIPTION_DATA: 'SUBSCRIPTION_DATA',                       // Background → UI: subscription + plan info
+  SUBSCRIPTION_CREATE_CHECKOUT: 'SUBSCRIPTION_CREATE_CHECKOUT', // UI → Background: start Stripe Checkout
+  SUBSCRIPTION_CHECKOUT_URL: 'SUBSCRIPTION_CHECKOUT_URL',       // Background → UI: checkout session URL
+  SUBSCRIPTION_CREATE_PORTAL: 'SUBSCRIPTION_CREATE_PORTAL',     // UI → Background: open Stripe Customer Portal
+  SUBSCRIPTION_PORTAL_URL: 'SUBSCRIPTION_PORTAL_URL',           // Background → UI: portal session URL
+  PLANS_GET: 'PLANS_GET',                                       // UI → Background: list available plans
+  PLANS_DATA: 'PLANS_DATA',                                     // Background → UI: plans array.
+
+  // Usage Tracking (XST-760)
+  USAGE_CHECK: 'USAGE_CHECK',                                   // UI/Handler → Background: check if feature allowed
+  USAGE_ALLOWED: 'USAGE_ALLOWED',                               // Background → caller: { allowed, limit, used, remaining }
+  USAGE_INCREMENT: 'USAGE_INCREMENT',                           // Handler → Background: record feature usage
+  USAGE_INCREMENTED: 'USAGE_INCREMENTED',                       // Background → caller: updated count
+  USAGE_GET_STATS: 'USAGE_GET_STATS',                           // UI → Background: get all usage stats
+  USAGE_STATS: 'USAGE_STATS',                                   // Background → UI: all feature usage vs limits
+  USAGE_RESET_DAILY: 'USAGE_RESET_DAILY',                       // Alarm → Background: reset daily counters
+
   // Error
   ERROR: 'ERROR'
 };

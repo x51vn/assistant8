@@ -64,6 +64,14 @@ export const ERROR_CODES = {
   // ===== Generic =====
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   OPERATION_FAILED: 'OPERATION_FAILED',
+
+  // ===== Billing & Subscription (XST-758..XST-763) =====
+  USAGE_LIMIT_EXCEEDED: 'USAGE_LIMIT_EXCEEDED',
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  SUBSCRIPTION_NOT_FOUND: 'SUBSCRIPTION_NOT_FOUND',
+  CHECKOUT_FAILED: 'CHECKOUT_FAILED',
+  PORTAL_FAILED: 'PORTAL_FAILED',
+  STRIPE_ERROR: 'STRIPE_ERROR',
 };
 
 // ============================================================================
@@ -122,6 +130,14 @@ export const ERROR_MESSAGES_VN = {
   // Generic
   [ERROR_CODES.UNKNOWN_ERROR]: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   [ERROR_CODES.OPERATION_FAILED]: 'Thao tác thất bại. Vui lòng thử lại.',
+
+  // Billing
+  [ERROR_CODES.USAGE_LIMIT_EXCEEDED]: 'Bạn đã đạt giới hạn của gói hiện tại. Nâng cấp lên Pro để tiếp tục.',
+  [ERROR_CODES.PLAN_NOT_FOUND]: 'Không tìm thấy gói dịch vụ.',
+  [ERROR_CODES.SUBSCRIPTION_NOT_FOUND]: 'Không tìm thấy thông tin đăng ký.',
+  [ERROR_CODES.CHECKOUT_FAILED]: 'Không thể tạo phiên thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.PORTAL_FAILED]: 'Không thể mở trang quản lý thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.STRIPE_ERROR]: 'Lỗi thanh toán. Vui lòng thử lại hoặc dùng thẻ khác.',
 };
 
 // ============================================================================
