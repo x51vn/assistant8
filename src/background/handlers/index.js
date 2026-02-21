@@ -41,6 +41,7 @@ import './supabaseWatchlist.js'; // XST-741: Watchlist CRUD handlers (migrated t
 import './supabasePriceUpdate.js'; // XST-744: Price update handler (migrated to Supabase)
 import './watchlistEnrich.js'; // XST-742: Manual per-symbol watchlist enrichment
 import './promptQueueInfo.js'; // Prompt queue info for Settings UI
+import './billing.js'; // XST-758..XST-763: Billing, Subscription, Usage Tracking
 
 logger.info('All message handlers registered');
 
