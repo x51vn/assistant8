@@ -19,6 +19,7 @@ import { UserSection } from '../components/UserSection.jsx';
 import { PromptQueueSection } from '../components/PromptQueueSection.jsx';
 import { ChangePasswordSection } from '../components/auth/ChangePasswordSection.jsx';
 import { DeleteAccountSection } from '../components/auth/DeleteAccountSection.jsx';
+import { SubscriptionPage } from '../components/billing/SubscriptionPage.jsx';
 import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.js';
 import { clearTemplateCache } from '../api/writingApi.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
@@ -172,6 +173,7 @@ export function SettingsPage() {
         <SettingsForm onSave={handleSave} />
         <PromptQueueSection />
         <ChangePasswordSection />
+        <SubscriptionPage />
         <UserSection />
         <DeleteAccountSection />
       </div>

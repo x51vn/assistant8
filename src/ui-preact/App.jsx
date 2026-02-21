@@ -18,6 +18,7 @@ import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm.jsx';
 import { RegisterForm } from './components/auth/RegisterForm.jsx';
 import { EmailVerificationPending } from './components/auth/EmailVerificationPending.jsx';
 import { MainApp } from './components/MainApp.jsx';
+import { SubscriptionProvider } from './context/SubscriptionContext.jsx';
 import { globalLoading, loadingMessage } from './state/appState.js';
 
 /**
@@ -101,7 +102,9 @@ export function App() {
           {renderAuthView()}
         </div>
       ) : (
-        <MainApp />
+        <SubscriptionProvider>
+          <MainApp />
+        </SubscriptionProvider>
       )}
       
       {/* SINGLE global loading overlay */}
