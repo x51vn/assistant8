@@ -7,9 +7,7 @@ import { startIndicesPolling, stopIndicesPolling } from '../api/marketIndicesUpd
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 import {
   getMasterPrompt,
-  getPortfolioPrompt,
-  getStockEvalPrompt,
-  getTeaStockPrompt
+  getStockEvalPrompt
 } from '../state/settingsState.js';
 import {
   portfolioItems,
@@ -35,7 +33,10 @@ import PortfolioSummary from '../components/PortfolioSummary.jsx';
 import PortfolioTable from '../components/PortfolioTable.jsx';
 import StockModal from '../components/StockModal.jsx';
 import PriceUpdateModal from '../components/PriceUpdateModal.jsx';
+import StockResearchModal from '../components/StockResearchModal.jsx';
+import PortfolioEvalModal from '../components/PortfolioEvalModal.jsx';
 import MarketIndices from '../components/MarketIndices.jsx';
+import { isTeaStockModalOpen, openTeaStockModal, isEvaluateModalOpen, openEvaluateModal } from '../state/portfolioState.js';
 
 /**
  * Helper: Calculate P&L for a stock
@@ -365,66 +366,13 @@ export default function PortfolioPage() {
   };
 
   /**
-   * Handle evaluate portfolio - reads prompt from settings helper
-   * Button: "Đánh giá danh mục" - combines portfolio data with portfolioPrompt
+   * Handle evaluate portfolio
+   * XST-804: Opens PortfolioEvalModal which checks feature flag internally.
+   * - flag ON → per-symbol STOCK_RESEARCH_RUN via orchestrator
+   * - flag OFF → legacy SEND_PROMPT with portfolio table
    */
-  const handleEvaluatePortfolio = async () => {
-    // Read prompt from settings helper (NOT from modal input)
-    const prompt = getPortfolioPrompt();
-
-    if (!prompt || !prompt.trim()) {
-      setShowErrorToast('Vui lòng nhập prompt đánh giá trong tab "Cấu hình"');
-      setTimeout(() => { setShowErrorToast(null); }, 3000);
-      return;
-    }
-
-    try {
-      // Build portfolio summary - use correct field names from Supabase schema
-      const portfolio = portfolioItems.value;
-      let portfolioText = '## DANH MỤC HIỆN CÓ\n\n';
-      portfolioText += '| Mã | Entry | Current | Khối lượng | P&L |\n';
-      portfolioText += '|----|-------|---------|-----------|-----|\n';
-
-      let totalEntryValue = 0;
-      let totalCurrentValue = 0;
-      
-      portfolio.forEach((stock) => {
-        // Use correct field names: avg_price, current_price, symbol
-        const avgPrice = stock.avg_price || 0;
-        const currentPrice = stock.current_price || avgPrice;
-        const entryValue = avgPrice * stock.quantity;
-        const currentValue = currentPrice * stock.quantity;
-        const pl = currentValue - entryValue;
-        const plPercent = entryValue > 0 ? ((pl / entryValue) * 100).toFixed(2) : 0;
-
-        totalEntryValue += entryValue;
-        totalCurrentValue += currentValue;
-
-        portfolioText += `| ${stock.symbol} | ${avgPrice} | ${currentPrice || '-'} | ${stock.quantity} | ${pl.toFixed(2)} (${plPercent}%) |\n`;
-      });
-
-      const totalPL = totalCurrentValue - totalEntryValue;
-      const totalPLPercent = totalEntryValue > 0 ? ((totalPL / totalEntryValue) * 100).toFixed(2) : 0;
-      portfolioText += `\n**Tổng P&L: ${totalPL.toFixed(2)} (${totalPLPercent}%)**\n\n`;
-
-      const fullPrompt = `${portfolioText}\n## YÊU CẦU\n${prompt}`;
-
-      console.log('[Portfolio] Evaluate portfolio prompt:', fullPrompt);
-
-      const result = await sendPromptWithHistory(fullPrompt, 'Portfolio Evaluation', true);
-
-      if (!result.success) {
-        setShowErrorToast(`Lỗi gửi: ${result.error}`);
-        setTimeout(() => { setShowErrorToast(null); }, 3000);
-      } else {
-        setShowSuccessToast('Đã gửi đánh giá danh mục lên ChatGPT!');
-        setTimeout(() => { setShowSuccessToast(null); }, 3000);
-      }
-    } catch (error) {
-      console.error('[Portfolio] Evaluate error:', error);
-      setShowErrorToast(`Lỗi: ${error.message}`);
-      setTimeout(() => { setShowErrorToast(null); }, 3000);
-    }
+  const handleEvaluatePortfolio = () => {
+    openEvaluateModal();
   };
 
   /**
@@ -473,30 +421,9 @@ export default function PortfolioPage() {
    * Button: "Tìm cổ phiếu trà đá" - sends teaStockPrompt to ChatGPT
    */
   const handleTeaStockSearch = async () => {
-    // Read prompt from settings helper (NOT from modal input)
-    const prompt = getTeaStockPrompt();
-
-    if (!prompt || !prompt.trim()) {
-      setShowErrorToast('Vui lòng nhập prompt tìm cổ phiếu trà đá trong tab "Cấu hình"');
-      setTimeout(() => { setShowErrorToast(null); }, 3000);
-      return;
-    }
-
-    try {
-      const result = await sendPromptWithHistory(prompt, 'Tea Stock Search', true);
-
-      if (!result.success) {
-        setShowErrorToast(`Lỗi gửi: ${result.error}`);
-        setTimeout(() => { setShowErrorToast(null); }, 3000);
-      } else {
-        setShowSuccessToast('Đã gửi tìm kiếm cổ phiếu trà đá!');
-        setTimeout(() => { setShowSuccessToast(null); }, 3000);
-      }
-    } catch (error) {
-      console.error('[Portfolio] Tea stock search error:', error);
-      setShowErrorToast(`Lỗi: ${error.message}`);
-      setTimeout(() => { setShowErrorToast(null); }, 3000);
-    }
+    // XST-802: When stock_research_v2 flag is on, open StockResearchModal
+    // instead of sending legacy SEND_PROMPT
+    openTeaStockModal();
   };
 
   /**
@@ -636,16 +563,26 @@ export default function PortfolioPage() {
               onClose={closeAllModals}
             />
           )}
+
+          {/* XST-802: Stock Research Modal */}
+          {isTeaStockModalOpen.value && (
+            <StockResearchModal />
+          )}
+
+          {/* XST-804: Portfolio Evaluation Modal */}
+          {isEvaluateModalOpen.value && (
+            <PortfolioEvalModal />
+          )}
         </>
       )}
     </div>
   );
 }
 
-// NOTE: EvaluatePortfolioModal and TeaStockModal REMOVED
-// These buttons now read prompts directly from settings helpers and execute immediately
-// - handleEvaluatePortfolio: reads getPortfolioPrompt() + builds portfolio data table
-// - handleTeaStockSearch: reads getTeaStockPrompt() (no portfolio data)
+// NOTE: Legacy TeaStockModal and EvaluatePortfolioModal REPLACED by:
+// - StockResearchModal (XST-802): handleTeaStockSearch → openTeaStockModal()
+// - PortfolioEvalModal (XST-804): handleEvaluatePortfolio → openEvaluateModal()
+// Both check feature flag stock_research_v2 internally.
 // - handleRunPrompt: reads getMasterPrompt() (no portfolio data) - legacy runBtn behavior
 // - handleEvaluateStock: reads getStockEvalPrompt() + stock details
 

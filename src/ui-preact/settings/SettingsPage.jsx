@@ -26,6 +26,7 @@ import { LanguageSelector } from '../hooks/LanguageSelector.jsx';
 import { useOnboardingGate } from '../components/OnboardingWizard.jsx';
 import { OnboardingWizard } from '../components/OnboardingWizard.jsx';
 import { LLMProviderSection } from './LLMProviderSection.jsx';
+import { StockResearchSection } from './StockResearchSection.jsx';
 import { DataImportSection } from './DataImportSection.jsx';
 import { APIKeysSection } from './APIKeysSection.jsx';
 import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.js';
@@ -229,6 +230,9 @@ export function SettingsPage() {
 
         {/* XST-775: LLM Provider selector */}
         <LLMProviderSection />
+
+        {/* XST-801: Stock Research Pipeline settings */}
+        <StockResearchSection />
 
         {/* XST-777: Data Import */}
         <DataImportSection />

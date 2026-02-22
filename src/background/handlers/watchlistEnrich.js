@@ -11,7 +11,7 @@
  * All ChatGPT operations go through the unified prompt queue to prevent
  * concurrent ChatGPT interactions.
  *
- * Ticket: XST-742
+ * Ticket: XST-742, XST-803
  */
 
 import { registerHandler } from '../messageRouter.js';
@@ -24,6 +24,9 @@ import { SYSTEM_PROMPT_KEYS } from '../../shared/systemPrompts.js';
 import { DEFAULT_SYSTEM_PROMPTS } from '../../shared/systemPrompts.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import { getFeatureFlag } from '../../shared/featureFlags.js';
+import { runStockResearch } from '../services/stock/stockResearchOrchestrator.js';
+import { enqueue as promptQueueEnqueue } from '../services/promptQueue.js';
 import {
   enqueueBackgroundJob,
   cancelJob,
@@ -191,6 +194,19 @@ export async function processEnrichmentJob(job) {
     if (fetchError || !watchlistItem) {
       return { success: false, error: `Mã ${sanitizedSymbol} không tồn tại trong watchlist` };
     }
+
+    // XST-803: Check feature flag — route to orchestrator if enabled
+    const userId = await getUserIdSafe();
+    const settingsConfig = userId ? await getUserSettingsConfigForEnrich(userId) : {};
+    const useOrchestrator = getFeatureFlag('stock_research_v2', settingsConfig);
+
+    if (useOrchestrator && userId) {
+      return await processEnrichmentViaOrchestrator(
+        sanitizedSymbol, watchlistItem, userId, settingsConfig, correlationId
+      );
+    }
+
+    // Legacy path: ChatGPTSession (flag off or no userId)
 
     // 2. Get enrichment prompt template
     let promptTemplate = DEFAULT_SYSTEM_PROMPTS[SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH];
@@ -372,6 +388,151 @@ export async function processEnrichmentJob(job) {
     }
 
     return { success: false, error: 'Lỗi khi đánh giá. Vui lòng thử lại.' };
+  }
+}
+
+// ===== XST-803: Orchestrator Path =====
+
+/**
+ * Process enrichment via the unified stockResearchOrchestrator.
+ * Maps orchestrator output (recommendation, targetPrice, stopLoss, thesis)
+ * back to watchlist fields.
+ *
+ * @param {string} symbol - Uppercase stock symbol
+ * @param {Object} watchlistItem - Current watchlist record
+ * @param {string} userId - Authenticated user ID
+ * @param {Object} settingsConfig - User settings config
+ * @param {string} correlationId - Correlation ID for tracing
+ * @returns {Promise<{success: boolean, item?: Object, error?: string}>}
+ */
+async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, settingsConfig, correlationId) {
+  logger.info('Using orchestrator for enrichment (stock_research_v2=true)', { symbol, correlationId });
+
+  try {
+    const result = await runStockResearch(
+      symbol,
+      { mode: 'watchlist-enrich', correlationId },
+      userId,
+      {
+        settingsConfig,
+        enqueue: promptQueueEnqueue,
+        onProgress: (status) => {
+          // Broadcast enrichment progress to UI
+          try {
+            chrome.runtime.sendMessage({
+              v: 1,
+              type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS,
+              correlationId,
+              timestamp: Date.now(),
+              symbol,
+              status: status.status,
+              step: status.step,
+              totalSteps: status.totalSteps,
+              message: status.message,
+            }).catch(() => {});
+          } catch { /* no listeners */ }
+        },
+      }
+    );
+
+    if (!result.success) {
+      logger.warn('Orchestrator enrichment failed', {
+        symbol, errorCode: result.errorCode, correlationId,
+      });
+      return { success: false, error: result.errorMessage || 'Phân tích thất bại' };
+    }
+
+    // Map orchestrator output → watchlist fields
+    const output = result.output || {};
+    const updateData = {};
+
+    if (output.targetPrice != null) {
+      updateData.target = Number(output.targetPrice);
+    }
+    if (output.stopLoss != null) {
+      updateData.stoploss = Number(output.stopLoss);
+    }
+    // Map thesis array to investment_thesis string
+    if (output.thesis?.length > 0) {
+      updateData.investment_thesis = output.thesis.join('\n');
+    }
+    // Map recommendation to notes if useful
+    if (output.recommendation) {
+      const existing = watchlistItem.notes || '';
+      const recNote = `[AI ${new Date().toLocaleDateString('vi-VN')}] ${output.recommendation}` +
+        (output.confidence ? ` (${output.confidence}%)` : '');
+      updateData.notes = existing ? `${recNote}\n${existing}` : recNote;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return { success: false, error: 'AI không cung cấp thông tin cần cập nhật' };
+    }
+
+    // Update watchlist item in Supabase
+    const updateResult = await supabaseWithRetry(
+      async () => {
+        const response = await supabase
+          .from('watchlist')
+          .update(updateData)
+          .eq('symbol', symbol)
+          .select();
+        if (response.error) throw response.error;
+        return response;
+      },
+      { operationName: 'watchlist.orchestrator-enrich-update', maxRetries: 2, correlationId }
+    );
+
+    if (!updateResult.data || updateResult.data.length === 0) {
+      return { success: false, error: 'Không thể cập nhật watchlist' };
+    }
+
+    logger.info('Orchestrator enrichment completed', {
+      symbol,
+      updatedFields: Object.keys(updateData),
+      recommendation: output.recommendation,
+      correlationId,
+    });
+
+    return { success: true, item: updateResult.data[0] };
+
+  } catch (error) {
+    logger.error('Orchestrator enrichment exception', {
+      error: error.message,
+      symbol,
+      correlationId,
+    });
+    return { success: false, error: error.message || 'Lỗi phân tích qua orchestrator' };
+  }
+}
+
+/**
+ * Get userId safely from Supabase auth (no throw).
+ * @returns {Promise<string|null>}
+ */
+async function getUserIdSafe() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get user settings config for enrichment flag check.
+ * @param {string} userId
+ * @returns {Promise<Object>}
+ */
+async function getUserSettingsConfigForEnrich(userId) {
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('config')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return data?.config || {};
+  } catch {
+    return {};
   }
 }
 
