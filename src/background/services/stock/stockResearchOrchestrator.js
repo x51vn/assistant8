@@ -4,12 +4,15 @@
  *
  * 7-step pipeline:
  * 1. Input Validation  → validate symbol, merge options
- * 2. Search            → Google Search via Edge Function (optional)
+ * 2. Search            → Google Search (currently via Edge Function — see @todo)
  * 3. Filter & Rank     → score and filter sources
  * 4. Context Builder   → build LLM prompt with sources
  * 5. LLM Evaluation    → send to AI provider
  * 6. Output Validation → validate JSON output against schema
  * 7. Persist           → save to Supabase tables
+ *
+ * @done XST-812 — Step 2 now uses googleSearchWebService.js (Web/DOM automation
+ *                  on google.com tabs). No API key needed.
  *
  * Architecture:
  * - Stateless: no in-memory state (MV3-safe)
@@ -24,10 +27,13 @@
 import { createLogger, generateCorrelationId } from '../../../logger.js';
 import { supabase } from '../../../supabaseConfig.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../../shared/errorCodes.js';
-import { searchGoogle } from '../search/googleSearchService.js';
+// XST-812: Web/DOM automation search (replaces deprecated Edge Function proxy)
+import { searchGoogleWeb } from '../search/googleSearchWebService.js';
 import { validateStockResearchOutput } from '../../../shared/validators/stockResearchOutputValidator.js';
 import { getProviderForFeature, classifyLLMError, FEATURE_TYPES } from '../../../shared/llm/llmProviderRouting.js';
 import { LLMProviderFactory } from '../../../shared/llm/LLMProviderFactory.js';
+// XST-807: Pipeline observability & telemetry
+import { PipelineTracer } from './pipelineTelemetry.js';
 
 const logger = createLogger('StockResearchOrchestrator');
 
@@ -99,6 +105,13 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
   const timing = {};
   const { onProgress, settingsConfig = {}, enqueue } = deps;
 
+  // XST-807: Create per-run tracer for structured observability
+  const tracer = new PipelineTracer(runId, symbol?.toUpperCase?.() || symbol, {
+    provider: settingsConfig?.llm_provider || 'chatgpt',
+    searchEnabled: options.searchEnabled ?? DEFAULT_OPTIONS.searchEnabled,
+    mode: options.mode || 'stock-research',
+  });
+
   logger.info('Pipeline started', { symbol, runId, correlationId, userId });
 
   // Helper: emit progress
@@ -123,12 +136,14 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     // Step 1: Input Validation
     // =============================================
     emitProgress(1);
+    tracer.startStep('validate');
     const stepStart1 = Date.now();
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
     const normalizedSymbol = validateSymbol(symbol);
 
     timing.validate_ms = Date.now() - stepStart1;
+    tracer.endStep('validate');
 
     // Create run record in DB
     await createRunRecord(runId, normalizedSymbol, userId, opts);
@@ -137,12 +152,13 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     // Step 2: Google Search (optional)
     // =============================================
     emitProgress(2);
+    tracer.startStep('search', { searchEnabled: opts.searchEnabled });
     const stepStart2 = Date.now();
 
     if (opts.searchEnabled) {
       try {
         const query = buildSearchQuery(normalizedSymbol, opts);
-        sources = await searchGoogle(query, {
+        sources = await searchGoogleWeb(query, {
           maxResults: opts.maxSources,
           recencyWindowDays: opts.recencyWindowDays,
           timeoutMs: Math.min(opts.timeoutMs / 3, 15_000),
@@ -161,32 +177,38 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     }
 
     timing.search_ms = Date.now() - stepStart2;
+    tracer.endStep('search', { sourceCount: sources.length });
 
     // =============================================
     // Step 3: Filter & Rank sources
     // =============================================
     emitProgress(3);
+    tracer.startStep('rank');
     const stepStart3 = Date.now();
 
     // Sources are already ranked by googleSearchService, just limit
     const rankedSources = sources.slice(0, opts.maxSources);
 
     timing.rank_ms = Date.now() - stepStart3;
+    tracer.endStep('rank', { rankedCount: rankedSources.length });
 
     // =============================================
     // Step 4: Build LLM context/prompt
     // =============================================
     emitProgress(4);
+    tracer.startStep('context');
     const stepStart4 = Date.now();
 
     const llmPrompt = buildAnalysisPrompt(normalizedSymbol, rankedSources, opts);
 
     timing.context_ms = Date.now() - stepStart4;
+    tracer.endStep('context', { promptLength: llmPrompt.length });
 
     // =============================================
     // Step 5: LLM Evaluation (with retries)
     // =============================================
     emitProgress(5);
+    tracer.startStep('analyze');
     const stepStart5 = Date.now();
 
     const providerConfig = getProviderForFeature(FEATURE_TYPES.STOCK_RESEARCH, settingsConfig);
@@ -223,11 +245,13 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     }
 
     timing.analyze_ms = Date.now() - stepStart5;
+    tracer.endStep('analyze', { responseLength: llmResponse.text?.length || 0 });
 
     // =============================================
     // Step 6: Validate LLM Output
     // =============================================
     emitProgress(6);
+    tracer.startStep('validate_output');
     const stepStart6 = Date.now();
 
     const validation = validateStockResearchOutput(llmResponse.text, {
@@ -270,12 +294,14 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       logger.info('Validation warnings', { warnings: validation.warnings, correlationId });
     }
 
-    timing.validate_ms = Date.now() - stepStart6;
+    timing.validate_output_ms = Date.now() - stepStart6;
+    tracer.endStep('validate_output');
 
     // =============================================
     // Step 7: Persist to Supabase
     // =============================================
     emitProgress(7);
+    tracer.startStep('persist');
     const stepStart7 = Date.now();
 
     try {
@@ -295,11 +321,19 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     }
 
     timing.persist_ms = Date.now() - stepStart7;
+    tracer.endStep('persist');
 
     // =============================================
     // ✅ Success
     // =============================================
     timing.total_ms = Date.now() - startTime;
+
+    // XST-807: Complete tracer with result metadata
+    tracer.complete({
+      sourceCount: rankedSources.length,
+      confidence: llmOutput?.confidence,
+      recommendation: llmOutput?.recommendation,
+    });
 
     const result = {
       success: true,
@@ -320,6 +354,8 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
         searchEnabled: opts.searchEnabled,
         sourceCount: rankedSources.length,
         timing,
+        // XST-807: Include telemetry report
+        telemetry: tracer.getReport(),
       },
     };
 
@@ -331,8 +367,8 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       correlationId,
     });
 
-    // Update run status to done
-    await updateRunStatus(runId, 'done', { timing }).catch(err =>
+    // Update run status to done — include full timing from tracer
+    await updateRunStatus(runId, 'done', { timing: tracer.getTimingData() }).catch(err =>
       logger.error('Failed to update run status', { error: err.message, runId })
     );
 
@@ -348,6 +384,9 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     const errorCode = error.errorCode || classified.errorCode;
     const failedStep = error.failedStep || STEP_STATUS[5];
 
+    // XST-807: Record failure in tracer
+    tracer.fail(failedStep, errorCode, error.message);
+
     logger.error('Pipeline failed', {
       symbol,
       runId,
@@ -357,11 +396,11 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       correlationId,
     });
 
-    // Update run status to failed
+    // Update run status to failed — include timing from tracer
     await updateRunStatus(runId, 'failed', {
       error_code: errorCode,
       error_message: error.message,
-      timing,
+      timing: tracer.getTimingData(),
     }).catch(err =>
       logger.error('Failed to update run status', { error: err.message, runId })
     );
@@ -380,6 +419,8 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
         searchEnabled: options.searchEnabled ?? DEFAULT_OPTIONS.searchEnabled,
         sourceCount: sources.length,
         timing,
+        // XST-807: Include telemetry report on failure too
+        telemetry: tracer.getReport(),
       },
     };
   }
@@ -552,9 +593,14 @@ async function updateRunStatus(runId, status, extras = {}) {
     ...(status === 'done' || status === 'failed' ? { finished_at: new Date().toISOString() } : {}),
   };
 
-  // Store timing and error info in options (JSONB)
-  if (extras.timing || extras.error_code) {
-    update.options = supabase.rpc ? extras : extras; // Store as-is in JSONB
+  // XST-807: Store timing + error info in metadata JSONB field
+  const metadata = {};
+  if (extras.timing) metadata.timing = extras.timing;
+  if (extras.error_code) metadata.error_code = extras.error_code;
+  if (extras.error_message) metadata.error_message = extras.error_message;
+
+  if (Object.keys(metadata).length > 0) {
+    update.options = metadata;
   }
 
   const { error } = await supabase

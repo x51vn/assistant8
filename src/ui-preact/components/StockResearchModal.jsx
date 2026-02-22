@@ -20,6 +20,12 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import { isTeaStockModalOpen } from '../state/portfolioState.js';
 import { generateCorrelationId } from '../../logger.js';
 import { MESSAGE_TYPES, MESSAGE_VERSION, createMessage } from '../../shared/messageSchema.js';
+import {
+  validateOverrideField,
+  validateOverrides,
+  countActiveOverrides,
+  createEmptyOverrides,
+} from '../../shared/pipelineOverrides.js';
 
 // ===== CONSTANTS =====
 
@@ -81,6 +87,11 @@ export default function StockResearchModal() {
     sources: false,
   });
 
+  // XST-811: Advanced Options override state
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [overrides, setOverrides] = useState(createEmptyOverrides());
+  const [overrideErrors, setOverrideErrors] = useState({});
+
   // Listen for status broadcasts from background
   useEffect(() => {
     if (!isOpen) return;
@@ -110,6 +121,13 @@ export default function StockResearchModal() {
       return;
     }
 
+    // XST-811: Validate overrides before submitting
+    const { valid, errors } = validateOverrides(overrides);
+    if (!valid) {
+      setOverrideErrors(errors);
+      return;
+    }
+
     const cid = generateCorrelationId();
     setCorrelationId(cid);
     setIsRunning(true);
@@ -119,6 +137,26 @@ export default function StockResearchModal() {
     setStatusText('Đang khởi tạo...');
 
     try {
+      // XST-811: Build options with overrides (per-run only)
+      const runOptions = {};
+      if (providerOverride) runOptions.provider = providerOverride;
+      // Apply active overrides
+      if (overrides.maxSources !== '' && overrides.maxSources !== undefined) {
+        runOptions.maxSources = Number(overrides.maxSources);
+      }
+      if (overrides.recencyWindowDays !== '' && overrides.recencyWindowDays !== undefined) {
+        runOptions.recencyWindowDays = Number(overrides.recencyWindowDays);
+      }
+      if (overrides.strictValidation !== undefined) {
+        runOptions.strictValidation = overrides.strictValidation;
+      }
+      if (overrides.searchEnabled !== undefined) {
+        runOptions.searchEnabled = overrides.searchEnabled;
+      }
+      if (overrides.provider && overrides.provider !== '') {
+        runOptions.provider = overrides.provider;
+      }
+
       const response = await chrome.runtime.sendMessage({
         v: MESSAGE_VERSION,
         type: MESSAGE_TYPES.STOCK_RESEARCH_RUN,
@@ -127,7 +165,7 @@ export default function StockResearchModal() {
         data: {
           symbol: trimmed,
           mode: 'stock-research',
-          options: providerOverride ? { provider: providerOverride } : {},
+          options: runOptions,
         },
       });
 
@@ -143,7 +181,7 @@ export default function StockResearchModal() {
     } finally {
       setIsRunning(false);
     }
-  }, [symbol, providerOverride, totalSteps]);
+  }, [symbol, providerOverride, overrides, totalSteps]);
 
   /** Load research history */
   const handleLoadHistory = useCallback(async () => {
@@ -187,6 +225,10 @@ export default function StockResearchModal() {
     setCurrentStep(0);
     setStatusText('');
     setShowHistory(false);
+    // XST-811: Reset overrides per-run
+    setOverrides(createEmptyOverrides());
+    setOverrideErrors({});
+    setAdvancedOpen(false);
   };
 
   /** Close modal */
@@ -201,7 +243,35 @@ export default function StockResearchModal() {
     setCorrelationId(null);
     setShowHistory(false);
     setHistoryItems([]);
+    // XST-811: Reset overrides on close
+    setOverrides(createEmptyOverrides());
+    setOverrideErrors({});
+    setAdvancedOpen(false);
   };
+
+  // XST-811: Handle override field change with real-time validation
+  const handleOverrideChange = useCallback((field, value) => {
+    setOverrides(prev => ({ ...prev, [field]: value }));
+    const error = validateOverrideField(field, value);
+    setOverrideErrors(prev => {
+      const next = { ...prev };
+      if (error) {
+        next[field] = error;
+      } else {
+        delete next[field];
+      }
+      return next;
+    });
+  }, []);
+
+  // XST-811: Reset all overrides to empty (revert to preset defaults)
+  const handleResetOverrides = useCallback(() => {
+    setOverrides(createEmptyOverrides());
+    setOverrideErrors({});
+  }, []);
+
+  // XST-811: Count active overrides for badge indicator
+  const activeOverrideCount = countActiveOverrides(overrides);
 
   if (!isOpen) return null;
 
@@ -299,6 +369,145 @@ export default function StockResearchModal() {
                   <option value="gemini">Gemini</option>
                   <option value="claude">Claude</option>
                 </select>
+              </div>
+
+              {/* XST-811: Advanced Options — Collapsible Panel */}
+              <div class="advanced-options">
+                <button
+                  type="button"
+                  class="advanced-options__toggle"
+                  onClick={() => setAdvancedOpen(!advancedOpen)}
+                >
+                  <i class={`fas fa-chevron-${advancedOpen ? 'up' : 'down'}`}></i>
+                  <span>Tùy chọn nâng cao</span>
+                  {activeOverrideCount > 0 && (
+                    <span class="badge badge--small badge--override" title={`${activeOverrideCount} tham số đã thay đổi`}>
+                      {activeOverrideCount}
+                    </span>
+                  )}
+                </button>
+
+                {advancedOpen && (
+                  <div class="advanced-options__panel">
+                    <p class="field-hint" style="margin-bottom:8px;">
+                      Ghi đè tham số pipeline cho lần chạy này. Để trống = dùng giá trị từ preset trong Cài đặt.
+                    </p>
+
+                    {/* Override: maxSources */}
+                    <div class="form-group form-group--inline">
+                      <label htmlFor="override-maxSources">Số nguồn tối đa</label>
+                      <input
+                        id="override-maxSources"
+                        class={`form-input form-input--small ${overrideErrors.maxSources ? 'form-input--error' : ''}`}
+                        type="number"
+                        min="1"
+                        max="20"
+                        placeholder="Mặc định"
+                        value={overrides.maxSources}
+                        onInput={(e) => handleOverrideChange('maxSources', e.target.value)}
+                      />
+                      {overrideErrors.maxSources && (
+                        <span class="field-error">{overrideErrors.maxSources}</span>
+                      )}
+                    </div>
+
+                    {/* Override: recencyWindowDays */}
+                    <div class="form-group form-group--inline">
+                      <label htmlFor="override-recency">Khung thời gian (ngày)</label>
+                      <input
+                        id="override-recency"
+                        class={`form-input form-input--small ${overrideErrors.recencyWindowDays ? 'form-input--error' : ''}`}
+                        type="number"
+                        min="1"
+                        max="90"
+                        placeholder="Mặc định"
+                        value={overrides.recencyWindowDays}
+                        onInput={(e) => handleOverrideChange('recencyWindowDays', e.target.value)}
+                      />
+                      {overrideErrors.recencyWindowDays && (
+                        <span class="field-error">{overrideErrors.recencyWindowDays}</span>
+                      )}
+                    </div>
+
+                    {/* Override: strictValidation */}
+                    <div class="form-group form-group--inline">
+                      <label class="toggle-label">
+                        <input
+                          type="checkbox"
+                          checked={overrides.strictValidation === true}
+                          ref={(el) => {
+                            if (el) el.indeterminate = overrides.strictValidation === undefined;
+                          }}
+                          onChange={(e) => {
+                            // Cycle: undefined → true → false → undefined
+                            if (overrides.strictValidation === undefined) {
+                              handleOverrideChange('strictValidation', true);
+                            } else if (overrides.strictValidation === true) {
+                              handleOverrideChange('strictValidation', false);
+                            } else {
+                              handleOverrideChange('strictValidation', undefined);
+                            }
+                          }}
+                        />
+                        <span class="toggle-text">Kiểm tra nghiêm ngặt</span>
+                      </label>
+                    </div>
+
+                    {/* Override: searchEnabled */}
+                    <div class="form-group form-group--inline">
+                      <label class="toggle-label">
+                        <input
+                          type="checkbox"
+                          checked={overrides.searchEnabled === true}
+                          ref={(el) => {
+                            if (el) el.indeterminate = overrides.searchEnabled === undefined;
+                          }}
+                          onChange={(e) => {
+                            if (overrides.searchEnabled === undefined) {
+                              handleOverrideChange('searchEnabled', true);
+                            } else if (overrides.searchEnabled === true) {
+                              handleOverrideChange('searchEnabled', false);
+                            } else {
+                              handleOverrideChange('searchEnabled', undefined);
+                            }
+                          }}
+                        />
+                        <span class="toggle-text">Google Search</span>
+                      </label>
+                    </div>
+
+                    {/* Override: provider */}
+                    <div class="form-group form-group--inline">
+                      <label htmlFor="override-provider">Provider</label>
+                      <select
+                        id="override-provider"
+                        class={`form-input form-input--small ${overrideErrors.provider ? 'form-input--error' : ''}`}
+                        value={overrides.provider}
+                        onChange={(e) => handleOverrideChange('provider', e.target.value)}
+                      >
+                        <option value="">Mặc định</option>
+                        <option value="chatgpt">ChatGPT</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="claude">Claude</option>
+                      </select>
+                      {overrideErrors.provider && (
+                        <span class="field-error">{overrideErrors.provider}</span>
+                      )}
+                    </div>
+
+                    {/* Reset button */}
+                    {activeOverrideCount > 0 && (
+                      <button
+                        type="button"
+                        class="btn btn--small btn--ghost"
+                        onClick={handleResetOverrides}
+                        style="margin-top:4px;"
+                      >
+                        <i class="fas fa-undo"></i> Đặt lại mặc định
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {error && (
@@ -480,7 +689,7 @@ export default function StockResearchModal() {
               <button
                 class="btn btn--primary"
                 onClick={handleResearch}
-                disabled={!symbol.trim()}
+                disabled={!symbol.trim() || Object.keys(overrideErrors).length > 0}
               >
                 <i class="fas fa-search"></i> Phân tích
               </button>

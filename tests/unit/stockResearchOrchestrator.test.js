@@ -42,10 +42,10 @@ vi.mock('../../src/supabaseConfig.js', () => ({
   },
 }));
 
-// Mock searchGoogle
+// Mock searchGoogleWeb (XST-812: Web/DOM automation search)
 const mockSearchGoogle = vi.fn();
-vi.mock('../../src/background/services/search/googleSearchService.js', () => ({
-  searchGoogle: (...args) => mockSearchGoogle(...args),
+vi.mock('../../src/background/services/search/googleSearchWebService.js', () => ({
+  searchGoogleWeb: (...args) => mockSearchGoogle(...args),
 }));
 
 // Mock LLMProviderFactory

@@ -2,6 +2,14 @@
  * @fileoverview Gemini Provider — Google AI Gemini API
  * Ticket: XST-775 — Multi-LLM Provider Interface
  *
+ * @deprecated This API-based provider will be replaced by GeminiWebProvider.js
+ *             (XST-814) which uses Web/DOM automation on gemini.google.com tabs,
+ *             following the same pattern as ChatGPTProvider. No API key needed.
+ *
+ * @todo XST-814 — Implement GeminiWebProvider (Web/DOM automation)
+ * @todo XST-815 — Update LLMProviderFactory to route to GeminiWebProvider
+ *
+ * Original description:
  * Pro/Enterprise feature: requires Google AI API key stored in Supabase settings.
  * Default model: gemini-1.5-flash (fast + free tier available)
  * Docs: https://ai.google.dev/api/generate-content

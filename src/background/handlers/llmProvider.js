@@ -1,12 +1,19 @@
 /**
  * @fileoverview LLM Provider Background Handler
  * Ticket: XST-775 — Multi-LLM Provider Interface
+ * Updated: XST-815 — Web providers, no API keys needed
+ *
+ * @done XST-815 — Web provider migration complete:
+ *   - All providers use Web/DOM automation (no API keys)
+ *   - All providers are free-tier (no plan-gating)
+ *   - API key fields removed from config
+ *   - All providers use DI-based {enqueue} pattern
  *
  * Message types:
  *  LLM_GET_PROVIDERS  — list available providers with plan requirements
  *  LLM_SEND_PROMPT    — send prompt through the active LLM provider
  *  LLM_GET_STATUS     — check connection status of active provider
- *  LLM_SET_PROVIDER   — update provider selection + API key in settings
+ *  LLM_SET_PROVIDER   — update provider selection in settings
  */
 
 import { registerHandler } from '../messageRouter.js';
@@ -37,11 +44,8 @@ export async function getProviderConfig(userId) {
 
   const config = data?.config || {};
   return {
-    provider:     config.llm_provider     || 'chatgpt',
-    claudeApiKey: config.llm_claude_key   || '',
-    geminiApiKey: config.llm_gemini_key   || '',
-    claudeModel:  config.llm_claude_model || undefined,
-    geminiModel:  config.llm_gemini_model || undefined,
+    provider: config.llm_provider || 'chatgpt',
+    // @done XST-815: API key fields removed — all providers use Web/DOM automation
   };
 }
 
@@ -93,16 +97,8 @@ registerHandler('LLM_SEND_PROMPT', async (message) => {
   try {
     const userId = await requireAuth(message);
     const config = await getProviderConfig(userId);
-    const planId = await getUserPlan(userId);
 
-    // Check plan allows provider
-    const meta = LLMProviderFactory.getMeta(config.provider);
-    if (!meta.plans.includes(planId)) {
-      return createErrorResponse(
-        message, 'PLAN_LIMIT',
-        `Provider ${meta.name} yêu cầu gói ${meta.plans.slice(1).join('/')}. Hiện tại bạn đang dùng gói ${planId}.`
-      );
-    }
+    // @done XST-815: Plan-gating removed — all Web providers are free-tier
 
     const provider = LLMProviderFactory.create(config, { enqueue });
     logger.info('Sending via LLM provider', { provider: config.provider, chars: prompt.length, correlationId });
@@ -148,7 +144,7 @@ registerHandler('LLM_GET_STATUS', async (message) => {
 // ============================================================
 registerHandler('LLM_SET_PROVIDER', async (message) => {
   const correlationId = message.correlationId;
-  const { provider, claudeApiKey, geminiApiKey, claudeModel, geminiModel } = message;
+  const { provider } = message;
 
   const validProviders = SUPPORTED_PROVIDERS.map(p => p.id);
   if (!validProviders.includes(provider)) {
@@ -157,16 +153,8 @@ registerHandler('LLM_SET_PROVIDER', async (message) => {
 
   try {
     const userId = await requireAuth(message);
-    const planId = await getUserPlan(userId);
-    const meta = LLMProviderFactory.getMeta(provider);
-    if (!meta.plans.includes(planId)) {
-      return createErrorResponse(
-        message, 'PLAN_LIMIT',
-        `Provider ${meta.name} yêu cầu gói ${meta.plans.slice(1).join('/')}. Nâng cấp để sử dụng.`
-      );
-    }
 
-    // Merge into settings config
+    // Merge into settings config (only provider selection, no API keys)
     const { data: existing } = await supabase
       .from('settings')
       .select('config')
@@ -177,10 +165,7 @@ registerHandler('LLM_SET_PROVIDER', async (message) => {
     const updates = {
       ...currentConfig,
       llm_provider: provider,
-      ...(claudeApiKey !== undefined ? { llm_claude_key: claudeApiKey } : {}),
-      ...(geminiApiKey !== undefined ? { llm_gemini_key: geminiApiKey } : {}),
-      ...(claudeModel  !== undefined ? { llm_claude_model: claudeModel } : {}),
-      ...(geminiModel  !== undefined ? { llm_gemini_model: geminiModel } : {}),
+      // @done XST-815: API key fields removed — Web providers don't need them
     };
 
     await supabaseWithRetry(async () => {

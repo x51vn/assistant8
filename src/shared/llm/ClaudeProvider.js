@@ -2,6 +2,14 @@
  * @fileoverview Claude Provider — Anthropic Messages API
  * Ticket: XST-775 — Multi-LLM Provider Interface
  *
+ * @deprecated This API-based provider will be replaced by ClaudeWebProvider.js
+ *             (XST-813) which uses Web/DOM automation on claude.ai tabs,
+ *             following the same pattern as ChatGPTProvider. No API key needed.
+ *
+ * @todo XST-813 — Implement ClaudeWebProvider (Web/DOM automation)
+ * @todo XST-815 — Update LLMProviderFactory to route to ClaudeWebProvider
+ *
+ * Original description:
  * Pro/Enterprise feature: requires Anthropic API key stored in Supabase settings.
  * Default model: claude-3-5-haiku-20241022 (fast + affordable)
  * Docs: https://docs.anthropic.com/en/api/messages

@@ -16,6 +16,9 @@
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
+    "https://www.google.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
     "https://iboard-query.ssi.com.vn/*",
     "https://iboard.ssi.com.vn/*",
     "https://bgapidatafeed.vps.com.vn/*",
@@ -51,6 +54,18 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
+      "all_frames": false,
+      "type": "module"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content-gemini.js"],
+      "all_frames": false,
+      "type": "module"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content-claude.js"],
       "all_frames": false,
       "type": "module"
     }

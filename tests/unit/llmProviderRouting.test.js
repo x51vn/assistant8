@@ -8,6 +8,9 @@ import {
 
 // ============================================================================
 // getProviderForFeature
+// @note XST-815: After WebProvider migration, API key assertions in these tests
+//       should be removed (claudeApiKey, geminiApiKey fields will be dropped).
+//       The routing logic being tested (per-feature overrides) remains valid.
 // ============================================================================
 
 describe('getProviderForFeature', () => {

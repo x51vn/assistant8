@@ -16,39 +16,26 @@
  */
 
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'preact/hooks';
 import { createMessage, MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
+import {
+  getPresetsForUI,
+  getPresetConfig,
+  detectPresetMode,
+  DEFAULT_PRESET,
+} from '../../shared/pipelinePresets.js';
 
-/** Default stock research settings */
+/** Default stock research settings (Balanced preset) */
 const DEFAULTS = {
   provider: 'chatgpt',
   searchEnabled: true,
-  maxSources: 8,
-  pipelineMode: 'balanced',
-  strictValidation: true,
-  trustedDomains: 'cafef.vn, vietstock.vn, fireant.vn',
-  recencyWindowDays: 14,
+  ...getPresetConfig(DEFAULT_PRESET),
+  pipelineMode: DEFAULT_PRESET,
 };
 
-/** Pipeline mode descriptions in Vietnamese */
-const PIPELINE_MODES = [
-  {
-    value: 'conservative',
-    label: 'Thận trọng',
-    description: 'Ưu tiên nguồn tin cậy cao, nhiều kiểm tra hơn',
-  },
-  {
-    value: 'balanced',
-    label: 'Cân bằng',
-    description: 'Cân bằng giữa tốc độ và chất lượng (khuyến nghị)',
-  },
-  {
-    value: 'aggressive',
-    label: 'Tích cực',
-    description: 'Nhiều nguồn hơn, ít kiểm tra hơn, nhanh hơn',
-  },
-];
+/** Pipeline mode presets for UI rendering */
+const PIPELINE_MODES = getPresetsForUI();
 
 async function msg(type, extra = {}) {
   return chrome.runtime.sendMessage(createMessage(type, extra));
@@ -81,16 +68,68 @@ export function StockResearchSection() {
         setProvider(sr.provider || DEFAULTS.provider);
         setSearchEnabled(sr.searchEnabled ?? DEFAULTS.searchEnabled);
         setMaxSources(sr.maxSources ?? DEFAULTS.maxSources);
-        setPipelineMode(sr.pipelineMode || DEFAULTS.pipelineMode);
         setStrictValidation(sr.strictValidation ?? DEFAULTS.strictValidation);
-        setTrustedDomains(sr.trustedDomains || DEFAULTS.trustedDomains);
+        setTrustedDomains(sr.trustedDomains ?? DEFAULTS.trustedDomains);
         setRecencyWindowDays(sr.recencyWindowDays ?? DEFAULTS.recencyWindowDays);
+
+        // Detect actual mode: if params match a preset, use that; otherwise 'custom'
+        const detected = detectPresetMode({
+          maxSources: sr.maxSources ?? DEFAULTS.maxSources,
+          recencyWindowDays: sr.recencyWindowDays ?? DEFAULTS.recencyWindowDays,
+          strictValidation: sr.strictValidation ?? DEFAULTS.strictValidation,
+          trustedDomains: sr.trustedDomains ?? DEFAULTS.trustedDomains,
+        });
+        setPipelineMode(sr.pipelineMode || detected);
 
         // Feature flag
         setEnabled(res.config.stock_research_v2 === true);
       }
     }).catch(() => {});
   }, []);
+
+  /**
+   * Handle preset mode change: auto-populate all parameters from preset.
+   * If user selects a known preset, params are filled automatically.
+   */
+  const handleModeChange = useCallback((newMode) => {
+    setPipelineMode(newMode);
+    if (newMode !== 'custom') {
+      const presetParams = getPresetConfig(newMode);
+      setMaxSources(presetParams.maxSources);
+      setRecencyWindowDays(presetParams.recencyWindowDays);
+      setStrictValidation(presetParams.strictValidation);
+      setTrustedDomains(presetParams.trustedDomains);
+    }
+  }, []);
+
+  /**
+   * Handle individual parameter change: detect if settings still match a preset
+   * or switch to 'custom' mode.
+   */
+  const handleParamChange = useCallback((setter) => (value) => {
+    setter(value);
+    // Defer custom detection to next tick so state is updated
+    setTimeout(() => {
+      // We can't read state here directly, so custom detection
+      // happens in the render via the mode label display.
+    }, 0);
+  }, []);
+
+  /**
+   * Detect if current params match a preset — used for display label.
+   * Returns the detected mode based on current state values.
+   */
+  const detectedMode = detectPresetMode({
+    maxSources,
+    recencyWindowDays,
+    strictValidation,
+    trustedDomains,
+  });
+
+  // If user manually changed params away from selected preset, show custom
+  const effectiveMode = (pipelineMode !== 'custom' && detectedMode !== pipelineMode)
+    ? 'custom'
+    : pipelineMode;
 
   /** Validate fields and return true if valid */
   function validate() {
@@ -124,7 +163,7 @@ export function StockResearchSection() {
         provider,
         searchEnabled,
         maxSources: Number(maxSources),
-        pipelineMode,
+        pipelineMode: effectiveMode,
         strictValidation,
         trustedDomains: trustedDomains.trim(),
         recencyWindowDays: Number(recencyWindowDays),
@@ -244,28 +283,42 @@ export function StockResearchSection() {
             </p>
           </div>
 
-          {/* Pipeline Mode */}
+          {/* Pipeline Mode — Preset Cards */}
           <div class="form-group">
-            <label>Chế độ pipeline</label>
-            <div class="radio-group">
+            <label>
+              Chế độ pipeline
+              {effectiveMode === 'custom' && (
+                <span class="badge badge--custom" style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:3px;background:#ffc107;color:#333;">
+                  Custom
+                </span>
+              )}
+            </label>
+            <div class="radio-group preset-cards">
               {PIPELINE_MODES.map(mode => (
-                <label key={mode.value} class="radio-label">
+                <label
+                  key={mode.key}
+                  class={`radio-label preset-card ${effectiveMode === mode.key ? 'preset-card--active' : ''}`}
+                >
                   <input
                     type="radio"
                     name="pipelineMode"
-                    value={mode.value}
-                    checked={pipelineMode === mode.value}
-                    onChange={(e) => setPipelineMode(e.target.value)}
+                    value={mode.key}
+                    checked={effectiveMode === mode.key}
+                    onChange={() => handleModeChange(mode.key)}
                   />
                   <span class="radio-text">
                     <strong>{mode.label}</strong>
                     <span class="radio-description">{mode.description}</span>
+                    <span class="preset-params" style="font-size:11px;color:#888;margin-top:4px;display:block;">
+                      {mode.params.maxSources} nguồn · {mode.params.recencyWindowDays} ngày
+                      {mode.params.strictValidation ? ' · Strict' : ' · Relaxed'}
+                    </span>
                   </span>
                 </label>
               ))}
             </div>
             <p class="field-hint">
-              V1: chỉ hiển thị lựa chọn. V2 sẽ áp dụng presets tương ứng.
+              Chọn preset để tự động điền tất cả tham số. Chỉnh riêng bất kỳ tham số nào để chuyển sang chế độ Custom.
             </p>
           </div>
 

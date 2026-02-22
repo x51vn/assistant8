@@ -1,6 +1,12 @@
 /**
  * LLMProviderSection.jsx — LLM Provider Selector for SettingsPage
  * Ticket: XST-775 — Multi-LLM Provider Interface
+ * Updated: XST-815 — Web providers, no API keys
+ *
+ * @done XST-815 — Web provider migration:
+ *   - Removed API key input fields (all providers use Web/DOM automation)
+ *   - Removed plan-gating (all providers are free-tier)
+ *   - Added login guidance for Claude and Gemini
  */
 
 import { h } from 'preact';
@@ -11,14 +17,16 @@ async function msg(type, extra = {}) {
   return chrome.runtime.sendMessage(createMessage(type, extra));
 }
 
+/** Login URLs for each provider */
+const PROVIDER_LOGIN_INFO = {
+  chatgpt: { url: 'https://chatgpt.com', label: 'chatgpt.com' },
+  claude:  { url: 'https://claude.ai',   label: 'claude.ai' },
+  gemini:  { url: 'https://gemini.google.com', label: 'gemini.google.com' },
+};
+
 export function LLMProviderSection() {
   const [providers, setProviders]     = useState([]);
   const [active, setActive]           = useState('chatgpt');
-  const [planId, setPlanId]           = useState('free');
-  const [claudeKey, setClaudeKey]     = useState('');
-  const [geminiKey, setGeminiKey]     = useState('');
-  const [claudeModel, setClaudeModel] = useState('');
-  const [geminiModel, setGeminiModel] = useState('');
   const [status, setStatus]           = useState('');
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState('');
@@ -28,7 +36,6 @@ export function LLMProviderSection() {
       if (res?.success) {
         setProviders(res.providers || []);
         setActive(res.activeProvider || 'chatgpt');
-        setPlanId(res.planId || 'free');
       }
     });
   }, []);
@@ -38,13 +45,7 @@ export function LLMProviderSection() {
     setError('');
     setStatus('');
     try {
-      const res = await msg('LLM_SET_PROVIDER', {
-        provider: active,
-        claudeApiKey: claudeKey || undefined,
-        geminiApiKey: geminiKey || undefined,
-        claudeModel:  claudeModel || undefined,
-        geminiModel:  geminiModel || undefined,
-      });
+      const res = await msg('LLM_SET_PROVIDER', { provider: active });
       if (res?.success) setStatus('✅ Đã lưu cấu hình LLM provider');
       else setError(res?.errorMessage || 'Lưu thất bại');
     } catch (err) {
@@ -65,10 +66,12 @@ export function LLMProviderSection() {
     }
   }
 
+  const loginInfo = PROVIDER_LOGIN_INFO[active];
+
   return (
     <section class="settings-section">
       <h3 class="settings-section-title"><i class="fas fa-robot"></i> LLM Provider</h3>
-      <p class="settings-hint">Chọn mô hình AI để gửi prompt. ChatGPT (Web) không cần API key.</p>
+      <p class="settings-hint">Chọn mô hình AI để gửi prompt. Tất cả sử dụng Web UI — không cần API key.</p>
 
       {error  && <div class="alert alert-danger">{error}</div>}
       {status && <div class="alert alert-info">{status}</div>}
@@ -78,65 +81,25 @@ export function LLMProviderSection() {
           <button
             key={p.id}
             type="button"
-            class={`provider-card ${active === p.id ? 'active' : ''} ${!p.available ? 'locked' : ''}`}
-            onClick={() => p.available && setActive(p.id)}
-            disabled={!p.available}
-            title={!p.available ? `Yêu cầu gói ${p.plans.slice(1).join('/')}` : p.name}
+            class={`provider-card ${active === p.id ? 'active' : ''}`}
+            onClick={() => setActive(p.id)}
+            title={p.name}
           >
             <span class="provider-name">{p.name}</span>
-            {!p.available && <span class="provider-lock">🔒 Pro+</span>}
-            {p.requiresKey && p.available && <span class="provider-key-note">cần API key</span>}
           </button>
         ))}
       </div>
 
-      {active === 'claude' && (
-        <div class="api-key-inputs">
-          <div class="form-group">
-            <label>Anthropic API Key</label>
-            <input
-              class="form-input"
-              type="password"
-              placeholder="sk-ant-..."
-              value={claudeKey}
-              onInput={e => setClaudeKey(e.target.value)}
-            />
-          </div>
-          <div class="form-group">
-            <label>Model (tùy chọn)</label>
-            <input
-              class="form-input"
-              type="text"
-              placeholder="claude-3-5-haiku-20241022"
-              value={claudeModel}
-              onInput={e => setClaudeModel(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
-
-      {active === 'gemini' && (
-        <div class="api-key-inputs">
-          <div class="form-group">
-            <label>Google AI API Key</label>
-            <input
-              class="form-input"
-              type="password"
-              placeholder="AIza..."
-              value={geminiKey}
-              onInput={e => setGeminiKey(e.target.value)}
-            />
-          </div>
-          <div class="form-group">
-            <label>Model (tùy chọn)</label>
-            <input
-              class="form-input"
-              type="text"
-              placeholder="gemini-1.5-flash"
-              value={geminiModel}
-              onInput={e => setGeminiModel(e.target.value)}
-            />
-          </div>
+      {loginInfo && (
+        <div class="login-guidance">
+          <p class="settings-hint">
+            <i class="fas fa-info-circle"></i>{' '}
+            Hãy đăng nhập tại{' '}
+            <a href={loginInfo.url} target="_blank" rel="noopener noreferrer">
+              {loginInfo.label}
+            </a>
+            {' '}trước khi sử dụng. Extension sẽ tự động mở tab và gửi prompt.
+          </p>
         </div>
       )}
 

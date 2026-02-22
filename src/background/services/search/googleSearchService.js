@@ -1,12 +1,21 @@
 /**
  * @fileoverview Google Search Service
  *
- * Stateless service that calls the `google-search-proxy` Supabase Edge Function
- * and normalizes/dedup/ranks the results.
+ * @deprecated This module calls a Supabase Edge Function (`google-search-proxy`)
+ * that was never deployed. The entire Edge Function / API-key approach has been
+ * superseded by the Web/DOM automation architecture (see ADR-001 Amendment).
  *
- * Architecture:
+ * The **reusable utilities** in this file (normalizeResults, deduplicateByUrl,
+ * rankSources, classifySourceType, etc.) SHOULD be extracted and reused by the
+ * replacement module `googleSearchWebService.js` (XST-812).
+ *
+ * @todo XST-812 — Replace with googleSearchWebService.js (Web/DOM automation)
+ * @todo XST-790 — Edge Function approach was never completed; this file is the
+ *                  only remaining artifact.
+ *
+ * Architecture (SUPERSEDED):
  * - Called by the stock research orchestrator (or directly from a handler)
- * - Calls Supabase Edge Function → proxy hides API key server-side
+ * - Was supposed to call Supabase Edge Function → proxy hides API key server-side
  * - Returns normalized array of search sources sorted by relevance score
  * - Fully MV3-safe: no in-memory state, no dynamic imports
  *
@@ -71,6 +80,10 @@ const DEFAULT_TRUSTED_DOMAINS = [
 
 /**
  * Search Google for stock-related information via Edge Function proxy.
+ *
+ * @deprecated This function calls a non-existent Edge Function. Use the future
+ *             googleSearchWebService.js (XST-812) instead, which will use
+ *             Web/DOM automation on google.com tabs.
  *
  * @param {string} query - Search query string
  * @param {Object} [options] - Search options

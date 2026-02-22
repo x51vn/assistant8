@@ -2,7 +2,7 @@
 
 | Field        | Value                                        |
 |-------------|----------------------------------------------|
-| **Status**  | Accepted                                     |
+| **Status**  | Amended                                      |
 | **Date**    | 2026-02-22                                   |
 | **Authors** | ChatGPT Assistant Team                       |
 | **Ticket**  | XST-787                                      |
@@ -164,7 +164,7 @@ Visual node builder chỉ cân nhắc ở V3 khi có nhu cầu enterprise rõ r�
 | `src/background/services/stock/stockResearchOrchestrator.js` | Pipeline orchestration |
 | `src/background/handlers/stockResearch.js` | Message handler for STOCK_RESEARCH_* |
 | `supabase/migrations/018_create_stock_research_tables.sql` | DB tables |
-| `supabase/functions/google-search-proxy/index.ts` | Edge Function proxy |
+| `supabase/functions/google-search-proxy/index.ts` | ~~Edge Function proxy~~ **SUPERSEDED** — see Section 8 Amendment |
 
 ### 4.3 Files Unchanged
 
@@ -206,8 +206,81 @@ Visual node builder chỉ cân nhắc ở V3 khi có nhu cầu enterprise rõ r�
 
 ---
 
-## 8. Decision Record
+## 8. Amendment: Web/DOM Automation Architecture (2025-06)
+
+### 8.1 Context Change
+
+After implementing the initial pipeline (XST-787 through XST-799), the team decided that
+**no external API keys** will be used for any provider — neither Google Custom Search Engine
+API, nor Gemini API, nor Claude API. All LLM and search interactions will use **Web/DOM
+automation**, following the same pattern already proven with `ChatGPTProvider`.
+
+### 8.2 What Changed
+
+| Original Decision | New Decision |
+|-------------------|-------------|
+| Google CSE API via Supabase Edge Function proxy | **Google Search via tab automation** (open google.com, scrape results) — XST-812 |
+| Claude API via Anthropic REST endpoint | **Claude Web provider** (automate claude.ai tab) — XST-813 |
+| Gemini API via Google Generative Language API | **Gemini Web provider** (automate gemini.google.com tab) — XST-814 |
+| `LLMProviderFactory` routes to API-based providers | **Factory routes to Web providers** (DI-based `{enqueue}`) — XST-815 |
+| Edge Function `google-search-proxy` hosted on Supabase | **Removed** — never deployed (XST-790 approach superseded) |
+| API keys stored in Supabase `settings.config` | **No API keys needed** — all providers use Web automation |
+
+### 8.3 Impact on Section 2.3 (Search API Provider Choice)
+
+The original choice of Google CSE is **superseded**. Instead of calling a REST API,
+`googleSearchWebService.js` (XST-812) will:
+1. Open a Google Search tab via `chrome.tabs.create()`
+2. Inject a content script to scrape organic search results
+3. Return normalized results using the same `normalizeResults()`, `deduplicateByUrl()`,
+   `rankSources()` utilities from the original `googleSearchService.js`
+
+### 8.4 Impact on Section 2.1 (Architecture)
+
+Updated pipeline diagram:
+
+```
+UI → STOCK_RESEARCH_RUN → Background Handler
+  → stockResearchOrchestrator.runStockResearch()
+    → Step 1: Input validation + config loading
+    → Step 2: Google Search (via Web/DOM automation on google.com tab)
+    → Step 3: Source ranking, dedup, filtering
+    → Step 4: LLM Provider call (ChatGPT Web / Gemini Web / Claude Web)
+    → Step 5: JSON output validation
+    → Step 6: Persist to Supabase (runs/sources/insights)
+  → STOCK_RESEARCH_DONE / STOCK_RESEARCH_FAILED → UI
+```
+
+### 8.5 Impact on Section 4.2 (Files New)
+
+| Original File | Status | Replacement |
+|--------------|--------|-------------|
+| `supabase/functions/google-search-proxy/index.ts` | **Removed** (never created) | `src/background/services/search/googleSearchWebService.js` (XST-812) |
+| `src/shared/llm/ClaudeProvider.js` | **Deprecated** | `src/shared/llm/ClaudeWebProvider.js` (XST-813) |
+| `src/shared/llm/GeminiProvider.js` | **Deprecated** | `src/shared/llm/GeminiWebProvider.js` (XST-814) |
+
+### 8.6 Rationale
+
+1. **No API costs**: Web automation eliminates API key management and billing.
+2. **Consistent architecture**: All providers follow the same ChatGPTProvider pattern.
+3. **Simpler security**: No secrets to manage in Supabase Edge Function environment.
+4. **User's existing sessions**: Leverages user's logged-in sessions on ChatGPT/Gemini/Claude.
+5. **MV3-safe**: Tab automation via `chrome.tabs` + `chrome.scripting.executeScript`.
+
+### 8.7 New Tickets
+
+| Ticket | Description |
+|--------|-------------|
+| XST-812 | Google Search Web Service (tab automation on google.com) |
+| XST-813 | Claude Web Provider (DI-based, tab automation on claude.ai) |
+| XST-814 | Gemini Web Provider (DI-based, tab automation on gemini.google.com) |
+| XST-815 | Unify LLMProviderFactory for Web Providers |
+
+---
+
+## 9. Decision Record
 
 | Date | Decision | By |
 |------|----------|----|
 | 2026-02-22 | ADR created, Option B accepted, Google CSE chosen | Team |
+| 2025-06 | Amendment: All providers use Web/DOM automation, no API keys. Google CSE, Claude API, Gemini API deprecated. See Section 8. | Team |

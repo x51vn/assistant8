@@ -148,6 +148,8 @@ export default defineConfig({
       input: {
         background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
+        'content-gemini': path.resolve(__dirname, 'src/content/gemini.js'),
+        'content-claude': path.resolve(__dirname, 'src/content/claude.js'),
         // ✅ CLEANUP: Removed legacy 'ui' entry point
         'settings-preact': path.resolve(__dirname, 'src/ui-preact/settings/index.jsx'),
       },

@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [preact()],
   test: {
     environment: 'happy-dom',
-    include: ['tests/unit/**/*.test.js']
+    include: ['tests/unit/**/*.test.js', 'tests/integration/**/*.test.js']
   }
 });

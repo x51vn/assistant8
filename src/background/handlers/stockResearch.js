@@ -24,6 +24,7 @@ import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js'
 import { getFeatureFlag } from '../../shared/featureFlags.js';
 import { runStockResearch } from '../services/stock/stockResearchOrchestrator.js';
 import { enqueue } from '../services/promptQueue.js';
+import { resolvePresetOptions, DEFAULT_PRESET } from '../../shared/pipelinePresets.js';
 
 const logger = createLogger('StockResearchHandler');
 
@@ -53,6 +54,13 @@ registerHandler(MESSAGE_TYPES.STOCK_RESEARCH_RUN, async (message) => {
 
     logger.info('Stock research requested', { symbol, mode, correlationId });
 
+    // XST-810: Resolve pipeline preset → merge with user overrides
+    const presetName = settingsConfig?.stock_research?.pipelineMode || DEFAULT_PRESET;
+    const resolvedOptions = resolvePresetOptions(presetName, {
+      ...settingsConfig?.stock_research,
+      ...options,
+    });
+
     // Broadcast initial status
     broadcastStatus(correlationId, {
       runId: correlationId,
@@ -63,10 +71,10 @@ registerHandler(MESSAGE_TYPES.STOCK_RESEARCH_RUN, async (message) => {
       message: `Đang khởi tạo phân tích ${symbol.toUpperCase()}...`,
     });
 
-    // Run pipeline
+    // Run pipeline with resolved preset options
     const result = await runStockResearch(
       symbol,
-      { ...options, mode: mode || 'stock-research', correlationId },
+      { ...resolvedOptions, ...options, mode: mode || 'stock-research', correlationId },
       userId,
       {
         settingsConfig,
