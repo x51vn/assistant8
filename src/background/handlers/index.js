@@ -48,6 +48,7 @@ import './dataImport.js'; // XST-777: Data Import (JSON/CSV)
 import './apiKeys.js'; // XST-778: Enterprise API key management
 import './multiPortfolio.js'; // XST-779: Multi-Portfolio support
 import './llmProvider.js'; // XST-775: Multi-LLM Provider Interface
+import './stockResearch.js'; // XST-797: Stock Research Pipeline handlers
 
 logger.info('All message handlers registered');
 

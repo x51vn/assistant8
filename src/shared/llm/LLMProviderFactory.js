@@ -8,7 +8,7 @@
  *
  * Usage (background handler):
  *   const config = await getProviderConfig(userId);
- *   const provider = LLMProviderFactory.create(config);
+ *   const provider = LLMProviderFactory.create(config, { enqueue });
  *   const { text } = await provider.sendPrompt(prompt);
  */
 
@@ -33,13 +33,19 @@ export const SUPPORTED_PROVIDERS = [
   { id: 'gemini',  name: 'Gemini (Google AI)', plans: ['pro', 'enterprise'],    requiresKey: true  },
 ];
 
+/**
+ * @typedef {Object} ProviderDeps
+ * @property {Function} [enqueue] - enqueue function from promptQueue (required for ChatGPT)
+ */
+
 export class LLMProviderFactory {
   /**
    * Create and return a configured LLMProvider instance.
    * @param {ProviderConfig} config
+   * @param {ProviderDeps} [deps] - External dependencies (DI)
    * @returns {import('./LLMProvider.js').LLMProvider}
    */
-  static create(config = {}) {
+  static create(config = {}, deps = {}) {
     const { provider = 'chatgpt', claudeApiKey, geminiApiKey, claudeModel, geminiModel } = config;
 
     switch (provider) {
@@ -49,7 +55,7 @@ export class LLMProviderFactory {
         return new GeminiProvider(geminiApiKey || '', geminiModel);
       case 'chatgpt':
       default:
-        return new ChatGPTProvider();
+        return new ChatGPTProvider({ enqueue: deps.enqueue });
     }
   }
 

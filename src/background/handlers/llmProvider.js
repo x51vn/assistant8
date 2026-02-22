@@ -20,14 +20,15 @@ import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
 import { LLMProviderFactory, SUPPORTED_PROVIDERS } from '../../shared/llm/LLMProviderFactory.js';
+import { enqueue } from '../services/promptQueue.js'; // XST-793: Static import for DI
 
 const logger = createLogger('LLMHandler');
 
 // ============================================================
-// HELPERS
+// HELPERS (exported for reuse by other handlers)
 // ============================================================
 
-async function getProviderConfig(userId) {
+export async function getProviderConfig(userId) {
   const { data } = await supabase
     .from('settings')
     .select('config')
@@ -44,7 +45,7 @@ async function getProviderConfig(userId) {
   };
 }
 
-async function getUserPlan(userId) {
+export async function getUserPlan(userId) {
   const { data } = await supabase
     .from('subscriptions')
     .select('plan_id')
@@ -103,7 +104,7 @@ registerHandler('LLM_SEND_PROMPT', async (message) => {
       );
     }
 
-    const provider = LLMProviderFactory.create(config);
+    const provider = LLMProviderFactory.create(config, { enqueue });
     logger.info('Sending via LLM provider', { provider: config.provider, chars: prompt.length, correlationId });
 
     const { text, usage } = await provider.sendPrompt(prompt, options);
@@ -127,7 +128,7 @@ registerHandler('LLM_GET_STATUS', async (message) => {
   try {
     const userId = await requireAuth(message);
     const config = await getProviderConfig(userId);
-    const provider = LLMProviderFactory.create(config);
+    const provider = LLMProviderFactory.create(config, { enqueue });
     const status = await provider.getStatus();
     const capabilities = provider.getCapabilities();
 
