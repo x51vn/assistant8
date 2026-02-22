@@ -29,12 +29,15 @@ CREATE TABLE IF NOT EXISTS public.plans (
 -- Plans are public read-only (anyone can see pricing)
 ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "plans_select_all" ON public.plans
-  FOR SELECT USING (true);
-
--- Only service_role can modify plans
-CREATE POLICY "plans_admin_only" ON public.plans
-  FOR ALL USING (false) WITH CHECK (false);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plans' AND policyname = 'plans_select_all') THEN
+    CREATE POLICY "plans_select_all" ON public.plans FOR SELECT USING (true);
+  END IF;
+  -- Only service_role can modify plans
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plans' AND policyname = 'plans_admin_only') THEN
+    CREATE POLICY "plans_admin_only" ON public.plans FOR ALL USING (false) WITH CHECK (false);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.plans IS 'Subscription plan definitions with feature limits and Stripe price IDs';
 COMMENT ON COLUMN public.plans.limits IS 'JSON: { portfolio_stocks, watchlist_items, ai_enrichment_monthly, writing_prompts_monthly, context_menu_monthly, asset_types, chat_history_days, custom_prompts }';
@@ -80,13 +83,15 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_status
 -- RLS: Users can only read/modify their own subscriptions
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "subscriptions_select_own" ON public.subscriptions
-  FOR SELECT USING (auth.uid() = user_id);
-
--- Inserts & updates handled by Edge Functions with service_role
--- Users should NOT directly modify subscriptions (Stripe webhooks handle this)
-CREATE POLICY "subscriptions_service_role_manage" ON public.subscriptions
-  FOR ALL USING (false) WITH CHECK (false);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subscriptions' AND policyname = 'subscriptions_select_own') THEN
+    CREATE POLICY "subscriptions_select_own" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  -- Inserts & updates handled by Edge Functions with service_role
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subscriptions' AND policyname = 'subscriptions_service_role_manage') THEN
+    CREATE POLICY "subscriptions_service_role_manage" ON public.subscriptions FOR ALL USING (false) WITH CHECK (false);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.subscriptions IS 'User subscription records linked to Stripe';
 
@@ -117,14 +122,17 @@ CREATE INDEX IF NOT EXISTS idx_usage_period
 -- RLS: Users can see and increment their own usage
 ALTER TABLE public.usage_tracking ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "usage_select_own" ON public.usage_tracking
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "usage_insert_own" ON public.usage_tracking
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "usage_update_own" ON public.usage_tracking
-  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'usage_tracking' AND policyname = 'usage_select_own') THEN
+    CREATE POLICY "usage_select_own" ON public.usage_tracking FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'usage_tracking' AND policyname = 'usage_insert_own') THEN
+    CREATE POLICY "usage_insert_own" ON public.usage_tracking FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'usage_tracking' AND policyname = 'usage_update_own') THEN
+    CREATE POLICY "usage_update_own" ON public.usage_tracking FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.usage_tracking IS 'Per-feature usage counts per billing period for limit enforcement';
 COMMENT ON COLUMN public.usage_tracking.feature IS 'Feature key: ai_enrichment, writing_prompts, context_menu, etc.';
@@ -162,12 +170,15 @@ CREATE INDEX IF NOT EXISTS idx_payments_created
 -- RLS: Users can only view their own payment history
 ALTER TABLE public.payment_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "payments_select_own" ON public.payment_history
-  FOR SELECT USING (auth.uid() = user_id);
-
--- Inserts handled by Edge Functions (webhook) with service_role
-CREATE POLICY "payments_service_role_manage" ON public.payment_history
-  FOR ALL USING (false) WITH CHECK (false);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'payment_history' AND policyname = 'payments_select_own') THEN
+    CREATE POLICY "payments_select_own" ON public.payment_history FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  -- Inserts handled by Edge Functions (webhook) with service_role
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'payment_history' AND policyname = 'payments_service_role_manage') THEN
+    CREATE POLICY "payments_service_role_manage" ON public.payment_history FOR ALL USING (false) WITH CHECK (false);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.payment_history IS 'Payment records from Stripe for billing history display';
 
@@ -308,14 +319,27 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS set_plans_updated_at ON public.plans;
 CREATE TRIGGER set_plans_updated_at
   BEFORE UPDATE ON public.plans
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS set_subscriptions_updated_at ON public.subscriptions;
 CREATE TRIGGER set_subscriptions_updated_at
   BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+DROP TRIGGER IF EXISTS set_usage_updated_at ON public.usage_tracking;
 CREATE TRIGGER set_usage_updated_at
   BEFORE UPDATE ON public.usage_tracking
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Backfill: give existing users a free subscription if they don't have one
+INSERT INTO public.subscriptions (user_id, plan_id, status, current_period_start)
+SELECT id, 'free', 'active', NOW()
+FROM auth.users
+WHERE id NOT IN (SELECT user_id FROM public.subscriptions)
+ON CONFLICT DO NOTHING;
+
+-- Force PostgREST schema cache reload
+NOTIFY pgrst, 'reload schema';

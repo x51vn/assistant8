@@ -52,6 +52,9 @@ GRANT EXECUTE ON FUNCTION public.increment_usage TO authenticated;
 -- Without this, upsert({onConflict: 'stripe_invoice_id'}) would fail or insert duplicates.
 
 ALTER TABLE public.payment_history
+  DROP CONSTRAINT IF EXISTS payment_history_stripe_invoice_id_key;
+
+ALTER TABLE public.payment_history
   ADD CONSTRAINT payment_history_stripe_invoice_id_key
   UNIQUE (stripe_invoice_id);
 
