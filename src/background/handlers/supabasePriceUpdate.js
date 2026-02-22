@@ -18,6 +18,7 @@ import { registerHandler } from '../messageRouter.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { isMarketHours } from '../utils/marketHours.js';
+import { checkPriceAlerts } from './priceAlerts.js'; // XST-776
 
 const logger = createLogger('Handlers/PriceUpdate');
 
@@ -94,6 +95,14 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
       logger.debug('No UI listening for price updates (sidepanel may be closed)', {
         correlationId
       });
+    }
+
+    // XST-776: Check price alerts and fire Chrome notifications
+    try {
+      const priceMap = Object.fromEntries(items.map(i => [i.symbol, i.price]));
+      await checkPriceAlerts(priceMap);
+    } catch (alertErr) {
+      logger.warn('Price alert check failed (non-critical)', { error: alertErr.message, correlationId });
     }
 
     // Return success response

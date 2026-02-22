@@ -42,6 +42,12 @@ import './supabasePriceUpdate.js'; // XST-744: Price update handler (migrated to
 import './watchlistEnrich.js'; // XST-742: Manual per-symbol watchlist enrichment
 import './promptQueueInfo.js'; // Prompt queue info for Settings UI
 import './billing.js'; // XST-758..XST-763: Billing, Subscription, Usage Tracking
+import './dataExport.js'; // XST-765: GDPR data export (Right to Portability)
+import './priceAlerts.js'; // XST-776: Price Alert System
+import './dataImport.js'; // XST-777: Data Import (JSON/CSV)
+import './apiKeys.js'; // XST-778: Enterprise API key management
+import './multiPortfolio.js'; // XST-779: Multi-Portfolio support
+import './llmProvider.js'; // XST-775: Multi-LLM Provider Interface
 
 logger.info('All message handlers registered');
 

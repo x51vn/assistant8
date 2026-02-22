@@ -38,6 +38,9 @@ export const MENU_IDS = {
   TRANSLATE: 'chatgpt-assistant-translate',
   REWRITE: 'chatgpt-assistant-rewrite',
   CUSTOM: 'chatgpt-assistant-custom',
+  // Writing Assistant (XST-780)
+  IMPROVE: 'chatgpt-assistant-improve',
+  EXPLAIN: 'chatgpt-assistant-explain',
   // Separator
   SEP_OPTIONS: 'chatgpt-assistant-sep-options',
   // Options (checkbox toggles)
@@ -355,6 +358,21 @@ export async function createContextMenus() {
       parentId: MENU_IDS.PARENT,
       title: '\u2699\ufe0f Ph\u00e2n t\u00edch (t\u00f9y ch\u1ec9nh)',
       contexts: ['selection', 'page', 'link', 'image']
+    });
+
+    // Writing Assistant items (XST-780)
+    chrome.contextMenus.create({
+      id: MENU_IDS.IMPROVE,
+      parentId: MENU_IDS.PARENT,
+      title: '\u2728 C\u1ea3i thi\u1ec7n v\u0103n b\u1ea3n',
+      contexts: ['selection']
+    });
+
+    chrome.contextMenus.create({
+      id: MENU_IDS.EXPLAIN,
+      parentId: MENU_IDS.PARENT,
+      title: '\ud83d\udca1 Gi\u1ea3i th\u00edch \u0111o\u1ea1n n\u00e0y',
+      contexts: ['selection']
     });
 
     // Separator

@@ -14,18 +14,29 @@ import { HistoryPage } from '../pages/HistoryPage.jsx';
 import { ErrorsPage } from '../pages/ErrorsPage.jsx';
 import { JiraPage } from '../pages/JiraPage.jsx';
 import { WritingPage } from '../pages/WritingPage.jsx';
+import { AlertsPage } from '../pages/AlertsPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
+import { DashboardPage } from '../pages/DashboardPage.jsx';
+import { OnboardingWizard, useOnboardingGate } from './OnboardingWizard.jsx';
+import { ShortcutsHelp } from './ShortcutsHelp.jsx';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
 import { currentPage, setCurrentPage } from '../state/navigationState.js';
 import { useContextMenuListener } from '../hooks/useContextMenuListener.js';
+import { useAuth } from '../hooks/useAuth.js';
 
 export function MainApp() {
   // Listen for context menu → side panel messages
   useContextMenuListener();
+  const { user } = useAuth();
+  const { showHelp, setShowHelp } = useKeyboardShortcuts();
+  const { showOnboarding, handleDone, handleSkip } = useOnboardingGate(!!user);
   // Subscribe to navigation state using effect
   const page = currentPage;
 
   const renderPage = () => {
     switch (page.value) {
+      case 'dashboard':
+        return <DashboardPage />;
       case 'portfolio':
         return <PortfolioPage />;
       case 'watchlist':
@@ -38,12 +49,14 @@ export function MainApp() {
         return <ErrorsPage />;
       case 'jira':
         return <JiraPage />;
+      case 'alerts':
+        return <AlertsPage />;
       case 'writing':
         return <WritingPage />;
       case 'settings':
         return <SettingsPage />;
       default:
-        return <SettingsPage />;
+        return <DashboardPage />;
     }
   };
 
@@ -57,6 +70,8 @@ export function MainApp() {
       <div class="page-wrapper">
         {renderPage()}
       </div>
+      {showOnboarding && <OnboardingWizard onDone={handleDone} onSkip={handleSkip} />}
+      {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

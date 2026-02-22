@@ -19,6 +19,8 @@ import { RegisterForm } from './components/auth/RegisterForm.jsx';
 import { EmailVerificationPending } from './components/auth/EmailVerificationPending.jsx';
 import { MainApp } from './components/MainApp.jsx';
 import { SubscriptionProvider } from './context/SubscriptionContext.jsx';
+import { ThemeProvider } from './context/ThemeContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
 import { globalLoading, loadingMessage } from './state/appState.js';
 
 /**
@@ -102,9 +104,13 @@ export function App() {
           {renderAuthView()}
         </div>
       ) : (
-        <SubscriptionProvider>
-          <MainApp />
-        </SubscriptionProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <SubscriptionProvider>
+              <MainApp />
+            </SubscriptionProvider>
+          </ToastProvider>
+        </ThemeProvider>
       )}
       
       {/* SINGLE global loading overlay */}

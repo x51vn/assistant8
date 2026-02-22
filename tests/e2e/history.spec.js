@@ -154,8 +154,7 @@ test.describe('History Tab Tests', () => {
     const content = await page.content();
     const hasSyncInfo = content.includes('sync') || 
                         content.includes('Sync') ||
-                        content.includes('đồng bộ') ||
-                        content.includes('Firebase');
+                        content.includes('đồng bộ');
     
     console.log(`✅ Sync status info: ${hasSyncInfo}`);
   });

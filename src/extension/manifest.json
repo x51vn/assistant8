@@ -11,7 +11,8 @@
     "alarms",
     "sidePanel",
     "contextMenus",
-    "activeTab"
+    "activeTab",
+    "notifications"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
@@ -26,7 +27,9 @@
     "https://api.coingecko.com/*",
     "https://api.binance.com/*",
     "https://*.atlassian.net/*",
-    "https://api.x51.vn/*"
+    "https://api.x51.vn/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"
@@ -55,6 +58,10 @@
   "web_accessible_resources": [
     {
       "resources": ["prompts/*.md"],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["privacy-policy.html", "terms-of-service.html"],
       "matches": ["<all_urls>"]
     }
   ]
