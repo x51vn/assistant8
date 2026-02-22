@@ -72,6 +72,16 @@ export const ERROR_CODES = {
   CHECKOUT_FAILED: 'CHECKOUT_FAILED',
   PORTAL_FAILED: 'PORTAL_FAILED',
   STRIPE_ERROR: 'STRIPE_ERROR',
+
+  // ===== Stock Research Pipeline (XST-781) =====
+  SEARCH_FAILED: 'SEARCH_FAILED',
+  SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
+  SEARCH_QUOTA_EXCEEDED: 'SEARCH_QUOTA_EXCEEDED',
+  LLM_TIMEOUT: 'LLM_TIMEOUT',
+  LLM_ERROR: 'LLM_ERROR',
+  LLM_QUOTA_EXCEEDED: 'LLM_QUOTA_EXCEEDED',
+  PARSE_ERROR: 'PARSE_ERROR',
+  PERSIST_ERROR: 'PERSIST_ERROR',
 };
 
 // ============================================================================
@@ -138,6 +148,16 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.CHECKOUT_FAILED]: 'Không thể tạo phiên thanh toán. Vui lòng thử lại.',
   [ERROR_CODES.PORTAL_FAILED]: 'Không thể mở trang quản lý thanh toán. Vui lòng thử lại.',
   [ERROR_CODES.STRIPE_ERROR]: 'Lỗi thanh toán. Vui lòng thử lại hoặc dùng thẻ khác.',
+
+  // Stock Research Pipeline
+  [ERROR_CODES.SEARCH_FAILED]: 'Không thể tìm kiếm thông tin. Vui lòng thử lại sau.',
+  [ERROR_CODES.SEARCH_TIMEOUT]: 'Tìm kiếm quá thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.SEARCH_QUOTA_EXCEEDED]: 'Đã hết lượt tìm kiếm hôm nay. Thử lại vào ngày mai hoặc tắt Search.',
+  [ERROR_CODES.LLM_TIMEOUT]: 'AI provider không phản hồi trong thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_ERROR]: 'Lỗi từ AI provider. Vui lòng thử provider khác hoặc thử lại sau.',
+  [ERROR_CODES.LLM_QUOTA_EXCEEDED]: 'Đã hết quota AI provider. Vui lòng kiểm tra API key hoặc thử provider khác.',
+  [ERROR_CODES.PARSE_ERROR]: 'AI trả lời không đúng format. Đang thử lại...',
+  [ERROR_CODES.PERSIST_ERROR]: 'Không thể lưu kết quả. Dữ liệu vẫn hiển thị nhưng không được lưu.',
 };
 
 // ============================================================================
@@ -204,6 +224,11 @@ export function isRetryableError(errorCode) {
     ERROR_CODES.SUPABASE_CONNECTION_ERROR,
     ERROR_CODES.DATABASE_ERROR,
     ERROR_CODES.SSI_API_ERROR,
+    ERROR_CODES.SEARCH_FAILED,
+    ERROR_CODES.SEARCH_TIMEOUT,
+    ERROR_CODES.LLM_TIMEOUT,
+    ERROR_CODES.LLM_ERROR,
+    ERROR_CODES.PERSIST_ERROR,
   ];
   return retryableErrors.includes(errorCode);
 }
