@@ -24,6 +24,48 @@ import { createLogger } from '../../logger.js';
 const logger = createLogger('BillingHandler');
 
 // ============================================================================
+// FALLBACK PLANS (used when billing tables are not yet deployed)
+// ============================================================================
+
+const FREE_PLAN_FALLBACK = {
+  id: 'free',
+  name: 'Miễn phí',
+  price_monthly: 0,
+  price_yearly: 0,
+  currency: 'USD',
+  limits: {
+    portfolio_stocks: 50,
+    watchlist_items: 20,
+    ai_enrichment_monthly: 10,
+    writing_prompts_monthly: 20,
+    context_menu_monthly: 20,
+    asset_types: 5,
+    chat_history_days: 90,
+    custom_prompts: 5,
+  },
+  features: {
+    market_indices: true,
+    commodity_prices: true,
+    jira_integration: false,
+    confluence_upload: false,
+    data_export: true,
+    priority_support: false,
+    team_workspace: false,
+  },
+  display_order: 0,
+  is_active: true,
+};
+
+/**
+ * Check if an error indicates the table doesn't exist (PGRST205).
+ * When billing tables haven't been deployed yet, we return safe defaults.
+ */
+function isTableNotFoundError(error) {
+  return error?.code === 'PGRST205' || error?.message?.includes('PGRST205')
+    || error?.message?.includes('Could not find the table');
+}
+
+// ============================================================================
 // PLAN LIMITS CONSTANTS
 // Sentinel value -1 = unlimited
 // ============================================================================
@@ -79,38 +121,69 @@ function getCurrentPeriod(scope = 'monthly') {
  * Always returns a result: falls back to Free plan if no subscription found.
  */
 async function fetchUserSubscription(userId, correlationId) {
-  const row = await supabaseWithRetry(
-    async () => {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*, plan:plan_id(*)')
-        .eq('user_id', userId)
-        .in('status', ['active', 'trialing', 'past_due'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    { operationName: 'subscription.get', correlationId }
-  );
+  try {
+    const row = await supabaseWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('*, plan:plan_id(*)')
+          .eq('user_id', userId)
+          .in('status', ['active', 'trialing', 'past_due'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      { operationName: 'subscription.get', correlationId }
+    );
 
-  if (row) return row;
+    if (row) return row;
+  } catch (error) {
+    if (isTableNotFoundError(error)) {
+      logger.warn('subscriptions table not found — using free plan fallback', { correlationId });
+      return buildFreeFallback(userId);
+    }
+    throw error;
+  }
 
   // Fallback: no subscription row → return free plan
-  const freePlan = await supabaseWithRetry(
-    async () => {
-      const { data, error } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('id', 'free')
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    { operationName: 'plans.getFree', correlationId }
-  );
+  try {
+    const freePlan = await supabaseWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from('plans')
+          .select('*')
+          .eq('id', 'free')
+          .single();
+        if (error) throw error;
+        return data;
+      },
+      { operationName: 'plans.getFree', correlationId }
+    );
 
+    return {
+      id: null,
+      user_id: userId,
+      plan_id: 'free',
+      status: 'active',
+      stripe_customer_id: null,
+      stripe_subscription_id: null,
+      current_period_start: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      plan: freePlan
+    };
+  } catch (error) {
+    if (isTableNotFoundError(error)) {
+      logger.warn('plans table not found — using free plan fallback', { correlationId });
+      return buildFreeFallback(userId);
+    }
+    throw error;
+  }
+}
+
+function buildFreeFallback(userId) {
   return {
     id: null,
     user_id: userId,
@@ -121,7 +194,7 @@ async function fetchUserSubscription(userId, correlationId) {
     current_period_start: null,
     current_period_end: null,
     cancel_at_period_end: false,
-    plan: freePlan
+    plan: FREE_PLAN_FALLBACK
   };
 }
 
@@ -203,6 +276,26 @@ registerHandler(MESSAGE_TYPES.SUBSCRIPTION_GET, async (message) => {
       plan: subscription.plan
     });
   } catch (error) {
+    // If billing tables don't exist yet, return free plan silently
+    if (isTableNotFoundError(error)) {
+      logger.warn('billing tables not found — returning free plan fallback', { correlationId });
+      const fallback = buildFreeFallback(null);
+      return createResponse(message, MESSAGE_TYPES.SUBSCRIPTION_DATA, {
+        success: true,
+        subscription: {
+          id: null,
+          planId: 'free',
+          status: 'active',
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          cancelAtPeriodEnd: false,
+          stripeCustomerId: null,
+          stripeSubscriptionId: null,
+        },
+        plan: fallback.plan
+      });
+    }
+
     logger.error('getSubscription failed', { correlationId, errorMessage: error?.message });
     if (error?.type === 'error_response') throw error;
     return createErrorResponse(
@@ -238,6 +331,15 @@ registerHandler(MESSAGE_TYPES.PLANS_GET, async (message) => {
       plans: plans ?? []
     });
   } catch (error) {
+    // If plans table doesn't exist yet, return the hardcoded free plan
+    if (isTableNotFoundError(error)) {
+      logger.warn('plans table not found — returning fallback free plan', { correlationId });
+      return createResponse(message, MESSAGE_TYPES.PLANS_DATA, {
+        success: true,
+        plans: [FREE_PLAN_FALLBACK]
+      });
+    }
+
     logger.error('getPlans failed', { correlationId, errorMessage: error?.message });
     return createErrorResponse(
       message,
@@ -493,18 +595,28 @@ registerHandler(MESSAGE_TYPES.USAGE_GET_STATS, async (message) => {
     const { periodStart, periodEnd } = getCurrentPeriod('monthly');
 
     // Fetch all usage rows for this period
-    const usageRows = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('usage_tracking')
-          .select('feature, count')
-          .eq('user_id', userId)
-          .eq('period_start', periodStart);
-        if (error) throw error;
-        return data ?? [];
-      },
-      { operationName: 'usage.getStats', correlationId }
-    );
+    let usageRows = [];
+    try {
+      usageRows = await supabaseWithRetry(
+        async () => {
+          const { data, error } = await supabase
+            .from('usage_tracking')
+            .select('feature, count')
+            .eq('user_id', userId)
+            .eq('period_start', periodStart);
+          if (error) throw error;
+          return data ?? [];
+        },
+        { operationName: 'usage.getStats', correlationId }
+      );
+    } catch (usageError) {
+      if (isTableNotFoundError(usageError)) {
+        logger.warn('usage_tracking table not found — returning zero usage', { correlationId });
+        // usageRows stays empty → all usage = 0
+      } else {
+        throw usageError;
+      }
+    }
 
     const usageMap = {};
     for (const row of usageRows) {
