@@ -79,7 +79,7 @@ export function ThemeProvider({ children }) {
         type: MESSAGE_TYPES.SETTINGS_UPDATE,
         correlationId: generateCorrelationId(),
         timestamp: Date.now(),
-        data: { theme: newTheme }
+        data: { config: { theme: newTheme } }
       });
     } catch { /* non-fatal */ }
   }, []);

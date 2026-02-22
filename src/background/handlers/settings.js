@@ -91,11 +91,18 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
 
 /**
  * SETTINGS_UPDATE - Update user settings (upsert)
- * Accepts both legacy (config.prompt) and new (config.prompts.master) format
+ * Accepts multiple formats:
+ *   1. { data: { config: { ... } } }          — standard format
+ *   2. { data: { theme, consent_*, onboarding_*, ... } } — direct fields (legacy callers)
+ *   3. { data: { config: { prompt: '...' } } } — legacy prompt field
  */
 registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
   const correlationId = logger.startOperation('updateSettings', message.correlationId);
-  let { config } = message.data || {};
+  const data = message.data || {};
+  // ✅ NORMALIZE: if callers send fields directly without wrapping in `config`, treat data as config
+  let config = (data.config && typeof data.config === 'object')
+    ? data.config
+    : (Object.keys(data).length > 0 && !('config' in data) ? data : data.config);
   
   try {
     const userId = await requireAuth(message);

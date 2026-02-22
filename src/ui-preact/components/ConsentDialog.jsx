@@ -53,11 +53,13 @@ async function saveConsent({ errorReporting, analytics }) {
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
       data: {
-        consent_essential: true,
-        consent_error_reporting: errorReporting,
-        consent_analytics: analytics,
-        consent_version: CONSENT_VERSION,
-        consent_date: new Date().toISOString(),
+        config: {
+          consent_essential: true,
+          consent_error_reporting: errorReporting,
+          consent_analytics: analytics,
+          consent_version: CONSENT_VERSION,
+          consent_date: new Date().toISOString(),
+        }
       }
     });
     return true;

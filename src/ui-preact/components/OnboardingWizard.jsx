@@ -63,7 +63,7 @@ async function markOnboardingDone() {
       type: MESSAGE_TYPES.SETTINGS_UPDATE,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
-      data: { onboarding_completed: true, onboarding_completed_at: new Date().toISOString() }
+      data: { config: { onboarding_completed: true, onboarding_completed_at: new Date().toISOString() } }
     });
   } catch { /* non-fatal */ }
 }
