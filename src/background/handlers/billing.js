@@ -413,6 +413,10 @@ registerHandler(MESSAGE_TYPES.USAGE_CHECK, async (message) => {
 
 /**
  * USAGE_INCREMENT — record that a feature was used (+1 to count)
+ *
+ * Uses the `increment_usage` Postgres RPC (migration 014) for atomic
+ * INSERT … ON CONFLICT DO UPDATE SET count = count + amount.
+ * This avoids the race condition of a chained JS upsert+update pattern.
  */
 registerHandler(MESSAGE_TYPES.USAGE_INCREMENT, async (message) => {
   const correlationId = logger.startOperation('incrementUsage', message.correlationId);
@@ -428,35 +432,24 @@ registerHandler(MESSAGE_TYPES.USAGE_INCREMENT, async (message) => {
     const scope = DAILY_FEATURES.has(feature) ? 'daily' : 'monthly';
     const { periodStart, periodEnd } = getCurrentPeriod(scope);
 
-    const { data, error } = await supabase
-      .from('usage_tracking')
-      .upsert(
-        {
-          user_id: userId,
-          feature,
-          count: amount,
-          period_start: periodStart,
-          period_end: periodEnd,
-        },
-        {
-          onConflict: 'user_id,feature,period_start',
-          // Increment: use raw SQL expression via RPC alternative pattern
-          ignoreDuplicates: false
-        }
-      )
-      .select('count')
-      .single();
+    // Atomic increment via Postgres function (migration 014_billing_fixes.sql)
+    const { error } = await supabase.rpc('increment_usage', {
+      p_user_id: userId,
+      p_feature: feature,
+      p_period_start: periodStart,
+      p_period_end: periodEnd,
+      p_amount: amount
+    });
 
-    // If upsert returned an existing row, we need to increment manually
-    // (Supabase JS doesn't support increment directly in upsert)
-    if (!error && data) {
-      // Row existed → increment using update
-      await supabase
-        .from('usage_tracking')
-        .update({ count: data.count + amount })
-        .eq('user_id', userId)
-        .eq('feature', feature)
-        .eq('period_start', periodStart);
+    if (error) {
+      logger.warn('increment_usage RPC failed', { correlationId, feature, errorMessage: error.message });
+      // Non-fatal: don't block users if usage tracking has an error
+      return createResponse(message, MESSAGE_TYPES.USAGE_INCREMENTED, {
+        success: false,
+        feature,
+        amount,
+        errorMessage: error.message
+      });
     }
 
     logger.info('Usage incremented', { correlationId, feature, amount, periodStart });

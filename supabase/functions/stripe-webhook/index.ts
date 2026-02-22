@@ -285,22 +285,32 @@ Deno.serve(async (req) => {
           })
           .eq('stripe_subscription_id', stripeSub.id)
 
-        // Ensure user has a Free subscription
+        // Ensure user still has at least one active (Free) subscription.
+        // We insert a new free row only if no active/trialing/past_due row exists.
         if (userId) {
-          await supabase
+          const { data: existingActive } = await supabase
             .from('subscriptions')
-            .upsert({
-              user_id: userId,
-              plan_id: 'free',
-              status: 'active',
-              stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : null,
-              stripe_subscription_id: null,
-              current_period_start: new Date().toISOString(),
-              cancel_at_period_end: false,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id', ignoreDuplicates: false })
-            .filter('status', 'neq', 'active')
-            // Note: only insert if no other active sub exists
+            .select('id')
+            .eq('user_id', userId)
+            .in('status', ['active', 'trialing', 'past_due'])
+            .limit(1)
+            .maybeSingle()
+
+          if (!existingActive) {
+            await supabase
+              .from('subscriptions')
+              .insert({
+                user_id: userId,
+                plan_id: 'free',
+                status: 'active',
+                stripe_customer_id: typeof stripeSub.customer === 'string'
+                  ? stripeSub.customer
+                  : null,
+                stripe_subscription_id: null,
+                current_period_start: new Date().toISOString(),
+                cancel_at_period_end: false,
+              })
+          }
         }
 
         console.log(`[stripe-webhook] Subscription ${stripeSub.id} deleted → user downgraded to Free`)
