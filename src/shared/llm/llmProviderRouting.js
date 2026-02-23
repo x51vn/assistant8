@@ -2,11 +2,8 @@
  * @fileoverview LLM Provider Routing — Feature-based provider selection
  * Ticket: XST-799 — LLM Provider Routing Standardization
  *
- * @todo XST-815 — After WebProvider migration:
- *   - Remove claudeApiKey/geminiApiKey from the returned config object
- *   - Remove llm_claude_key/llm_gemini_key references
- *   - All providers will use Web/DOM automation (no API key fields needed)
- *   - The routing logic itself (per-feature overrides) remains valid
+ * All providers use Web/DOM automation (no API keys required).
+ * Routing selects which provider handles each feature independently.
  *
  * Enables different features to use different LLM providers.
  * Users can configure per-feature provider overrides in settings:
@@ -89,14 +86,7 @@ export function getProviderForFeature(feature, settingsConfig = {}) {
     provider = FEATURE_DEFAULTS[feature] || 'chatgpt';
   }
 
-  return {
-    provider,
-    // @todo XST-815: Remove API key fields after WebProvider migration
-    claudeApiKey: config.llm_claude_key || '',
-    geminiApiKey: config.llm_gemini_key || '',
-    claudeModel:  config.llm_claude_model || undefined,
-    geminiModel:  config.llm_gemini_model || undefined,
-  };
+  return { provider };
 }
 
 /**

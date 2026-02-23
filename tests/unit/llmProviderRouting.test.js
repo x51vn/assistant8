@@ -8,35 +8,29 @@ import {
 
 // ============================================================================
 // getProviderForFeature
-// @note XST-815: After WebProvider migration, API key assertions in these tests
-//       should be removed (claudeApiKey, geminiApiKey fields will be dropped).
-//       The routing logic being tested (per-feature overrides) remains valid.
+// All providers use Web/DOM automation — no API keys needed.
 // ============================================================================
 
 describe('getProviderForFeature', () => {
   it('returns global default when no per-feature override', () => {
-    const config = { llm_provider: 'claude', llm_claude_key: 'sk-test' };
+    const config = { llm_provider: 'claude' };
     const result = getProviderForFeature(FEATURE_TYPES.CHAT, config);
     expect(result.provider).toBe('claude');
-    expect(result.claudeApiKey).toBe('sk-test');
   });
 
   it('returns per-feature override for stock-research', () => {
     const config = {
       llm_provider: 'chatgpt',
       llm_provider_stock_research: 'gemini',
-      llm_gemini_key: 'gk-test',
     };
     const result = getProviderForFeature(FEATURE_TYPES.STOCK_RESEARCH, config);
     expect(result.provider).toBe('gemini');
-    expect(result.geminiApiKey).toBe('gk-test');
   });
 
   it('returns per-feature override for watchlist-enrich', () => {
     const config = {
       llm_provider: 'chatgpt',
       llm_provider_watchlist_enrich: 'claude',
-      llm_claude_key: 'ck-test',
     };
     const result = getProviderForFeature(FEATURE_TYPES.WATCHLIST_ENRICH, config);
     expect(result.provider).toBe('claude');
@@ -52,22 +46,6 @@ describe('getProviderForFeature', () => {
     expect(result.provider).toBe('chatgpt');
   });
 
-  it('propagates all API keys regardless of selected provider', () => {
-    const config = {
-      llm_provider: 'gemini',
-      llm_claude_key: 'ck-key',
-      llm_gemini_key: 'gk-key',
-      llm_claude_model: 'claude-3',
-      llm_gemini_model: 'gemini-pro',
-    };
-    const result = getProviderForFeature(FEATURE_TYPES.CHAT, config);
-    expect(result.provider).toBe('gemini');
-    expect(result.claudeApiKey).toBe('ck-key');
-    expect(result.geminiApiKey).toBe('gk-key');
-    expect(result.claudeModel).toBe('claude-3');
-    expect(result.geminiModel).toBe('gemini-pro');
-  });
-
   it('per-feature override takes priority over global', () => {
     const config = {
       llm_provider: 'chatgpt',
@@ -75,6 +53,11 @@ describe('getProviderForFeature', () => {
     };
     const result = getProviderForFeature(FEATURE_TYPES.STOCK_RESEARCH, config);
     expect(result.provider).toBe('claude');
+  });
+
+  it('returns only provider field (no API key fields)', () => {
+    const result = getProviderForFeature(FEATURE_TYPES.CHAT, { llm_provider: 'gemini' });
+    expect(Object.keys(result)).toEqual(['provider']);
   });
 });
 

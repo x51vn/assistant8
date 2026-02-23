@@ -1,9 +1,9 @@
 /**
  * @fileoverview Search Utilities — Shared normalization, dedup, ranking functions
- * Ticket: XST-812 — Extracted from googleSearchService.js for reuse
+ * Ticket: XST-812
  *
- * These utilities are used by both the deprecated googleSearchService.js
- * (Edge Function proxy) and the new googleSearchWebService.js (DOM automation).
+ * Reusable helpers for search result normalization, deduplication, and ranking.
+ * Used by googleSearchWebService.js (DOM automation).
  */
 
 // ===== CONSTANTS =====
