@@ -93,7 +93,11 @@ export async function ensureNewChatSession(timeoutMs = 20000) {
     const currentMsgCount = getConversationMessageCount();
     const urlChanged = location.href !== startUrl;
 
-    if (editor && urlChanged && currentMsgCount === 0) {
+    // Allow success when:
+    // 1. Editor visible + URL changed + no messages (navigated to new chat)
+    // 2. Editor visible + already on home (/) + no messages (was already on empty chat page)
+    const isOnHomePage = location.pathname === '/' || location.pathname === '';
+    if (editor && currentMsgCount === 0 && (urlChanged || isOnHomePage)) {
       console.log(`[Content] ✅ New chat session ready after ${attempts} attempts (${Date.now() - start}ms)`);
       return true;
     }

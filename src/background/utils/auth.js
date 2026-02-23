@@ -164,6 +164,18 @@ export async function requireAuth(message) {
       );
     }
     
+    // JWT or session expiration errors → AUTH_EXPIRED (trigger re-login)
+    if (errorCode === 'invalid_jwt' || errorCode === 'session_expired' || errorCode === 'jwt_error' ||
+        errorMessage.includes('JWT') || errorMessage.includes('Session expired')) {
+      logger.warn('Auth token expired or invalid', { correlationId, errorCode, errorMessage });
+      throw createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_EXPIRED,
+        getUserFriendlyMessage(ERROR_CODES.AUTH_EXPIRED),
+        { technicalError: errorMessage }
+      );
+    }
+
     // Invalid API key (configuration error)
     if (errorMessage.includes('Invalid API key') || errorStatus === 401) {
       logger.error('Invalid Supabase credentials', { 

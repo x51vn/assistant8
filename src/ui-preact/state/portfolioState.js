@@ -101,13 +101,13 @@ export const filteredPortfolioItems = computed(() => {
   let filtered = items;
   if (query) {
     filtered = items.filter(item => 
-      item.symbol.toLowerCase().includes(query)
+      (item.symbol || '').toLowerCase().includes(query)
     );
   }
   
   // Sort: regular stocks first (A-Z), CASH last
   const regular = filtered.filter(item => item.symbol !== 'CASH').sort((a, b) => 
-    a.symbol.localeCompare(b.symbol)
+    (a.symbol || '').localeCompare(b.symbol || '')
   );
   const cash = filtered.filter(item => item.symbol === 'CASH');
   

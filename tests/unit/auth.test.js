@@ -22,11 +22,14 @@ vi.mock('../../src/logger.js', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn()
-  }))
+  })),
+  generateCorrelationId: vi.fn(() => 'auto-generated-id')
 }));
 
-// Mock Supabase - define mock functions that will be replaced in beforeEach
-const mockGetUser = vi.fn();
+// Use vi.hoisted() to declare mock functions before vi.mock hoisting
+const { mockGetUser } = vi.hoisted(() => ({
+  mockGetUser: vi.fn()
+}));
 
 vi.mock('../../src/supabaseConfig.js', () => ({
   supabase: {
@@ -178,8 +181,8 @@ describe('requireAuth', () => {
         await requireAuth(mockMessage);
         expect.fail('Should have thrown');
       } catch (error) {
-        expect(error.details).toBeDefined();
-        expect(error.details.technicalError).toBe(technicalError);
+      expect(error.error.details).toBeDefined();
+      expect(error.error.details.technicalError).toBe(technicalError);
       }
     });
   });

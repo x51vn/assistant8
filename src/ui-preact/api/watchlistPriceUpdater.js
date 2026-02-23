@@ -35,7 +35,6 @@ export function startPricePolling() {
     return;
   }
 
-  console.log('[watchlistPriceUpdater] Starting price polling...');
   shouldContinuePolling = true;
 
   // Initial update immediately
@@ -58,7 +57,6 @@ export function stopPricePolling() {
     clearInterval(pollingInterval);
     pollingInterval = null;
     shouldContinuePolling = false;
-    console.log('[watchlistPriceUpdater] Price polling stopped');
   }
 }
 
@@ -84,8 +82,6 @@ export async function updatePricesNow() {
       return;
     }
 
-    console.log('[watchlistPriceUpdater] Fetching prices for:', symbols);
-
     // Fetch prices with retry (reuses portfolioPricing.js)
     const prices = await fetchStockPricesWithRetry(symbols);
 
@@ -109,8 +105,6 @@ export async function updatePricesNow() {
 
     setWatchlistItems(updatedItems);
     lastUpdateTime.value = new Date();
-
-    console.log('[watchlistPriceUpdater] Prices updated successfully:', prices);
   } catch (error) {
     // Classify error and set state
     const classified = classifyPricingError(error);

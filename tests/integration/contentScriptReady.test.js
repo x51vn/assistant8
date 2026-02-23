@@ -11,8 +11,8 @@ import {
   clearContentScriptStatus,
   clearAllContentScriptStatus,
   reinitializeContentScriptRegistry
-} from '../src/background/handlers/contentScriptReady.js';
-import { MESSAGE_TYPES, createMessage } from '../src/shared/messageSchema.js';
+} from '../../src/background/handlers/contentScriptReady.js';
+import { MESSAGE_TYPES, createMessage } from '../../src/shared/messageSchema.js';
 
 describe('ContentScriptReady Handler', () => {
   beforeEach(() => {

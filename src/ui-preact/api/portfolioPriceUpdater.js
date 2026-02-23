@@ -31,7 +31,6 @@ export function startPricePolling() {
     return;
   }
 
-  console.log('[portfolioPriceUpdater] Starting price polling...');
   shouldContinuePolling = true;
 
   // Initial update immediately
@@ -54,7 +53,6 @@ export function stopPricePolling() {
     clearInterval(pollingInterval);
     pollingInterval = null;
     shouldContinuePolling = false;
-    console.log('[portfolioPriceUpdater] Price polling stopped');
   }
 }
 
@@ -82,8 +80,6 @@ export async function updatePricesNow() {
       return;
     }
 
-    console.log('[portfolioPriceUpdater] Fetching prices for:', symbols);
-
     // Fetch prices with retry
     const prices = await fetchStockPricesWithRetry(symbols);
 
@@ -100,8 +96,6 @@ export async function updatePricesNow() {
 
     setPortfolioItems(updatedItems);
     lastUpdateTime.value = new Date();
-
-    console.log('[portfolioPriceUpdater] Prices updated successfully:', prices);
   } catch (error) {
     // Classify error and set state
     const classified = classifyPricingError(error);

@@ -52,7 +52,7 @@ export const filteredItems = computed(() => {
 
   if (query) {
     items = items.filter(item =>
-      item.symbol.toUpperCase().includes(query)
+      (item.symbol || '').toUpperCase().includes(query)
     );
   }
 

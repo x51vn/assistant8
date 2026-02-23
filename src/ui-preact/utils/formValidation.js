@@ -121,7 +121,7 @@ export function validateNewPrice(price) {
  */
 export function isSymbolDuplicate(symbol, portfolioItems, excludeId = null) {
   return portfolioItems.some(
-    item => item.symbol.toUpperCase() === symbol.toUpperCase() && item.id !== excludeId
+    item => (item.symbol || '').toUpperCase() === symbol.toUpperCase() && item.id !== excludeId
   );
 }
 
