@@ -495,7 +495,7 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
 2. Đưa ra khuyến nghị rõ ràng: BUY, HOLD, SELL, hoặc WATCH
 3. Đánh giá độ tin cậy từ 0-100
 4. Liệt kê luận điểm đầu tư (thesis) và rủi ro (risks) bằng tiếng Việt
-5. Nếu có, đưa ra giá mục tiêu (targetPrice) và cắt lỗ (stopLoss) tính bằng VND
+5. Nếu có, đưa ra giá vào (entryPrice), giá mục tiêu (targetPrice) và cắt lỗ (stopLoss) tính bằng VND
 
 ## Format JSON bắt buộc (CHỈ trả lời JSON, không thêm text):
 \`\`\`json
@@ -503,6 +503,7 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
   "symbol": "${symbol}",
   "recommendation": "BUY|HOLD|SELL|WATCH",
   "confidence": 0-100,
+  "entryPrice": number_or_null,
   "targetPrice": number_or_null,
   "stopLoss": number_or_null,
   "timeHorizon": "1w|1m|1-3m|3-6m|6-12m|1y+",
@@ -665,6 +666,7 @@ async function persistResults(runId, symbol, userId, { output, sources, provider
         content: output.recommendation,
         confidence: output.confidence || null,
         metadata: {
+          entryPrice: output.entryPrice,
           targetPrice: output.targetPrice,
           stopLoss: output.stopLoss,
           timeHorizon: output.timeHorizon,

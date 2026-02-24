@@ -9,6 +9,7 @@
 
 import {h} from 'preact';
 import { formatNumber, formatPercent } from '../utils/formatters.js';
+import { calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 import {
   filteredItems,
   hasFilteredItems,
@@ -82,18 +83,17 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
 
   const ediffColorClass = getEdiffColorClass(item.ediff);
 
-  // pprofit = (target - entry) / entry
-  // When expected profit (target - entry) / target ≤ 10%, null out entry, target, pprofit, ediff
-  const pprofitTarget = (item.target && item.entry && item.target > 0)
-    ? (item.target - item.entry) / item.target
-    : null;
-  const isLowProfit = pprofitTarget !== null && pprofitTarget <= 0.10;
+  // Use DB pprofit if available, else calculate client-side
+  const pprofitRaw = item.pprofit != null
+    ? Number(item.pprofit)
+    : round4(calcPprofit(item.target, item.entry));
+
+  // When expected profit ≤ 10%, null out entry, target, pprofit, ediff
+  const isLowProfit = pprofitRaw !== null && pprofitRaw <= 0.10;
 
   const displayEntry = isLowProfit ? null : item.entry;
   const displayTarget = isLowProfit ? null : item.target;
-  const pprofit = isLowProfit ? null : (
-    (item.target && item.entry) ? (item.target - item.entry) / item.entry : null
-  );
+  const pprofit = isLowProfit ? null : pprofitRaw;
   const displayEdiff = isLowProfit ? null : item.ediff;
   const displayEdiffClass = isLowProfit ? '' : ediffColorClass;
 

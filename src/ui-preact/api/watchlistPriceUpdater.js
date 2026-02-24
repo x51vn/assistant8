@@ -18,6 +18,7 @@ import { watchlistItems, setWatchlistItems } from '../state/watchlistState.js';
 import { fetchStockPricesWithRetry, classifyPricingError } from './portfolioPricing.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
+import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 
 // Polling state signals
 export const lastUpdateTime = signal(null);
@@ -87,19 +88,18 @@ export async function updatePricesNow() {
     // Fetch prices with retry (reuses portfolioPricing.js)
     const prices = await fetchStockPricesWithRetry(symbols);
 
-    // Update watchlist items with new prices and recalculate ediff
+    // Update watchlist items with new prices and recalculate ediff + pprofit
     const updatedItems = watchlistItems.value.map(item => {
       if (prices[item.symbol] !== undefined) {
         const newPrice = prices[item.symbol];
-        // ediff = (price - entry) / price (when both price and entry exist)
-        const newEdiff = (newPrice && item.entry)
-          ? (newPrice - item.entry) / newPrice
-          : item.ediff;
+        const entry = item.entry ?? null;
+        const target = item.target ?? null;
 
         return {
           ...item,
           price: newPrice,
-          ediff: newEdiff
+          ediff: round4(calcEdiff(newPrice, entry)),
+          pprofit: round4(calcPprofit(target, entry)),
         };
       }
       return item;
@@ -108,13 +108,14 @@ export async function updatePricesNow() {
     setWatchlistItems(updatedItems);
     lastUpdateTime.value = new Date();
 
-    // Persist updated prices to Supabase (fire-and-forget)
+    // Persist updated prices + derived fields to Supabase (fire-and-forget)
     const priceUpdates = {};
     updatedItems.forEach(item => {
       if (prices[item.symbol] !== undefined) {
         priceUpdates[item.symbol] = {
           price: item.price,
-          ediff: item.ediff
+          ediff: item.ediff,
+          pprofit: item.pprofit,
         };
       }
     });

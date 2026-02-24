@@ -4,8 +4,8 @@
  * Handles ChatGPT DOM automation concerns that sit outside the generic LLM
  * provider abstraction:
  *   - CHATGPT_GET_OUTPUT  — Retrieves the current ChatGPT response from the tab.
- *                           Still needed for the legacy fire-and-forget UI path
- *                           (writingApi pollWritingOutput, getChatGPTOutput).
+ *                           Kept for edge-case compatibility; SEND_PROMPT now
+ *                           returns text directly for all providers.
  *   - ENSURE_CHATGPT_OPEN — Opens / focuses the ChatGPT tab (user-facing action).
  *
  * Note: Sending prompts to ChatGPT is now handled centrally by

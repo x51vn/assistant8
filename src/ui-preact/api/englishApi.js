@@ -208,7 +208,9 @@ export async function sendPromptToLLM(prompt, options = {}) {
 
     // For non-ChatGPT providers, full response text is in the response immediately.
     const text = response.text || response.payload?.text || null;
-    return { success: true, text, error: null };
+    const chatId = response.chatId || response.payload?.chatId || null;
+    const chatUrl = response.chatUrl || response.payload?.chatUrl || null;
+    return { success: true, text, chatId, chatUrl, error: null };
   } catch (error) {
     console.error('[EnglishAPI] Failed to send prompt:', error);
     return {
@@ -221,58 +223,11 @@ export async function sendPromptToLLM(prompt, options = {}) {
   }
 }
 
-// XST-825: Deprecated alias removed — use sendPromptToLLM directly.
-
 /**
- * Get ChatGPT output (for polling)
- * @returns {Promise<{output?: string, chatId?: string, chatUrl?: string, error?: {code, message}}>}
- */
-export async function getChatGPTOutput() {
-  try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      payload: { wait: false }
-    });
-
-    const error = extractError(response);
-    if (error) {
-      // Not necessarily an error - might just not be ready yet
-      return { output: null, error: null };
-    }
-
-    // Handle both response patterns
-    const output = response?.output || response?.payload?.output;
-    const chatId = response?.chatId || response?.payload?.chatId;
-    const chatUrl = response?.chatUrl || response?.payload?.chatUrl;
-
-    if (response && response.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && output) {
-      return {
-        output,
-        chatId,
-        chatUrl,
-        error: null
-      };
-    }
-
-    return { output: null, error: null };
-  } catch (error) {
-    console.error('[EnglishAPI] Failed to get ChatGPT output:', error);
-    return {
-      output: null,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: 'Không thể lấy output. Vui lòng kiểm tra mạng.'
-      }
-    };
-  }
-}
-
-/**
- * Open ChatGPT chat by chat_id
- * @param {string} chatId - ChatGPT conversation ID
+ * Open a saved conversation by chatId (ChatGPT) or full URL.
+ * XST-824: Removed ENSURE_CHATGPT_OPEN dependency — open tab directly.
+ * For non-ChatGPT providers chatId is null and an explanatory error is returned.
+ * @param {string} chatId - ChatGPT conversation ID or full URL
  * @returns {Promise<{success: boolean, error?: {code, message}}>}
  */
 export async function openEnglishChat(chatId) {
@@ -281,42 +236,27 @@ export async function openEnglishChat(chatId) {
       return {
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Chat ID là bắt buộc'
+          code: 'NO_CHAT_ID',
+          message: 'Không có chat ID — provider này không hỗ trợ mở lại conversation'
         }
       };
     }
 
-    // First ensure ChatGPT is open
-    await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.ENSURE_CHATGPT_OPEN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
-
-    // Then navigate to the specific chat
-    const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
-    
+    const chatUrl = chatId.startsWith('http') ? chatId : `https://chatgpt.com/c/${chatId}`;
+    const origin = chatId.startsWith('http') ? (new URL(chatId)).origin + '/*' : 'https://chatgpt.com/*';
+    const tabs = await chrome.tabs.query({ url: origin });
     if (tabs.length > 0) {
-      const chatUrl = `https://chatgpt.com/c/${chatId}`;
-      await chrome.tabs.update(tabs[0].id, { url: chatUrl });
-      return { success: true, error: null };
+      await chrome.tabs.update(tabs[0].id, { url: chatUrl, active: true });
     } else {
-      return {
-        success: false,
-        error: {
-          code: 'NO_TAB',
-          message: 'Không tìm thấy tab ChatGPT'
-        }
-      };
+      await chrome.tabs.create({ url: chatUrl, active: true });
     }
+    return { success: true, error: null };
   } catch (error) {
     console.error('[EnglishAPI] Failed to open chat:', error);
     return {
       success: false,
       error: {
-        code: 'NETWORK_ERROR',
+        code: 'OPEN_ERROR',
         message: 'Không thể mở chat. Vui lòng thử lại.'
       }
     };
@@ -380,30 +320,13 @@ export async function autoSelectTopic() {
       return { topic, error: null };
     }
 
-    // Fallback: Poll for response (legacy compatibility — should not trigger)
-    const maxPolls = 20;
-    for (let i = 0; i < maxPolls; i++) {
-      await new Promise(r => setTimeout(r, 1500));
-      
-      const outputResult = await getChatGPTOutput();
-      
-      if (outputResult.output) {
-        const firstLine = outputResult.output
-          .split('\n')
-          .map(s => s.trim())
-          .find(Boolean) || outputResult.output;
-        
-        const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
-        return { topic, error: null };
-      }
-    }
 
-    // Timeout
+    // No text returned — LLM send succeeded but no response text
     return {
       topic: null,
       error: {
-        code: 'TIMEOUT',
-        message: 'Không thể lấy topic từ ChatGPT. Vui lòng thử lại.'
+        code: 'NO_RESPONSE',
+        message: 'LLM không trả về nội dung. Vui lòng thử lại.'
       }
     };
   } catch (error) {

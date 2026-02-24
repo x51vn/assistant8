@@ -32,6 +32,7 @@ import { ERROR_CODES } from '../../types.js';
 import { LLMProviderFactory, SUPPORTED_PROVIDERS } from '../../shared/llm/LLMProviderFactory.js';
 import { enqueue } from '../services/promptQueue.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
+import { recordResponseCaptured } from '../services/chatHistoryService.js';
 
 const logger = createLogger('LLMHandler');
 
@@ -116,23 +117,39 @@ async function handleUnifiedSendPrompt(message, { source, responseType }) {
       return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Missing or invalid prompt');
     }
 
-    // Resolve active LLM provider from user settings
-    // Two separate try/catch: auth failure vs config-read failure are distinct causes.
-    let providerName = 'chatgpt'; // safe default
+    // ── Step 1: Authenticate ──────────────────────────────────────────────────
+    // If auth fails, return an error immediately.
+    // DO NOT fall back to any provider — the user must re-login to know their
+    // configured provider, otherwise we would silently route to the wrong LLM.
+    let userId;
     try {
-      const userId = await requireAuth(message);
+      userId = await requireAuth(message);
+    } catch (authErr) {
+      logger.warn('requireAuth failed in SEND_PROMPT — aborting (no silent ChatGPT fallback)', { correlationId });
+      logger.endOperation(correlationId, 'error', { reason: 'auth_failed' });
+      // requireAuth throws a pre-formatted error response object when the user is not authenticated
+      if (authErr?.errorCode) return authErr;
+      return createErrorResponse(message, ERROR_CODES.AUTH_REQUIRED, 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+    }
+
+    // ── Step 2: Resolve provider from Supabase, with local-storage cache ─────
+    // On Supabase failure we use the last-known provider cached in chrome.storage.local
+    // so the user's selection survives transient network issues.
+    let providerName = 'chatgpt'; // fallback only when both Supabase AND cache miss
+    try {
+      const config = await getProviderConfig(userId);
+      providerName = config.provider || 'chatgpt';
+      // Cache so next call survives a Supabase hiccup
+      chrome.storage.local.set({ __llm_provider_cache: providerName }).catch(() => {});
+    } catch (configErr) {
+      logger.warn('getProviderConfig failed — trying local cache', { correlationId, error: configErr?.message });
       try {
-        const config = await getProviderConfig(userId);
-        providerName = config.provider || 'chatgpt';
-      } catch (configErr) {
-        // Config read failed (Supabase error, RLS, network) — fall back but WARN explicitly
-        logger.warn('getProviderConfig failed — falling back to chatgpt', {
-          correlationId,
-          error: configErr?.message,
-        });
+        const cached = await chrome.storage.local.get(['__llm_provider_cache']);
+        providerName = cached.__llm_provider_cache || 'chatgpt';
+        logger.info('Using locally cached provider', { correlationId, providerName });
+      } catch {
+        providerName = 'chatgpt';
       }
-    } catch (_authErr) {
-      logger.warn('requireAuth failed — falling back to chatgpt', { correlationId });
     }
 
     logger.info('Sending prompt via provider', { correlationId, promptLength: prompt.length, provider: providerName });
@@ -153,13 +170,41 @@ async function handleUnifiedSendPrompt(message, { source, responseType }) {
     const chatId = providerResult.chatId || null;
     const chatUrl = providerResult.chatUrl || null;
 
-    // Persist prompt + response to chat_history
+    // Persist to chat_history
     if (options?.saveToHistory !== false) {
+      // Phase 1: save prompt (non-blocking on failure)
       await persistPromptSafe(runId, prompt, chatId, chatUrl, {
         source,
         provider: providerName,
         ...(options?.metadata || {}),
       });
+
+      // Phase 2: save AI response immediately.
+      // For the unified provider path (ChatGPT/Gemini/Claude via SEND_PROMPT), the response
+      // is returned synchronously here — we must persist it now.
+      // (The legacy ChatGPT path also sends CONTENT_RESPONSE_CAPTURED separately, but
+      // that handler deduplicates via run_id so double-writes are safe.)
+      if (text) {
+        recordResponseCaptured({
+          runId,
+          prompt,
+          response: text,
+          chatId,
+          chatUrl,
+          timestamp: Date.now(),
+          metadata: {
+            source,
+            provider: providerName,
+            capture: { status: 'complete', capturedAt: Date.now() },
+            ...(options?.metadata || {}),
+          },
+        }).catch((err) => {
+          logger.warn('Failed to persist LLM response to chat_history', {
+            correlationId: runId,
+            error: err?.message,
+          });
+        });
+      }
     }
 
     logger.endOperation(correlationId, 'success');

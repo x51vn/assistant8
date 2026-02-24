@@ -19,7 +19,6 @@ import {
   deleteEnglish,
   openEnglishChat,
   sendPromptToLLM,
-  getChatGPTOutput,
   getEnglishPromptTemplate,
   autoSelectTopic
 } from '../api/englishApi.js';
@@ -107,20 +106,12 @@ export function EnglishPage() {
   const [generating, setGenerating] = useState(false);
   const [resultMessage, setResultMessage] = useState(null);
   const [toast, setToast] = useState(null);
-  const pollIntervalRef = useRef(null);
   const currentPromptRef = useRef(null);
   const currentTopicRef = useRef(null);
 
   // Load English list on mount
   useEffect(() => {
     loadEnglishList();
-    
-    // Cleanup polling on unmount
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
   }, []);
 
   const showToast = (message, type = 'success') => {
@@ -165,69 +156,6 @@ export function EnglishPage() {
     if (result.error) {
       showToast(`Lỗi: ${result.error.message}`, 'error');
     }
-  };
-
-  const stopPolling = () => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-  };
-
-  const pollForResponse = async () => {
-    let pollCount = 0;
-    const maxPolls = 60; // 3 minutes (60 * 3s)
-    
-    pollIntervalRef.current = setInterval(async () => {
-      pollCount++;
-      
-      if (pollCount > maxPolls) {
-        stopPolling();
-        setResultMessage({
-          type: 'error',
-          text: '⏱️ Timeout - LLM không phản hồi sau 3 phút'
-        });
-        setGenerating(false);
-        return;
-      }
-      
-      setResultMessage({
-        type: 'loading',
-        text: `Đang chờ response... (${pollCount * 3}s)`
-      });
-      
-      const result = await getChatGPTOutput();
-      
-      if (result.output) {
-        stopPolling();
-        
-        // Save to Supabase
-        const saveResult = await addEnglish(
-          result.chatId,
-          currentTopicRef.current,
-          currentPromptRef.current
-        );
-        
-        if (saveResult.error) {
-          setResultMessage({
-            type: 'error',
-            text: `Lỗi lưu: ${saveResult.error.message}`
-          });
-        } else {
-          setResultMessage({
-            type: 'success',
-            text: `Đã lưu! (Chat: ${result.chatId.substring(0, 8)})`
-          });
-          
-          // Refresh list
-          await loadEnglishList();
-        }
-        
-        setGenerating(false);
-        currentPromptRef.current = null;
-        currentTopicRef.current = null;
-      }
-    }, 3000);
   };
 
   const handleGenerate = async () => {
@@ -286,11 +214,11 @@ export function EnglishPage() {
     }
     
     // XST-821: All providers now return text immediately via LLMProviderFactory.
-    // Use the response directly if available — no polling needed.
+    // Use the response directly — no polling needed.
     if (sendResult.text) {
-      // Save to Supabase
+      // Save to Supabase — pass chatId from provider (null for Gemini/Claude)
       const saveResult = await addEnglish(
-        null, // No chatId for direct text response
+        sendResult.chatId || null,
         currentTopicRef.current,
         currentPromptRef.current
       );
@@ -315,13 +243,12 @@ export function EnglishPage() {
       return;
     }
     
-    // Fallback: Poll for response (legacy compatibility — should not trigger)
+    // Should not reach here — SEND_PROMPT always returns text or error.
     setResultMessage({
-      type: 'loading',
-      text: 'Đang chờ response...'
+      type: 'error',
+      text: 'LLM không trả về nội dung. Vui lòng thử lại.'
     });
-    
-    pollForResponse();
+    setGenerating(false);
   };
 
   return (

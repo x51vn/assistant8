@@ -25,6 +25,10 @@ import { DEFAULT_SYSTEM_PROMPTS } from '../../shared/systemPrompts.js';
 import * as ChatGPTSession from '../../chatgptSession.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
 import { getFeatureFlag } from '../../shared/featureFlags.js';
+import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
+
+/** Rate-limit window: 1 AI analysis per symbol per hour */
+const AI_ANALYSIS_COOLDOWN_MS = 60 * 60 * 1000;
 import { runStockResearch } from '../services/stock/stockResearchOrchestrator.js';
 import { enqueue as promptQueueEnqueue } from '../services/promptQueue.js';
 import {
@@ -196,6 +200,19 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: `Mã ${sanitizedSymbol} không tồn tại trong watchlist` };
     }
 
+    // ── Rate limit: max 1 AI analysis per symbol per hour ────────────
+    if (watchlistItem.last_ai_analysis_at) {
+      const elapsed = Date.now() - new Date(watchlistItem.last_ai_analysis_at).getTime();
+      if (elapsed < AI_ANALYSIS_COOLDOWN_MS) {
+        const minutesLeft = Math.ceil((AI_ANALYSIS_COOLDOWN_MS - elapsed) / 60000);
+        logger.info('AI analysis rate limited', { symbol: sanitizedSymbol, minutesLeft, correlationId });
+        return {
+          success: false,
+          error: `${sanitizedSymbol} đã được phân tích gần đây. Vui lòng đợi ${minutesLeft} phút nữa.`,
+        };
+      }
+    }
+
     // XST-803: Check feature flag — route to orchestrator if enabled
     const userId = await getUserIdSafe();
     const settingsConfig = userId ? await getUserSettingsConfigForEnrich(userId) : {};
@@ -333,14 +350,18 @@ export async function processEnrichmentJob(job) {
 
     // 11. Build update data
     const updateData = {};
+    const now = new Date().toISOString();
     if (enrichmentResponse.entry !== undefined && enrichmentResponse.entry !== null) {
       updateData.entry = Number(enrichmentResponse.entry);
+      updateData.entry_updated_at = now;
     }
     if (enrichmentResponse.target !== undefined && enrichmentResponse.target !== null) {
       updateData.target = Number(enrichmentResponse.target);
+      updateData.target_updated_at = now;
     }
     if (enrichmentResponse.stoploss !== undefined && enrichmentResponse.stoploss !== null) {
       updateData.stoploss = Number(enrichmentResponse.stoploss);
+      updateData.stoploss_updated_at = now;
     }
     if (enrichmentResponse.investment_thesis !== undefined && enrichmentResponse.investment_thesis !== null) {
       updateData.investment_thesis = enrichmentResponse.investment_thesis;
@@ -349,6 +370,14 @@ export async function processEnrichmentJob(job) {
     if (Object.keys(updateData).length === 0) {
       return { success: false, error: 'ChatGPT không cung cấp thông tin cần cập nhật' };
     }
+
+    // Calculate derived fields
+    const effectiveEntry = updateData.entry ?? watchlistItem.entry ?? null;
+    const effectiveTarget = updateData.target ?? watchlistItem.target ?? null;
+    const effectivePrice = watchlistItem.price ?? null;
+    updateData.ediff = round4(calcEdiff(effectivePrice, effectiveEntry));
+    updateData.pprofit = round4(calcPprofit(effectiveTarget, effectiveEntry));
+    updateData.last_ai_analysis_at = now;
 
     // 12. Update watchlist item in Supabase (background-only, UI-independent)
     logger.info('Updating watchlist item with enrichment data', {
@@ -458,12 +487,19 @@ async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, s
     // Map orchestrator output → watchlist fields
     const output = result.output || {};
     const updateData = {};
+    const now = new Date().toISOString();
 
+    if (output.entryPrice != null) {
+      updateData.entry = Number(output.entryPrice);
+      updateData.entry_updated_at = now;
+    }
     if (output.targetPrice != null) {
       updateData.target = Number(output.targetPrice);
+      updateData.target_updated_at = now;
     }
     if (output.stopLoss != null) {
       updateData.stoploss = Number(output.stopLoss);
+      updateData.stoploss_updated_at = now;
     }
     // Map thesis array to investment_thesis string
     if (output.thesis?.length > 0) {
@@ -480,6 +516,14 @@ async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, s
     if (Object.keys(updateData).length === 0) {
       return { success: false, error: 'AI không cung cấp thông tin cần cập nhật' };
     }
+
+    // Calculate derived fields
+    const effectiveEntry = updateData.entry ?? watchlistItem.entry ?? null;
+    const effectiveTarget = updateData.target ?? watchlistItem.target ?? null;
+    const effectivePrice = watchlistItem.price ?? null;
+    updateData.ediff = round4(calcEdiff(effectivePrice, effectiveEntry));
+    updateData.pprofit = round4(calcPprofit(effectiveTarget, effectiveEntry));
+    updateData.last_ai_analysis_at = now;
 
     // Update watchlist item in Supabase
     const updateResult = await supabaseWithRetry(

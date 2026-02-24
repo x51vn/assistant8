@@ -16,6 +16,7 @@ import { createLogger } from '../../logger.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { requireAuth } from '../utils/auth.js';
+import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 
 const logger = createLogger('Handlers/WatchlistSupabase');
 
@@ -168,6 +169,19 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
     if (notes) insertData.notes = notes;
     if (highlighted !== undefined) insertData.highlighted = Boolean(highlighted);
 
+    // Calculate derived fields on create
+    const entryVal = insertData.entry ?? null;
+    const targetVal = insertData.target ?? null;
+    // price is not set on create (fetched later by price updater), so ediff stays null
+    insertData.ediff = round4(calcEdiff(null, entryVal));
+    insertData.pprofit = round4(calcPprofit(targetVal, entryVal));
+
+    // Per-field timestamps
+    const now = new Date().toISOString();
+    if (entryVal != null) insertData.entry_updated_at = now;
+    if (targetVal != null) insertData.target_updated_at = now;
+    if (insertData.stoploss != null) insertData.stoploss_updated_at = now;
+
     // Insert into Supabase with retry
     const result = await supabaseWithRetry(
       async () => {
@@ -262,7 +276,37 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     if (updates.notes !== undefined) updateData.notes = updates.notes;
     if (updates.highlighted !== undefined) updateData.highlighted = Boolean(updates.highlighted);
     if (updates.price !== undefined && updates.price !== null) updateData.price = Number(updates.price);
-    if (updates.ediff !== undefined && updates.ediff !== null) updateData.ediff = Number(updates.ediff);
+
+    // ── Per-field timestamps ──────────────────────────────────────────────────
+    const now = new Date().toISOString();
+    if (updateData.entry !== undefined) updateData.entry_updated_at = now;
+    if (updateData.target !== undefined) updateData.target_updated_at = now;
+    if (updateData.stoploss !== undefined) updateData.stoploss_updated_at = now;
+
+    // ── Fetch existing item for ediff/pprofit calc ───────────────────────────
+    // We need current price + any unchanged entry/target to compute derived fields.
+    const existing = await supabaseWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from('watchlist')
+          .select('price, entry, target')
+          .eq('user_id', userId)
+          .eq('symbol', symbol.trim().toUpperCase())
+          .single();
+        if (error) throw error;
+        return data;
+      },
+      { operationName: 'watchlist.read-for-calc', maxRetries: 1, correlationId }
+    );
+
+    // Merge: new value wins over existing
+    const effectivePrice = updateData.price ?? existing?.price ?? null;
+    const effectiveEntry = updateData.entry ?? existing?.entry ?? null;
+    const effectiveTarget = updateData.target ?? existing?.target ?? null;
+
+    // Compute derived fields
+    updateData.ediff = round4(calcEdiff(effectivePrice, effectiveEntry));
+    updateData.pprofit = round4(calcPprofit(effectiveTarget, effectiveEntry));
 
     // Update in Supabase with retry
     const result = await supabaseWithRetry(
@@ -550,11 +594,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES, async (messa
     let failed = 0;
 
     const updatePromises = symbols.map(async (symbol) => {
-      const { price, ediff } = prices[symbol];
+      const { price, ediff, pprofit } = prices[symbol];
       try {
         const updateData = {};
         if (price !== undefined && price !== null) updateData.price = Number(price);
         if (ediff !== undefined && ediff !== null) updateData.ediff = Number(ediff);
+        if (pprofit !== undefined && pprofit !== null) updateData.pprofit = Number(pprofit);
 
         if (Object.keys(updateData).length === 0) return;
 
