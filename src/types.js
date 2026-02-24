@@ -46,12 +46,6 @@
  */
 
 /**
- * @typedef {Object} WaitForContentScriptOptions
- * @property {number} [maxRetries=10] - Maximum number of retry attempts
- * @property {number} [retryDelay=500] - Delay between retries in milliseconds
- */
-
-/**
  * Standard error codes used throughout the application
  */
 /**

@@ -43,6 +43,7 @@ export const searchQuery = signal('');
 /**
  * Filtered and sorted watchlist items
  * - Filtered by search query (symbol contains search)
+ * - Excludes items with expected profit (target - entry) / target ≤ 10%
  * - Sorted by ediff ascending (smallest first)
  * - Items without ediff are placed at the end
  */
@@ -55,6 +56,16 @@ export const filteredItems = computed(() => {
       (item.symbol || '').toUpperCase().includes(query)
     );
   }
+
+  // Filter out items with expected profit ≤ 10%
+  // Formula: (target - entry) / target
+  items = items.filter(item => {
+    const target = Number(item.target);
+    const entry = Number(item.entry);
+    if (!target || !entry || target <= 0) return true; // Keep items without target/entry data
+    const expectedProfit = (target - entry) / target;
+    return expectedProfit > 0.10; // Only keep items with > 10% expected profit
+  });
 
   // Sort by ediff ascending (null/undefined at the end)
   return [...items].sort((a, b) => {

@@ -113,6 +113,7 @@ function copyExtensionStatic() {
       // ✅ CLEANUP: Only copy active CSS files (removed styles-legacy.css, styles.css)
       await copyFile(path.resolve(staticDir, 'styles-shared.css'), path.resolve(outDir, 'styles-shared.css'));
       await copyFile(path.resolve(staticDir, 'styles-preact.css'), path.resolve(outDir, 'styles-preact.css'));
+      await copyFile(path.resolve(staticDir, 'styles-settings.css'), path.resolve(outDir, 'styles-settings.css'));
       
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
 
@@ -156,6 +157,8 @@ export default defineConfig({
       output: {
         entryFileNames: '[name].js',
         chunkFileNames: '[name]-[hash].js',
+        // Predictable CSS names so statically-copied HTML can reference them
+        assetFileNames: 'assets/[name][extname]',
         format: 'es',
         // X51LABS-79: Removed manualChunks - Vite auto-splits optimally
       },

@@ -288,7 +288,7 @@ export function StockResearchSection() {
             <label>
               Chế độ pipeline
               {effectiveMode === 'custom' && (
-                <span class="badge badge--custom" style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:3px;background:#ffc107;color:#333;">
+                <span class="badge badge--custom" style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:3px;background:var(--warning-color,#ffc107);color:var(--text-primary,#333);">
                   Custom
                 </span>
               )}
@@ -309,7 +309,7 @@ export function StockResearchSection() {
                   <span class="radio-text">
                     <strong>{mode.label}</strong>
                     <span class="radio-description">{mode.description}</span>
-                    <span class="preset-params" style="font-size:11px;color:#888;margin-top:4px;display:block;">
+                    <span class="preset-params" style="font-size:11px;color:var(--text-muted,#888);margin-top:4px;display:block;">
                       {mode.params.maxSources} nguồn · {mode.params.recencyWindowDays} ngày
                       {mode.params.strictValidation ? ' · Strict' : ' · Relaxed'}
                     </span>

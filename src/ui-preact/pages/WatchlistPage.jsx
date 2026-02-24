@@ -386,7 +386,7 @@ export default function WatchlistPage() {
   // Auth check in progress
   if (!authChecked) {
     return (
-      <div class="watchlist-page">
+      <div class="page-container watchlist-page">
         <div class="page-header">
           <h2>
             <i class="fas fa-list-check"></i>
@@ -404,7 +404,7 @@ export default function WatchlistPage() {
   // Not authenticated - show login prompt
   if (!isAuthenticated) {
     return (
-      <div class="watchlist-page">
+      <div class="page-container watchlist-page">
         <div class="page-header">
           <h2>
             <i class="fas fa-list-check"></i>
@@ -434,14 +434,14 @@ export default function WatchlistPage() {
 
   // Authenticated - show watchlist
   return (
-    <div class="watchlist-page">
+    <div class="page-container watchlist-page">
       {/* Page Header */}
       <div class="page-header">
         <h2>
           <i class="fas fa-list-check"></i>
           Stock Watchlist
         </h2>
-        <div class="page-actions">
+        <div class="header-actions">
           <button
             class="btn-secondary"
             onClick={handleRefresh}

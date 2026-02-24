@@ -229,7 +229,7 @@ export function AlertsPage() {
   const triggered = alerts.filter(a => a.triggered);
 
   return (
-    <div class="alerts-page page-content">
+    <div class="page-container alerts-page">
       <div class="page-header">
         <h2><i class="fas fa-bell"></i> Cảnh báo giá</h2>
         <p class="text-muted">Nhận thông báo Chrome khi giá đạt mục tiêu</p>

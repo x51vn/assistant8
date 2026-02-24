@@ -30,6 +30,8 @@ function getSystemTheme() {
 
 function applyTheme(resolved) {
   document.documentElement.setAttribute('data-theme', resolved);
+  // Legacy compat: styles-shared.css also uses body.dark class
+  document.body.classList.toggle('dark', resolved === 'dark');
 }
 
 function loadLocalTheme() {

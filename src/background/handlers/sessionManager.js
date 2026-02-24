@@ -257,35 +257,6 @@ async function attemptTokenRefresh(correlationId) {
 // ============================================================================
 
 /**
- * Broadcast SESSION_ABOUT_TO_EXPIRE to UI
- * Gives user warning before automatic logout
- */
-function broadcastSessionAboutToExpire(user, minutesRemaining) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SESSION_ABOUT_TO_EXPIRE,
-      correlationId: `session-warning-${Date.now()}`,
-      timestamp: Date.now(),
-      data: {
-        user: {
-          id: user.id,
-          email: user.email
-        },
-        minutesRemaining,
-        action: 'WARN_USER'
-      }
-    }).catch(err => {
-      if (!err?.message?.includes('Receiving end does not exist')) {
-        logger.warn('Failed to broadcast session expiry warning', { error: err?.message });
-      }
-    });
-  } catch (error) {
-    logger.warn('Broadcast session expiry warning error', { error: error.message });
-  }
-}
-
-/**
  * Broadcast SESSION_EXPIRED to UI
  * Indicates user must login again
  */

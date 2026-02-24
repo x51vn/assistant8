@@ -17,6 +17,7 @@ import { WritingPage } from '../pages/WritingPage.jsx';
 import { AlertsPage } from '../pages/AlertsPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
+import { PromptsPage } from '../pages/PromptsPage.jsx';
 import { OnboardingWizard, useOnboardingGate } from './OnboardingWizard.jsx';
 import { ShortcutsHelp } from './ShortcutsHelp.jsx';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
@@ -37,6 +38,8 @@ export function MainApp() {
     switch (page.value) {
       case 'dashboard':
         return <DashboardPage />;
+      case 'prompts':
+        return <PromptsPage />;
       case 'portfolio':
         return <PortfolioPage />;
       case 'watchlist':

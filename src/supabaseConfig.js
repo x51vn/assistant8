@@ -190,38 +190,14 @@ logger.info('Supabase client initialized', {
 });
 
 // ============================================================================
-// AUTH STATE MONITORING (Optional)
+// AUTH STATE MONITORING
 // ============================================================================
 
-/**
- * Monitor auth state changes for logging/debugging
- * Note: This is async but doesn't block initialization
- */
-supabase.auth.onAuthStateChange((event, session) => {
-  logger.info('Auth state changed', {
-    event,
-    hasSession: !!session,
-    userId: session?.user?.id,
-  });
-  
-  // Broadcast auth state to UI if needed
-  // UI can listen for this and update login state
-  if (typeof chrome !== 'undefined' && chrome.runtime) {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: 'AUTH_STATE_CHANGED',
-      correlationId: `config-auth-state-${Date.now()}`,
-      timestamp: Date.now(),
-      data: {
-        event,
-        authenticated: !!session,
-        userId: session?.user?.id
-      }
-    }).catch(() => {
-      // Ignore if no listeners (UI not open)
-    });
-  }
-});
+// NOTE: Auth state change listener lives in src/background/handlers/supabaseAuth.js
+// (setupAuthStateListener). That handler broadcasts AUTH_STATE_CHANGED and
+// AUTH_TOKEN_REFRESHED for SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED events,
+// plus flushes chat_history outbox on sign-in.
+// Do NOT add another onAuthStateChange here — it would cause duplicate broadcasts.
 
 // ============================================================================
 // EXPORTS

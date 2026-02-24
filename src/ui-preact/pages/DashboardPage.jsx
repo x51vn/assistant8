@@ -19,20 +19,9 @@ import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
 import { setCurrentPage } from '../state/navigationState.js';
+import { ASSET_TYPE_COLORS as TYPE_COLORS, ASSET_TYPE_LABELS as TYPE_LABELS } from '../utils/assetTypes.js';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
-
-/* ── Asset‑type colours (match NetWorthSummary) ── */
-const TYPE_COLORS = {
-  cash: '#4CAF50', savings: '#2196F3', stocks: '#9C27B0',
-  crypto: '#FF9800', gold: '#FFD700', real_estate: '#795548',
-  vehicle: '#607D8B', other: '#9E9E9E',
-};
-const TYPE_LABELS = {
-  cash: 'Tiền mặt', savings: 'Tiết kiệm', stocks: 'Cổ phiếu',
-  crypto: 'Crypto', gold: 'Vàng', real_estate: 'BĐS',
-  vehicle: 'Xe cộ', other: 'Khác',
-};
 
 // ========================================================================
 // Helpers
@@ -83,7 +72,7 @@ async function fetchDashboardData() {
   return {
     portfolio: portfolioRes.status === 'fulfilled' ? (portfolioRes.value?.items ?? []) : [],
     assets:    assetsRes.status    === 'fulfilled' ? (assetsRes.value?.items ?? [])    : [],
-    history:   historyRes.status   === 'fulfilled' ? (historyRes.value?.items ?? [])   : [],
+    history:   historyRes.status   === 'fulfilled' ? (historyRes.value?.history ?? historyRes.value?.items ?? []) : [],
   };
 }
 
@@ -159,7 +148,7 @@ function StatGrid({ portfolio, assets }) {
   return (
     <div className="dash-stat-grid">
       <button type="button" className="dash-stat-card" onClick={() => setCurrentPage('portfolio')}>
-        <div className="dash-stat-icon" style={{ color: 'var(--primary-color, #667eea)', background: 'rgba(102,126,234,.1)' }}>
+        <div className="dash-stat-icon" style={{ color: 'var(--accent-color, #667eea)', background: 'var(--accent-bg, rgba(102,126,234,.1))' }}>
           <i className="fas fa-chart-line"></i>
         </div>
         <div className="dash-stat-body">
@@ -172,7 +161,7 @@ function StatGrid({ portfolio, assets }) {
       </button>
 
       <button type="button" className="dash-stat-card" onClick={() => setCurrentPage('assets')}>
-        <div className="dash-stat-icon" style={{ color: '#4CAF50', background: 'rgba(76,175,80,.1)' }}>
+        <div className="dash-stat-icon" style={{ color: 'var(--success-color, #4CAF50)', background: 'var(--success-bg, rgba(76,175,80,.1))' }}>
           <i className="fas fa-coins"></i>
         </div>
         <div className="dash-stat-body">
@@ -205,6 +194,7 @@ function TopMovers({ portfolio }) {
   }
 
   const sorted = portfolio
+    .filter(s => Number(s.current_price) > 0) // Exclude stocks without price data
     .map(s => {
       const cost  = (Number(s.avg_price) || 0) * (Number(s.quantity) || 0);
       const value = (Number(s.current_price) || 0) * (Number(s.quantity) || 0);
@@ -335,6 +325,7 @@ function RecentActivity({ history }) {
 
 function QuickActions() {
   const actions = [
+    { icon: 'fa-scroll', label: 'Prompts', page: 'prompts' },
     { icon: 'fa-plus-circle', label: 'Thêm CP', page: 'portfolio' },
     { icon: 'fa-binoculars', label: 'Watchlist', page: 'watchlist' },
     { icon: 'fa-coins', label: 'Tài sản', page: 'assets' },

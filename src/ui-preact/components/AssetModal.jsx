@@ -425,7 +425,7 @@ export default function AssetModal({ asset, onClose, onSave, saving }) {
 
           {/* Market Price Display (for gold/crypto) */}
           {['gold', 'crypto'].includes(formData.asset_type) && (
-            <div className="form-group" style={{ backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '4px' }}>
+            <div className="form-group" style={{ backgroundColor: 'var(--bg-secondary, #f5f5f5)', padding: '12px', borderRadius: '4px' }}>
               <label style={{ fontWeight: 'bold' }}>
                 <i className="fas fa-chart-line"></i> Giá thị trường hiện tại
               </label>
@@ -436,16 +436,16 @@ export default function AssetModal({ asset, onClose, onSave, saving }) {
                   <span>
                     <strong>{(marketPrices.gold).toLocaleString('vi-VN')} VND/chỉ</strong>
                     <br />
-                    <small style={{ color: '#666' }}>Giá trị: {typeof formData.current_value === 'number' ? formData.current_value.toLocaleString('vi-VN') : (formData.current_value || '0')} VND</small>
+                    <small style={{ color: 'var(--text-secondary, #666)' }}>Giá trị: {typeof formData.current_value === 'number' ? formData.current_value.toLocaleString('vi-VN') : (formData.current_value || '0')} VND</small>
                   </span>
                 ) : formData.asset_type === 'crypto' && marketPrices.crypto[formData.symbol?.toUpperCase()] ? (
                   <span>
                     <strong>{(marketPrices.crypto[formData.symbol.toUpperCase()].vnd).toLocaleString('vi-VN')} VND/coin</strong>
                     <br />
-                    <small style={{ color: '#666' }}>Giá trị: {typeof formData.current_value === 'number' ? formData.current_value.toLocaleString('vi-VN') : (formData.current_value || '0')} VND</small>
+                    <small style={{ color: 'var(--text-secondary, #666)' }}>Giá trị: {typeof formData.current_value === 'number' ? formData.current_value.toLocaleString('vi-VN') : (formData.current_value || '0')} VND</small>
                   </span>
                 ) : (
-                  <span style={{ color: '#999' }}>Chưa có dữ liệu giá</span>
+                  <span style={{ color: 'var(--text-muted, #999)' }}>Chưa có dữ liệu giá</span>
                 )}
               </div>
             </div>

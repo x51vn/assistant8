@@ -54,12 +54,12 @@ chrome.storage.local.set({
   logger.warn('Failed to store extension start marker', { error: err.message });
 });
 
-// ✅ NEW: Force session restoration when Service Worker starts
+// Force session restoration when Service Worker starts
 // This ensures user stays logged in after Service Worker reload
 logger.info('Service Worker loaded - attempting to restore session...');
 // Note: Wrap in setTimeout to avoid blocking message routing
 setTimeout(() => {
-  restoreSessionOnServiceWorkerStart().catch(error => {
+  restoreSession('sw_start').catch(error => {
     logger.error('Failed to restore session on SW start', { 
       error: error.message 
     });
@@ -267,8 +267,8 @@ async function onStartup() {
     // Setup periodic alarms
     await setupAlarms();
     
-    // ✅ NEW: Force session restoration on startup
-    await restoreSessionOnStartup();
+    // Force session restoration on startup
+    await restoreSession('browser_startup');
     
     logger.info('Startup tasks completed');
   } catch (error) {
@@ -277,59 +277,77 @@ async function onStartup() {
 }
 
 /**
- * Force session restoration when browser starts
- * Ensures user stays logged in across browser restarts
+ * Restore auth session from chrome.storage.local.
+ * Called on both SW restart and browser startup.
+ * If token is expired, attempts an automatic refresh so the user
+ * never has to re-login as long as a valid refresh_token exists.
+ *
+ * @param {'sw_start'|'browser_startup'} reason
  */
-async function restoreSessionOnStartup() {
+async function restoreSession(reason = 'sw_start') {
   try {
-    logger.info('Attempting to restore session on startup...');
+    logger.info(`Restoring session (${reason})...`);
     
-    // Force Supabase to read session from chrome.storage.local
+    // Read session from chrome.storage.local (via adapter)
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (error) {
-      logger.warn('Failed to restore session on startup', { 
-        error: error.message 
-      });
+      logger.warn('Failed to read session', { reason, error: error.message });
       return;
     }
     
-    if (session) {
-      logger.info('✅ Session restored successfully', { 
-        userId: session.user?.id,
-        email: session.user?.email,
-        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
-      });
-      
-      // Broadcast to UI
-      // ✅ CRITICAL: Catch receiving end errors gracefully
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-restore-${Date.now()}`,
-        timestamp: Date.now(),
-        data: {
-          authenticated: true,
-          user: {
-            id: session.user.id,
-            email: session.user.email
-          }
-        }
-      }).catch(broadcastError => {
-        // UI not open - this is normal
-        if (broadcastError?.message?.includes('Receiving end does not exist')) {
-          logger.debug('UI not open - session will restore when UI loads');
-        } else {
-          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
-        }
-      });
-    } else {
-      logger.info('No session found on startup - user needs to login');
+    if (!session) {
+      logger.info('No session found - user needs to login', { reason });
+      return;
     }
-  } catch (error) {
-    logger.error('Session restoration failed', { 
-      error: error.message 
+    
+    // Check if token is expired / expiring → refresh proactively
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expiresAt = session.expires_at || 0;
+    if (expiresAt - nowSec < 120) {
+      logger.info('Token expired or expiring soon, refreshing', { reason, secondsLeft: expiresAt - nowSec });
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        logger.warn('Session refresh failed on restore', { reason, error: refreshError.message });
+        // Token is dead — broadcast will still carry the old session
+        // so the UI can show "session expired" gracefully
+      } else if (refreshData?.session) {
+        logger.info('Session refreshed successfully on restore', { reason });
+        // The onAuthStateChange listener in supabaseAuth.js will broadcast
+        // AUTH_STATE_CHANGED automatically — no duplicate broadcast needed
+        return;
+      }
+    }
+    
+    logger.info('Session restored', {
+      reason,
+      userId: session.user?.id,
+      email: session.user?.email,
+      expiresAt: new Date(expiresAt * 1000).toLocaleString()
     });
+    
+    // Broadcast to UI (if open)
+    chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+      correlationId: `auth-restore-${reason}-${Date.now()}`,
+      timestamp: Date.now(),
+      data: {
+        authenticated: true,
+        user: {
+          id: session.user.id,
+          email: session.user.email
+        }
+      }
+    }).catch(broadcastError => {
+      if (broadcastError?.message?.includes('Receiving end does not exist')) {
+        logger.debug('UI not open - session will restore when UI loads');
+      } else {
+        logger.warn('Auth broadcast failed', { error: broadcastError?.message });
+      }
+    });
+  } catch (error) {
+    logger.error('Session restoration failed', { reason, error: error.message });
   }
 }
 
@@ -383,64 +401,7 @@ async function setupAlarms() {
   }
 }
 
-/**
- * ✅ NEW: Restore session when Service Worker starts/reloads
- * Ensures user stays logged in after SW restart
- */
-async function restoreSessionOnServiceWorkerStart() {
-  try {
-    logger.info('Service Worker started - restoring auth session...');
-    
-    // Force Supabase to read session from chrome.storage.local
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      logger.warn('Failed to get session on SW start', { 
-        error: error.message 
-      });
-      return;
-    }
-    
-    if (session && session.user) {
-      logger.info('✅ Auth session restored', { 
-        userId: session.user.id,
-        email: session.user.email,
-        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
-      });
-      
-      // Broadcast to UI if it's open
-      // ✅ CRITICAL: Catch receiving end errors gracefully
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-restored-${Date.now()}`,
-        timestamp: Date.now(),
-        data: {
-          authenticated: true,
-          event: 'SESSION_RESTORED',
-          user: {
-            id: session.user.id,
-            email: session.user.email
-          }
-        }
-      }).catch(broadcastError => {
-        // UI not open - this is normal
-        // Error: "Could not establish connection. Receiving end does not exist."
-        if (broadcastError?.message?.includes('Receiving end does not exist')) {
-          logger.debug('UI not open - session will restore when UI loads');
-        } else {
-          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
-        }
-      });
-    } else {
-      logger.info('No session found on SW start - user will need to login');
-    }
-  } catch (error) {
-    logger.error('Session restoration failed', { 
-      error: error.message 
-    });
-  }
-}
+// restoreSessionOnServiceWorkerStart removed — consolidated into restoreSession()
 
 /**
  * Clean up legacy alarms from old versions

@@ -480,7 +480,7 @@ export default function PortfolioPage() {
   }, []);
 
   return (
-    <div class="portfolio-page">
+    <div class="page-container portfolio-page">
       {/* Error State */}
       {pageError && (
         <div class="error-banner">

@@ -27,14 +27,18 @@ vi.mock('../../src/logger.js', () => ({
 }));
 
 // Use vi.hoisted() to declare mock functions before vi.mock hoisting
-const { mockGetUser } = vi.hoisted(() => ({
-  mockGetUser: vi.fn()
+const { mockGetUser, mockGetSession, mockRefreshSession } = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockGetSession: vi.fn(),
+  mockRefreshSession: vi.fn()
 }));
 
 vi.mock('../../src/supabaseConfig.js', () => ({
   supabase: {
     auth: {
-      getUser: mockGetUser
+      getUser: mockGetUser,
+      getSession: mockGetSession,
+      refreshSession: mockRefreshSession
     }
   }
 }));
@@ -52,6 +56,16 @@ describe('requireAuth', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: getSession returns valid session far from expiry
+    mockGetSession.mockResolvedValue({
+      data: { session: { expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      error: null
+    });
+    // Default: refreshSession fails (no valid refresh token in test)
+    mockRefreshSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'No refresh token' }
+    });
   });
 
   describe('Successful authentication', () => {

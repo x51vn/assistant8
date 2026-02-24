@@ -14,30 +14,7 @@ import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import { useAuth } from '../../hooks/useAuth.js';
 import { changePassword } from '../../api/authApi.js';
-
-// Password policy regex: 8+ chars, 1 upper, 1 lower, 1 digit, 1 special
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]).{8,}$/;
-
-/**
- * Get password strength info for strength indicator
- * @param {string} password
- * @returns {{ score: number, label: string, color: string }}
- */
-function getPasswordStrength(password) {
-  if (!password) return { score: 0, label: '', color: '' };
-  
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[a-z]/.test(password)) score++;
-  if (/\d/.test(password)) score++;
-  if (/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)) score++;
-  
-  if (score <= 2) return { score, label: 'Yếu', color: '#e74c3c' };
-  if (score <= 4) return { score, label: 'Trung bình', color: '#f39c12' };
-  return { score, label: 'Mạnh', color: '#27ae60' };
-}
+import { getPasswordStrength, PASSWORD_REGEX } from '../../utils/passwordStrength.js';
 
 /**
  * Validate password meets policy requirements

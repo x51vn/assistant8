@@ -27,6 +27,29 @@ import { toggleItemHighlight, updateWatchlistItem } from '../state/watchlistStat
 const formatCurrency = formatNumber;
 
 /**
+ * Format updated_at timestamp to short readable format
+ */
+function formatUpdatedAt(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '-';
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diffDays <= 7) {
+      return `${diffDays}d ago`;
+    }
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  } catch {
+    return '-';
+  }
+}
+
+/**
  * Get color class for ediff value
  */
 function getEdiffColorClass(ediff) {
@@ -101,6 +124,11 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
         <div class="thesis-text" title={item.investment_thesis || ''}>
           {item.investment_thesis || '-'}
         </div>
+      </td>
+
+      {/* Updated At */}
+      <td class="td-date" title={item.updated_at || ''}>
+        {formatUpdatedAt(item.updated_at)}
       </td>
 
       {/* Actions */}
@@ -229,6 +257,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
               <th class="th-number">PProfit %</th>
               <th class="th-number">EDiff %</th>
               <th class="th-thesis">Luận điểm</th>
+              <th class="th-date">Cập nhật</th>
               <th class="th-actions">Hành động</th>
             </tr>
           </thead>

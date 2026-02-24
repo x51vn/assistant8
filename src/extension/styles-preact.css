@@ -528,6 +528,7 @@ textarea.input-field {
   justify-content: center;
   align-items: center;
   z-index: 10000;
+  padding: 16px;
   animation: fadeIn 0.2s ease;
 }
 
@@ -537,13 +538,13 @@ textarea.input-field {
 }
 
 .modal-content {
-  background: var(--surface-bg, white);
-  border-radius: 8px;
+  background: var(--card-bg, #fff);
+  border-radius: 12px;
   width: 90%;
   max-width: 400px;
-  max-height: 85vh;
+  max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--surface-shadow, 0 10px 40px rgba(0, 0, 0, 0.3));
+  box-shadow: var(--surface-shadow, 0 8px 32px rgba(0, 0, 0, 0.2));
   animation: slideUp 0.3s ease;
 }
 
@@ -593,15 +594,18 @@ textarea.input-field {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .modal-footer {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  padding: 16px 20px;
-  border-top: 1px solid var(--surface-border, #e0e0e0);
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
 }
 
 
@@ -3108,58 +3112,7 @@ textarea:disabled {
   flex: 1;
 }
 
-/* Modal styles (shared) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.modal-content {
-  background: var(--card-bg, #fff);
-  border-radius: 12px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #e1e4e8);
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.modal-body {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--border-color, #e1e4e8);
-}
-
+/* Modal styles — .confirm-modal supplement */
 .confirm-modal {
   max-width: 400px;
   padding: 20px;
@@ -3824,6 +3777,7 @@ textarea:disabled {
 .th-number, .td-number { text-align: right; min-width: 55px; font-variant-numeric: tabular-nums; }
 .th-risk, .td-risk { text-align: center; min-width: 60px; }
 .th-thesis, .td-thesis { min-width: 120px; max-width: 200px; }
+.th-date, .td-date { text-align: center; min-width: 70px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .th-actions, .td-actions { text-align: center; min-width: 90px; white-space: nowrap; }
 
 /* Symbol cell */
@@ -4061,10 +4015,10 @@ textarea:disabled {
 
 /* ── Net-Worth Hero Card ── */
 .dash-nw-card {
-  background: var(--card-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+  background: var(--dash-hero-bg, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
   border-radius: 12px;
   padding: 20px 16px;
-  color: #fff;
+  color: var(--dash-hero-text, #fff);
   margin-bottom: 12px;
 }
 
@@ -4090,15 +4044,15 @@ textarea:disabled {
 .dash-nw-change {
   font-size: 12px;
   margin-top: 6px;
-  opacity: .9;
   display: flex;
   align-items: center;
   gap: 4px;
+  color: var(--dash-hero-muted, rgba(255,255,255,.7));
 }
 
-.dash-nw-change.stat-positive { color: #86efac; }
-.dash-nw-change.stat-negative { color: #fca5a5; }
-.dash-nw-change.stat-neutral  { color: rgba(255,255,255,.7); }
+.dash-nw-change.stat-positive { color: var(--dash-hero-positive, #86efac); }
+.dash-nw-change.stat-negative { color: var(--dash-hero-negative, #fca5a5); }
+.dash-nw-change.stat-neutral  { color: var(--dash-hero-muted, rgba(255,255,255,.7)); }
 
 /* ── Stat Grid (2-col) ── */
 .dash-stat-grid {
@@ -4357,7 +4311,7 @@ textarea:disabled {
 
 /* ── Skeleton ── */
 .dash-skeleton-line {
-  background: linear-gradient(90deg, rgba(0,0,0,.06) 25%, rgba(0,0,0,.03) 50%, rgba(0,0,0,.06) 75%);
+  background: var(--loading-skeleton, linear-gradient(90deg, var(--bg-tertiary, #f0f2f5) 25%, var(--bg-secondary, #f8f9fa) 50%, var(--bg-tertiary, #f0f2f5) 75%));
   background-size: 200% 100%;
   animation: dash-skeleton-pulse 1.5s ease infinite;
   border-radius: 4px;
@@ -4366,5 +4320,4 @@ textarea:disabled {
 @keyframes dash-skeleton-pulse {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
 }
