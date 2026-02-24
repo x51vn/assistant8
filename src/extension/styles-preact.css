@@ -3997,6 +3997,80 @@ textarea:disabled {
   max-width: 480px;
 }
 
+/* Symbol chips for bulk-add mode */
+.symbol-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--badge-bg, rgba(100,116,139,0.12));
+  color: var(--text-secondary, #64748b);
+  border: 1px solid var(--border-color, rgba(0,0,0,0.08));
+}
+
+.chip--success {
+  background: var(--success-bg, #dcfce7);
+  color: var(--success-text, #16a34a);
+  border-color: var(--success-border, #bbf7d0);
+}
+
+.chip--error {
+  background: var(--error-bg, #fee2e2);
+  color: var(--error-text, #dc2626);
+  border-color: var(--error-border, #fca5a5);
+}
+
+.chip--pending {
+  opacity: 0.7;
+}
+
+/* Inline count badge ("6 mã" next to label) */
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--primary-color, #3b82f6);
+  color: #fff;
+  vertical-align: middle;
+}
+
+/* Info banner variants (success / warn) */
+.form-info-banner {
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-info-banner--success {
+  background: var(--success-bg, #dcfce7);
+  border: 1px solid var(--success-border, #bbf7d0);
+  color: var(--success-text, #16a34a);
+}
+
+.form-info-banner--warn {
+  background: var(--warning-bg, #fef9c3);
+  border: 1px solid var(--warning-border, #fde047);
+  color: var(--warning-text, #a16207);
+}
+
 .modal.confirm-modal {
   max-width: 380px;
 }

@@ -64,11 +64,25 @@ function validateForm(data, isEdit = false) {
 }
 
 /**
- * AddWatchlistModal - Create new watchlist item
+ * Parse a comma/whitespace-separated symbol string into validated symbols
+ */
+function parseSymbols(value) {
+  return value
+    .split(/[,\s]+/)
+    .map(s => s.trim().toUpperCase())
+    .filter(s => s.length >= 1 && /^[A-Z0-9]+$/.test(s));
+}
+
+/**
+ * AddWatchlistModal - Create new watchlist item(s)
+ *
+ * Modes:
+ *   Single  — 1 symbol → full detail form (investment_thesis, risk, entry, target, stoploss, notes)
+ *   Bulk    — comma-separated symbols → symbol-only batch add, shows per-symbol progress chips
  */
 export function AddWatchlistModal({ isOpen, onClose, onSave }) {
+  const [symbolInput, setSymbolInput] = useState('');
   const [formData, setFormData] = useState({
-    symbol: '',
     investment_thesis: '',
     risk: '',
     entry: '',
@@ -78,52 +92,66 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Bulk progress: [{ symbol, status: 'pending'|'success'|'error', error? }]
+  const [bulkResults, setBulkResults] = useState([]);
 
-  // Reset form when modal opens
+  const isBulkMode = symbolInput.includes(',');
+  const bulkSymbols = isBulkMode ? parseSymbols(symbolInput) : [];
+  const bulkDone = bulkResults.length > 0 && !isSubmitting;
+
+  // Reset when modal opens
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        symbol: '',
-        investment_thesis: '',
-        risk: '',
-        entry: '',
-        target: '',
-        stoploss: '',
-        notes: ''
-      });
+      setSymbolInput('');
+      setFormData({ investment_thesis: '', risk: '', entry: '', target: '', stoploss: '', notes: '' });
       setErrors({});
       setIsSubmitting(false);
+      setBulkResults([]);
     }
   }, [isOpen]);
 
   const handleChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear field error on change
-    if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
-      });
-    }
+    if (errors[field]) setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
   }, [errors]);
+
+  const handleSymbolChange = (value) => {
+    setSymbolInput(value.toUpperCase());
+    if (errors.symbol) setErrors(prev => { const e = { ...prev }; delete e.symbol; return e; });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate
-    const validationErrors = validateForm(formData, false);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+    if (isBulkMode) {
+      // ── Bulk mode ────────────────────────────────────────────────────────
+      if (bulkSymbols.length === 0) {
+        setErrors({ symbol: 'Nhập ít nhất một mã hợp lệ' });
+        return;
+      }
+      setIsSubmitting(true);
+      setBulkResults(bulkSymbols.map(s => ({ symbol: s, status: 'pending' })));
 
-    setIsSubmitting(true);
+      for (let i = 0; i < bulkSymbols.length; i++) {
+        const sym = bulkSymbols[i];
+        try {
+          await onSave({ symbol: sym });
+          setBulkResults(prev => prev.map((r, idx) =>
+            idx === i ? { ...r, status: 'success' } : r
+          ));
+        } catch (err) {
+          setBulkResults(prev => prev.map((r, idx) =>
+            idx === i ? { ...r, status: 'error', error: err.message } : r
+          ));
+        }
+      }
+      setIsSubmitting(false);
+      // Keep modal open so user sees the results summary; close via "Đóng"
 
-    try {
-      // Prepare data - convert empty strings to undefined, numbers to actual numbers
-      const data = {
-        symbol: formData.symbol.trim().toUpperCase(),
+    } else {
+      // ── Single mode ──────────────────────────────────────────────────────
+      const singleData = {
+        symbol: symbolInput.trim().toUpperCase(),
         investment_thesis: formData.investment_thesis.trim() || undefined,
         risk: formData.risk || undefined,
         entry: formData.entry ? Number(formData.entry) : undefined,
@@ -131,16 +159,26 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
         stoploss: formData.stoploss ? Number(formData.stoploss) : undefined,
         notes: formData.notes.trim() || undefined
       };
-
-      await onSave(data);
-      onClose(); // Close modal on success
-    } catch (error) {
-      console.error('[AddWatchlistModal] Submit failed:', error);
-      setErrors({ submit: error.message || 'Có lỗi xảy ra khi thêm mục watchlist' });
-    } finally {
-      setIsSubmitting(false);
+      const validationErrors = validateForm({ ...formData, symbol: symbolInput }, false);
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        await onSave(singleData);
+        onClose();
+      } catch (error) {
+        console.error('[AddWatchlistModal] Submit failed:', error);
+        setErrors({ submit: error.message || 'Có lỗi xảy ra khi thêm mục watchlist' });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
+
+  const bulkSuccessCount = bulkResults.filter(r => r.status === 'success').length;
+  const bulkErrorCount = bulkResults.filter(r => r.status === 'error').length;
 
   if (!isOpen) return null;
 
@@ -157,27 +195,28 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
         </div>
 
         <form class="modal-body" onSubmit={handleSubmit}>
-          {/* Submit Error */}
+          {/* Submit error */}
           {errors.submit && (
             <div class="form-error-banner">
-              <i class="fas fa-exclamation-triangle"></i>
-              {errors.submit}
+              <i class="fas fa-exclamation-triangle"></i> {errors.submit}
             </div>
           )}
 
-          {/* Symbol * */}
+          {/* Symbol input */}
           <div class="form-group">
             <label for="add-symbol">
               <i class="fas fa-chart-line"></i> Mã cổ phiếu *
+              {isBulkMode && bulkSymbols.length > 0 && (
+                <span class="badge-count">{bulkSymbols.length} mã</span>
+              )}
             </label>
             <input
               id="add-symbol"
               type="text"
               class={`input-field ${errors.symbol ? 'input-error' : ''}`}
-              placeholder="VD: VNM, HPG, TCB..."
-              value={formData.symbol}
-              onInput={(e) => handleChange('symbol', e.target.value.toUpperCase())}
-              maxLength="10"
+              placeholder="VD: HPG — hoặc nhiều mã: BCC, VPI, HAG, CTI"
+              value={symbolInput}
+              onInput={(e) => handleSymbolChange(e.target.value)}
               autoFocus
               required
             />
@@ -186,145 +225,147 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
                 <i class="fas fa-exclamation-circle"></i> {errors.symbol}
               </span>
             )}
+            {/* Symbol chips — shown in bulk mode */}
+            {isBulkMode && bulkSymbols.length > 0 && (
+              <div class="symbol-chips">
+                {bulkSymbols.map(s => {
+                  const r = bulkResults.find(x => x.symbol === s);
+                  const cls = r?.status === 'success' ? 'chip chip--success'
+                    : r?.status === 'error' ? 'chip chip--error'
+                    : r?.status === 'pending' ? 'chip chip--pending'
+                    : 'chip';
+                  return (
+                    <span key={s} class={cls} title={r?.error || s}>
+                      {r?.status === 'success' && <i class="fas fa-check"></i>}
+                      {r?.status === 'error'   && <i class="fas fa-times"></i>}
+                      {r?.status === 'pending' && <i class="fas fa-spinner fa-spin"></i>}
+                      {' '}{s}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Investment Thesis */}
-          <div class="form-group">
-            <label for="add-thesis">
-              <i class="fas fa-lightbulb"></i> Luận điểm đầu tư
-            </label>
-            <textarea
-              id="add-thesis"
-              class="input-field"
-              placeholder="Mô tả luận điểm đầu tư cho cổ phiếu này..."
-              rows="3"
-              value={formData.investment_thesis}
-              onInput={(e) => handleChange('investment_thesis', e.target.value)}
-            />
-          </div>
-
-          {/* Risk */}
-          <div class="form-group">
-            <label for="add-risk">
-              <i class="fas fa-exclamation-triangle"></i> Mức rủi ro
-            </label>
-            <select
-              id="add-risk"
-              class="input-field"
-              value={formData.risk}
-              onChange={(e) => handleChange('risk', e.target.value)}
-            >
-              {RISK_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Price Fields Row */}
-          <div class="form-row">
-            <div class="form-group">
-              <label for="add-entry">
-                <i class="fas fa-arrow-down"></i> Entry
-              </label>
-              <input
-                id="add-entry"
-                type="number"
-                class={`input-field ${errors.entry ? 'input-error' : ''}`}
-                placeholder="Giá nhập"
-                step="0.01"
-                min="0"
-                value={formData.entry}
-                onInput={(e) => handleChange('entry', e.target.value)}
-              />
-              {errors.entry && (
-                <span class="error-text">
-                  <i class="fas fa-exclamation-circle"></i> {errors.entry}
-                </span>
-              )}
+          {/* Bulk results summary */}
+          {bulkDone && (
+            <div class={`form-info-banner ${bulkErrorCount > 0 ? 'form-info-banner--warn' : 'form-info-banner--success'}`}>
+              <i class={`fas ${bulkErrorCount > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'}`}></i>
+              {bulkSuccessCount > 0 && ` Thêm thành công ${bulkSuccessCount} mã.`}
+              {bulkErrorCount > 0 && ` ${bulkErrorCount} mã thất bại.`}
             </div>
+          )}
 
-            <div class="form-group">
-              <label for="add-target">
-                <i class="fas fa-arrow-up"></i> Target
-              </label>
-              <input
-                id="add-target"
-                type="number"
-                class={`input-field ${errors.target ? 'input-error' : ''}`}
-                placeholder="Giá mục tiêu"
-                step="0.01"
-                min="0"
-                value={formData.target}
-                onInput={(e) => handleChange('target', e.target.value)}
-              />
-              {errors.target && (
-                <span class="error-text">
-                  <i class="fas fa-exclamation-circle"></i> {errors.target}
-                </span>
-              )}
-            </div>
+          {/* Optional fields — hidden in bulk mode */}
+          {!isBulkMode && (
+            <>
+              <div class="form-group">
+                <label for="add-thesis">
+                  <i class="fas fa-lightbulb"></i> Luận điểm đầu tư
+                </label>
+                <textarea
+                  id="add-thesis"
+                  class="input-field"
+                  placeholder="Mô tả luận điểm đầu tư cho cổ phiếu này..."
+                  rows="3"
+                  value={formData.investment_thesis}
+                  onInput={(e) => handleChange('investment_thesis', e.target.value)}
+                />
+              </div>
 
-            <div class="form-group">
-              <label for="add-stoploss">
-                <i class="fas fa-hand-paper"></i> StopLoss
-              </label>
-              <input
-                id="add-stoploss"
-                type="number"
-                class={`input-field ${errors.stoploss ? 'input-error' : ''}`}
-                placeholder="Giá dừng lỗ"
-                step="0.01"
-                min="0"
-                value={formData.stoploss}
-                onInput={(e) => handleChange('stoploss', e.target.value)}
-              />
-              {errors.stoploss && (
-                <span class="error-text">
-                  <i class="fas fa-exclamation-circle"></i> {errors.stoploss}
-                </span>
-              )}
-            </div>
-          </div>
+              <div class="form-group">
+                <label for="add-risk">
+                  <i class="fas fa-exclamation-triangle"></i> Mức rủi ro
+                </label>
+                <select
+                  id="add-risk"
+                  class="input-field"
+                  value={formData.risk}
+                  onChange={(e) => handleChange('risk', e.target.value)}
+                >
+                  {RISK_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* Notes */}
-          <div class="form-group">
-            <label for="add-notes">
-              <i class="fas fa-note-sticky"></i> Ghi chú
-            </label>
-            <textarea
-              id="add-notes"
-              class="input-field"
-              placeholder="Ghi chú thêm..."
-              rows="2"
-              value={formData.notes}
-              onInput={(e) => handleChange('notes', e.target.value)}
-            />
-          </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="add-entry"><i class="fas fa-arrow-down"></i> Entry</label>
+                  <input
+                    id="add-entry"
+                    type="number"
+                    class={`input-field ${errors.entry ? 'input-error' : ''}`}
+                    placeholder="Giá nhập"
+                    step="0.01" min="0"
+                    value={formData.entry}
+                    onInput={(e) => handleChange('entry', e.target.value)}
+                  />
+                  {errors.entry && <span class="error-text"><i class="fas fa-exclamation-circle"></i> {errors.entry}</span>}
+                </div>
+
+                <div class="form-group">
+                  <label for="add-target"><i class="fas fa-arrow-up"></i> Target</label>
+                  <input
+                    id="add-target"
+                    type="number"
+                    class={`input-field ${errors.target ? 'input-error' : ''}`}
+                    placeholder="Giá mục tiêu"
+                    step="0.01" min="0"
+                    value={formData.target}
+                    onInput={(e) => handleChange('target', e.target.value)}
+                  />
+                  {errors.target && <span class="error-text"><i class="fas fa-exclamation-circle"></i> {errors.target}</span>}
+                </div>
+
+                <div class="form-group">
+                  <label for="add-stoploss"><i class="fas fa-hand-paper"></i> StopLoss</label>
+                  <input
+                    id="add-stoploss"
+                    type="number"
+                    class={`input-field ${errors.stoploss ? 'input-error' : ''}`}
+                    placeholder="Giá dừng lỗ"
+                    step="0.01" min="0"
+                    value={formData.stoploss}
+                    onInput={(e) => handleChange('stoploss', e.target.value)}
+                  />
+                  {errors.stoploss && <span class="error-text"><i class="fas fa-exclamation-circle"></i> {errors.stoploss}</span>}
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="add-notes"><i class="fas fa-note-sticky"></i> Ghi chú</label>
+                <textarea
+                  id="add-notes"
+                  class="input-field"
+                  placeholder="Ghi chú thêm..."
+                  rows="2"
+                  value={formData.notes}
+                  onInput={(e) => handleChange('notes', e.target.value)}
+                />
+              </div>
+            </>
+          )}
 
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn-secondary"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
-              <i class="fas fa-times"></i> Hủy
+            <button type="button" class="btn-secondary" onClick={onClose} disabled={isSubmitting}>
+              <i class="fas fa-times"></i> {bulkDone ? 'Đóng' : 'Hủy'}
             </button>
-            <button
-              type="submit"
-              class="btn-primary"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <i class="fas fa-spinner fa-spin"></i> Đang thêm...
-                </>
-              ) : (
-                <>
-                  <i class="fas fa-save"></i> Thêm
-                </>
-              )}
-            </button>
+            {!bulkDone && (
+              <button
+                type="submit"
+                class="btn-primary"
+                disabled={isSubmitting || (isBulkMode && bulkSymbols.length === 0)}
+              >
+                {isSubmitting ? (
+                  <><i class="fas fa-spinner fa-spin"></i> Đang thêm...</>
+                ) : isBulkMode ? (
+                  <><i class="fas fa-layer-group"></i> Thêm {bulkSymbols.length} mã</>
+                ) : (
+                  <><i class="fas fa-save"></i> Thêm</>
+                )}
+              </button>
+            )}
           </div>
         </form>
       </div>
