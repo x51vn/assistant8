@@ -419,8 +419,25 @@ export async function getOutput(tabId, options = {}) {
           action: 'get_output',
           wait: options.wait !== false,
           timeoutMs: options.timeoutMs || 15 * 60 * 1000,
-          stableMs: options.stableMs || 1500
+          stableMs: options.stableMs || 1500,
+          expectedChatId: options.expectedChatId || null  // Session guard
         });
+        
+        // Session mismatch: user navigated to a different chat while we were waiting
+        if (response && response.status === 'session_mismatch') {
+          logger.warn('[getOutput] Session mismatch — user navigated away', {
+            expectedChatId: options.expectedChatId,
+            currentChatId: response.currentChatId,
+            correlationId
+          });
+          logger.endOperation(correlationId, 'error', 'session_mismatch');
+          return createApiErrorResponse(
+            ERROR_CODES.SESSION_MISMATCH,
+            `Session changed: expected chatId=${options.expectedChatId}, actual chatId=${response.currentChatId}`,
+            'getOutput',
+            { expectedChatId: options.expectedChatId, currentChatId: response.currentChatId }
+          );
+        }
         
         if (response && response.result) {
           // X51LABS-62: Cache partial result
@@ -700,9 +717,9 @@ export async function ensureChatGPTTab(options = {}) {
         await chrome.tabs.update(chatTab.id, { active: true });
       }
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult = await waitForTabReady(chatTab.id);
+      if (readyResult.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: false };
       } else {
@@ -735,9 +752,9 @@ export async function ensureChatGPTTab(options = {}) {
           // Additional wait for React to load
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // Try ping again after reload
-          const readyAfterReload = await waitForContentScript(chatTab.id);
-          if (readyAfterReload) {
+          // Try again after reload (registry-based + ping fallback, 10s)
+          const readyAfterReload = await waitForTabReady(chatTab.id);
+          if (readyAfterReload.success) {
             logger.endOperation(correlationId, 'success');
             return { tabId: chatTab.id, isNew: false };
           }
@@ -790,13 +807,13 @@ export async function ensureChatGPTTab(options = {}) {
       // Additional wait for React to load
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult2 = await waitForTabReady(chatTab.id);
+      if (readyResult2.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: true };
       } else {
-        const errorMsg = 'Content script not ready after waiting';
+        const errorMsg = `Content script not ready after waiting: ${readyResult2.error || 'timeout'}`;
         logger.endOperation(correlationId, 'error', errorMsg);
         return { 
           tabId: chatTab.id, 

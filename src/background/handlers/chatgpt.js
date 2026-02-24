@@ -92,7 +92,13 @@ registerHandler(MESSAGE_TYPES.CHATGPT_GET_OUTPUT, async (message, sender) => {
     logger.info('Found ChatGPT tab', { tabId: targetTabId, trackingChatId });
   }
   
-  const result = await ChatGPTSession.getOutput(targetTabId, options);
+  // Pass expectedChatId for session-mismatch detection (consistency with enrichment path)
+  const mergedOptions = { ...options };
+  if (trackingChatId && !mergedOptions.expectedChatId) {
+    mergedOptions.expectedChatId = trackingChatId;
+  }
+
+  const result = await ChatGPTSession.getOutput(targetTabId, mergedOptions);
   
   if (!result.success) {
     return createResponse(message, MESSAGE_TYPES.ERROR, {

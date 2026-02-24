@@ -33,6 +33,7 @@ const logger = createLogger('PromptQueue');
 
 // ===== CONSTANTS =====
 const STORAGE_KEY = 'prompt_queue_jobs';
+const ACTIVE_SESSION_KEY = 'active_session'; // Currently-running ChatGPT session owned by the queue
 const JOB_TTL_MS = 60 * 60 * 1000; // 1h auto-cleanup for terminal jobs
 const MAX_BACKGROUND_JOBS = 50;
 
@@ -145,6 +146,19 @@ export async function enqueueBackgroundJob(config) {
       startedAt: Date.now(),
       attempt
     });
+    // Track active session so UI and processors can monitor what the queue is doing
+    await chrome.storage.local.set({
+      [ACTIVE_SESSION_KEY]: {
+        jobId,
+        type,
+        payload,
+        chatId: null,     // Will be updated by processor after sendInput succeeds
+        chatUrl: null,
+        tabId: null,       // Will be updated by processor after ensureChatGPTTab
+        startedAt: Date.now(),
+        attempt
+      }
+    });
     broadcastJobStatus(jobId, 'running', type, {
       ...payload,
       attempt
@@ -163,6 +177,7 @@ export async function enqueueBackgroundJob(config) {
 
       // Check cancelled after processing
       if (await isJobCancelled(jobId)) {
+        await cleanupActiveSession();
         broadcastJobStatus(jobId, 'cancelled', type, payload);
         return;
       }
@@ -173,6 +188,7 @@ export async function enqueueBackgroundJob(config) {
           finishedAt: Date.now(),
           result: { item: result.item }
         });
+        await cleanupActiveSession();
         broadcastJobStatus(jobId, 'done', type, {
           ...payload,
           item: result.item
@@ -184,6 +200,7 @@ export async function enqueueBackgroundJob(config) {
           finishedAt: Date.now(),
           lastError: result.error
         });
+        await cleanupActiveSession();
         broadcastJobStatus(jobId, 'failed', type, {
           ...payload,
           error: result.error
@@ -202,6 +219,7 @@ export async function enqueueBackgroundJob(config) {
         finishedAt: Date.now(),
         lastError: err.message
       });
+      await cleanupActiveSession();
       broadcastJobStatus(jobId, 'failed', type, {
         ...payload,
         error: err.message
@@ -257,20 +275,54 @@ export async function isJobCancelled(jobId) {
 
 /**
  * Get queue info (for UI display)
+ * Includes activeSession: the ChatGPT session the queue currently owns.
  * @returns {Promise<Object>}
  */
 export async function getQueueInfo() {
   await cleanStaleJobs();
   const jobs = await readPersistedJobs();
   const active = jobs.filter(j => j.state === 'queued' || j.state === 'running');
+
+  let activeSession = null;
+  try {
+    const stored = await chrome.storage.local.get([ACTIVE_SESSION_KEY]);
+    activeSession = stored[ACTIVE_SESSION_KEY] || null;
+  } catch { /* ignore */ }
+
   return {
     queueSize: queue.size,
     pendingCount: queue.pending,
     jobs,
     activeCount: active.length,
     queuedCount: active.filter(j => j.state === 'queued').length,
-    runningJob: jobs.find(j => j.state === 'running') || null
+    runningJob: jobs.find(j => j.state === 'running') || null,
+    activeSession // { jobId, type, payload, chatId, chatUrl, startedAt } | null
   };
+}
+
+/**
+ * Update the active session's chatId/chatUrl/tabId once the processor
+ * has sent the prompt and received a chatId from the content script.
+ * Called by processors (e.g. watchlistEnrich) immediately after sendInput succeeds.
+ *
+ * @param {string} jobId   - Must match the currently running job
+ * @param {string} chatId  - ChatGPT conversation ID (from URL)
+ * @param {string} chatUrl - Full chat URL
+ * @param {number} [tabId] - Chrome tab ID where the session is running
+ */
+export async function setActiveSessionChatId(jobId, chatId, chatUrl, tabId = null) {
+  try {
+    const stored = await chrome.storage.local.get([ACTIVE_SESSION_KEY]);
+    const session = stored[ACTIVE_SESSION_KEY];
+    if (session && session.jobId === jobId) {
+      const update = { ...session, chatId, chatUrl };
+      if (tabId !== null) update.tabId = tabId;
+      await chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: update });
+      logger.debug('Active session chatId updated', { jobId, chatId, tabId });
+    }
+  } catch (err) {
+    logger.warn('setActiveSessionChatId failed', { error: err.message });
+  }
 }
 
 /**
@@ -397,6 +449,31 @@ async function cleanStaleJobs() {
   if (cleaned.length !== before) {
     logger.info('Cleaned stale jobs', { removed: before - cleaned.length });
     await writePersistedJobs(cleaned);
+  }
+}
+
+// =============================================
+// INTERNAL: Active session cleanup
+// =============================================
+
+/**
+ * Read the active_session, remove it from storage, and send
+ * 'unlock_navigation' to the content script tab so the
+ * navigation guard is deactivated even if capture hasn't finished.
+ */
+async function cleanupActiveSession() {
+  try {
+    const stored = await chrome.storage.local.get([ACTIVE_SESSION_KEY]);
+    const session = stored[ACTIVE_SESSION_KEY];
+    await chrome.storage.local.remove([ACTIVE_SESSION_KEY]);
+
+    if (session?.tabId) {
+      chrome.tabs.sendMessage(session.tabId, { action: 'unlock_navigation' }).catch(() => {
+        // Tab may have been closed — safe to ignore
+      });
+    }
+  } catch {
+    // ignore
   }
 }
 

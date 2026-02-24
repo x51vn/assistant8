@@ -19,6 +19,7 @@ import {
 } from './output.js';
 import { writePendingPrompt, drainPendingPrompt } from './pendingPrompt.js';
 import { captureAndReportAssistantResponse } from './capture.js';
+import { activateGuard, deactivateGuard } from './navigationGuard.js';
 
 /**
  * Dispatch a single content-script message action.
@@ -124,9 +125,16 @@ export function handleMessage(request, safeSendResponse) {
           waitedMs: retries * 500
         });
 
+        // Activate navigation guard to prevent user from switching chats
+        // while the extension waits for the assistant's response.
+        if (!reviewOnly && success) {
+          activateGuard(meta.chatId);
+        }
+
         safeSendResponse({ status, runId, ...meta });
 
         // Fire-and-forget: capture assistant response
+        // Guard is deactivated inside captureAndReportAssistantResponse (finally block)
         if (!reviewOnly && success && runId) {
           captureAndReportAssistantResponse({
             runId,
@@ -138,6 +146,7 @@ export function handleMessage(request, safeSendResponse) {
           }).catch(() => {});
         }
       } catch (e) {
+        deactivateGuard(); // Ensure guard is released on error
         console.error('[Content] send_input error:', e);
         safeSendResponse({ status: 'error', error: String(e?.message || e) });
       }
@@ -153,8 +162,24 @@ export function handleMessage(request, safeSendResponse) {
         const wait = request.wait !== false;
         const timeoutMs = Number.isFinite(request.timeoutMs) ? request.timeoutMs : 15 * 60 * 1000;
         const stableMs = Number.isFinite(request.stableMs) ? request.stableMs : 1500;
+        const expectedChatId = typeof request.expectedChatId === 'string' ? request.expectedChatId : null;
 
         const meta = getChatMeta();
+
+        // Session guard: if the caller supplied an expectedChatId, verify we are still
+        // on that session before we start reading the DOM.
+        if (expectedChatId && meta.chatId && meta.chatId !== expectedChatId) {
+          console.warn('[Content] get_output: session mismatch — user navigated to different chat', {
+            expected: expectedChatId,
+            current: meta.chatId
+          });
+          safeSendResponse({
+            status: 'session_mismatch',
+            expectedChatId,
+            currentChatId: meta.chatId
+          });
+          return;
+        }
 
         console.log('🔍 [Content] get_output state:', {
           wait,
@@ -213,6 +238,13 @@ export function handleMessage(request, safeSendResponse) {
     } catch (e) {
       safeSendResponse({ ready: false, generating: false, hasContent: false, error: String(e?.message || e) });
     }
+    return false;
+  }
+
+  // ---- unlock_navigation (sent by background when job finishes) ----
+  if (request.action === 'unlock_navigation') {
+    deactivateGuard();
+    safeSendResponse({ success: true });
     return false;
   }
 

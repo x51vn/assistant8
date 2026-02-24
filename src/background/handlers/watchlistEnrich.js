@@ -33,7 +33,8 @@ import {
   getQueueInfo,
   resetQueue,
   resumeOnStartup,
-  isJobCancelled
+  isJobCancelled,
+  setActiveSessionChatId
 } from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/WatchlistEnrich');
@@ -278,19 +279,31 @@ export async function processEnrichmentJob(job) {
       symbol: sanitizedSymbol
     });
 
+    // Update active session with the chatId so the queue monitor and UI know
+    // exactly which ChatGPT conversation this job is using.
+    if (chatId) {
+      await setActiveSessionChatId(correlationId, chatId, chatUrl, tabResult.tabId);
+    }
+
     // 8. Check cancellation before waiting for response
     if (await isJobCancelled(correlationId)) {
       return { success: false, error: 'Job cancelled by user' };
     }
 
     // 9. Wait for ChatGPT response
+    // Pass expectedChatId so getOutput verifies the user hasn't navigated away
     const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
       wait: true,
       timeoutMs: 15 * 60 * 1000,
-      stableMs: 1500
+      stableMs: 1500,
+      expectedChatId: chatId  // Session guard
     });
 
     if (!outputResult.success || !outputResult.data?.result) {
+      // Specific message for session mismatch (user navigated away)
+      if (outputResult.error?.code === 'SESSION_MISMATCH') {
+        return { success: false, error: 'Người dùng đã chuyển sang chat khác trong khi đánh giá. Vui lòng thử lại.' };
+      }
       return { success: false, error: 'Hết thời gian chờ. ChatGPT chưa trả lời.' };
     }
 
