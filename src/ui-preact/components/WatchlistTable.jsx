@@ -83,22 +83,16 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
 
   const ediffColorClass = getEdiffColorClass(item.ediff);
 
-  // Use DB pprofit if available, else calculate client-side
-  const pprofitRaw = item.pprofit != null
+  // Use DB pprofit if available, else calculate client-side as fallback
+  const pprofit = item.pprofit != null
     ? Number(item.pprofit)
     : round4(calcPprofit(item.target, item.entry));
 
-  // When expected profit ≤ 10%, null out entry, target, pprofit, ediff
-  const isLowProfit = pprofitRaw !== null && pprofitRaw <= 0.10;
-
-  const displayEntry = isLowProfit ? null : item.entry;
-  const displayTarget = isLowProfit ? null : item.target;
-  const pprofit = isLowProfit ? null : pprofitRaw;
-  const displayEdiff = isLowProfit ? null : item.ediff;
-  const displayEdiffClass = isLowProfit ? '' : ediffColorClass;
+  // Auto-highlight row when potential profit ≥ 10%, or when user starred it
+  const isHighlightedRow = item.highlighted || (pprofit !== null && pprofit >= 0.10);
 
   return (
-    <tr class={item.highlighted ? 'highlighted-row' : ''}>
+    <tr class={isHighlightedRow ? 'highlighted-row' : ''}>
       {/* Symbol with highlight star */}
       <td class="td-symbol">
         {item.highlighted && (
@@ -111,10 +105,10 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       <td class="td-number">{formatCurrency(item.price)}</td>
 
       {/* Entry */}
-      <td class="td-number">{displayEntry != null ? formatCurrency(displayEntry) : '-'}</td>
+      <td class="td-number">{item.entry != null ? formatCurrency(item.entry) : '-'}</td>
 
       {/* Target */}
-      <td class="td-number">{displayTarget != null ? formatCurrency(displayTarget) : '-'}</td>
+      <td class="td-number">{item.target != null ? formatCurrency(item.target) : '-'}</td>
 
       {/* StopLoss */}
       <td class="td-number">{formatCurrency(item.stoploss)}</td>
@@ -125,8 +119,8 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       </td>
 
       {/* EDiff (performance indicator) */}
-      <td class={`td-number ${displayEdiffClass}`}>
-        {displayEdiff !== null && displayEdiff !== undefined ? formatPercent(displayEdiff, { fromDecimal: true, decimals: 2 }) : '-'}
+      <td class={`td-number ${ediffColorClass}`}>
+        {item.ediff !== null && item.ediff !== undefined ? formatPercent(item.ediff, { fromDecimal: true, decimals: 2 }) : '-'}
       </td>
 
       {/* Investment Thesis */}

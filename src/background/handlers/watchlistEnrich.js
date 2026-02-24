@@ -189,10 +189,18 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: 'Mã cổ phiếu là bắt buộc' };
     }
 
-    // 1. Fetch watchlist item from Supabase
+    // 0. Get userId early — needed for explicit user_id filter AND enrichment paths
+    const userId = await getUserIdSafe();
+    if (!userId) {
+      logger.warn('Enrichment job: no authenticated user', { symbol: sanitizedSymbol, correlationId });
+      return { success: false, error: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.' };
+    }
+
+    // 1. Fetch watchlist item from Supabase with explicit user_id filter
     const { data: watchlistItem, error: fetchError } = await supabase
       .from('watchlist')
       .select('*')
+      .eq('user_id', userId)
       .eq('symbol', sanitizedSymbol)
       .single();
 
@@ -214,17 +222,16 @@ export async function processEnrichmentJob(job) {
     }
 
     // XST-803: Check feature flag — route to orchestrator if enabled
-    const userId = await getUserIdSafe();
-    const settingsConfig = userId ? await getUserSettingsConfigForEnrich(userId) : {};
+    const settingsConfig = await getUserSettingsConfigForEnrich(userId);
     const useOrchestrator = getFeatureFlag('stock_research_v2', settingsConfig);
 
-    if (useOrchestrator && userId) {
+    if (useOrchestrator) {
       return await processEnrichmentViaOrchestrator(
         sanitizedSymbol, watchlistItem, userId, settingsConfig, correlationId
       );
     }
 
-    // Legacy path: ChatGPTSession (flag off or no userId)
+    // Legacy path: ChatGPTSession (flag off)
 
     // 2. Get enrichment prompt template
     let promptTemplate = DEFAULT_SYSTEM_PROMPTS[SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH];
@@ -391,6 +398,7 @@ export async function processEnrichmentJob(job) {
         const response = await supabase
           .from('watchlist')
           .update(updateData)
+          .eq('user_id', userId)
           .eq('symbol', sanitizedSymbol)
           .select();
         if (response.error) throw response.error;
@@ -531,6 +539,7 @@ async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, s
         const response = await supabase
           .from('watchlist')
           .update(updateData)
+          .eq('user_id', userId)
           .eq('symbol', symbol)
           .select();
         if (response.error) throw response.error;
