@@ -18,7 +18,7 @@ import {
   addEnglish,
   deleteEnglish,
   openEnglishChat,
-  sendPromptToChatGPT,
+  sendPromptToLLM,
   getChatGPTOutput,
   getEnglishPromptTemplate,
   autoSelectTopic
@@ -185,7 +185,7 @@ export function EnglishPage() {
         stopPolling();
         setResultMessage({
           type: 'error',
-          text: '⏱️ Timeout - ChatGPT không phản hồi sau 3 phút'
+          text: '⏱️ Timeout - LLM không phản hồi sau 3 phút'
         });
         setGenerating(false);
         return;
@@ -216,7 +216,7 @@ export function EnglishPage() {
         } else {
           setResultMessage({
             type: 'success',
-            text: `Đã lưu! (Chat: ${result.chatId.substring(0, 8)})\n\nNhấn vào item để mở ChatGPT`
+            text: `Đã lưu! (Chat: ${result.chatId.substring(0, 8)})`
           });
           
           // Refresh list
@@ -238,7 +238,7 @@ export function EnglishPage() {
       setGenerating(true);
       setResultMessage({
         type: 'loading',
-        text: 'Yêu cầu ChatGPT chọn topic phổ biến nhất trong tuần...'
+        text: 'Đang yêu cầu LLM chọn topic phổ biến nhất trong tuần...'
       });
       
       const topicResult = await autoSelectTopic();
@@ -256,7 +256,7 @@ export function EnglishPage() {
       setTopic(finalTopic);
       setResultMessage({
         type: 'info',
-        text: `ChatGPT đã chọn topic: ${finalTopic}`
+        text: `Đã chọn topic: ${finalTopic}`
       });
       
       // Small delay to show selected topic
@@ -274,7 +274,7 @@ export function EnglishPage() {
     currentPromptRef.current = prompt;
     currentTopicRef.current = finalTopic;
     
-    const sendResult = await sendPromptToChatGPT(prompt);
+    const sendResult = await sendPromptToLLM(prompt);
     
     if (sendResult.error) {
       setResultMessage({
@@ -285,7 +285,37 @@ export function EnglishPage() {
       return;
     }
     
-    // Start polling for response
+    // XST-821: All providers now return text immediately via LLMProviderFactory.
+    // Use the response directly if available — no polling needed.
+    if (sendResult.text) {
+      // Save to Supabase
+      const saveResult = await addEnglish(
+        null, // No chatId for direct text response
+        currentTopicRef.current,
+        currentPromptRef.current
+      );
+      
+      if (saveResult.error) {
+        setResultMessage({
+          type: 'error',
+          text: `Lỗi lưu: ${saveResult.error.message}`
+        });
+      } else {
+        setResultMessage({
+          type: 'success',
+          text: `Đã tạo bài học thành công!`
+        });
+        
+        await loadEnglishList();
+      }
+      
+      setGenerating(false);
+      currentPromptRef.current = null;
+      currentTopicRef.current = null;
+      return;
+    }
+    
+    // Fallback: Poll for response (legacy compatibility — should not trigger)
     setResultMessage({
       type: 'loading',
       text: 'Đang chờ response...'

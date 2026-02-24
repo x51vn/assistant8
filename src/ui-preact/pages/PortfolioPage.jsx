@@ -134,7 +134,7 @@ async function sendPromptWithHistory(prompt, title, createNewChat = true) {
       return { success: false, error: errorMsg };
     }
 
-    console.log('[Portfolio] Prompt sent successfully to ChatGPT');
+    console.log('[Portfolio] Prompt sent successfully');
 
     let finalChatId = response.chatId || null;
     let finalChatUrl = response.chatUrl || null;

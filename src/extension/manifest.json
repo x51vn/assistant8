@@ -54,20 +54,17 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
-      "all_frames": false,
-      "type": "module"
+      "all_frames": false
     },
     {
       "matches": ["https://gemini.google.com/*"],
       "js": ["content-gemini.js"],
-      "all_frames": false,
-      "type": "module"
+      "all_frames": false
     },
     {
       "matches": ["https://claude.ai/*"],
       "js": ["content-claude.js"],
-      "all_frames": false,
-      "type": "module"
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [

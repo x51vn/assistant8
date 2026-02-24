@@ -99,7 +99,7 @@ export async function saveSettings() {
 }
 
 /**
- * Send master prompt immediately to ChatGPT
+ * Send master prompt immediately to the active LLM provider
  * @returns {Promise<void>}
  * @throws {Error} if send fails
  */

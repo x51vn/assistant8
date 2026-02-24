@@ -1,14 +1,18 @@
 /**
  * @fileoverview Unified Prompt Queue Service (p-queue based)
  *
- * ALL ChatGPT interactions MUST go through this queue (concurrency = 1).
+ * ALL LLM interactions (ChatGPT, Gemini, Claude) MUST go through this queue (concurrency = 1).
  * This ensures only one prompt is active at a time, preventing interference
- * between concurrent ChatGPT operations.
+ * between concurrent LLM operations.
+ *
+ * XST-817: Updated to reflect multi-LLM support. The queue is provider-agnostic —
+ * it serialises any async function, not just ChatGPT interactions.
  *
  * Two modes:
  *
  * 1. enqueue(fn) — Synchronous: caller awaits the result
- *    Used by: SEND_PROMPT, CHATGPT_SEND_INPUT, context menu sends
+ *    Used by: SEND_PROMPT (and legacy aliases routed to SEND_PROMPT), context menu sends,
+ *             GeminiWebProvider.sendPrompt(), ClaudeWebProvider.sendPrompt()
  *
  * 2. enqueueBackgroundJob(config) — Fire-and-forget: returns immediately
  *    Job runs in background with status broadcasting & persistence.

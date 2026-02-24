@@ -33,7 +33,7 @@ const MAX_RESPONSE_CHARS = 100_000;
  *
  * @property {string} [source] - Where the prompt came from
  *   - 'SEND_PROMPT': High-level prompt send from UI
- *   - 'CHATGPT_SEND_INPUT': Direct ChatGPT input manipulation
+ *   - 'LLM_SEND_PROMPT': Legacy alias routed through the unified SEND_PROMPT pipeline
  *   - 'CONTEXT_MENU': Right-click context menu
  *   - 'content_script': Auto-captured from content script
  *

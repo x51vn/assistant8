@@ -15,8 +15,6 @@
 
 import { h } from 'preact';
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
 import { setCurrentPage } from '../state/navigationState.js';
 
 // ============================================================================
@@ -53,30 +51,28 @@ const STEPS = [
 ];
 
 // ============================================================================
-// SETTINGS API HELPERS
+// LOCAL STATE HELPERS (chrome.storage.local)
+// Onboarding state is UI-only — no need for Supabase round-trip.
+// Using chrome.storage.local ensures it is never wiped by SETTINGS_UPDATE.
 // ============================================================================
 
 async function markOnboardingDone() {
   try {
-    await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SETTINGS_UPDATE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      data: { config: { onboarding_completed: true, onboarding_completed_at: new Date().toISOString() } }
-    });
+    await chrome.storage.local.set({ onboarding_completed: true });
+  } catch { /* non-fatal */ }
+}
+
+/** Reset so the wizard shows again next time the panel opens */
+export async function resetOnboardingStorage() {
+  try {
+    await chrome.storage.local.set({ onboarding_completed: false });
   } catch { /* non-fatal */ }
 }
 
 async function loadOnboardingStatus() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SETTINGS_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
-    return response?.config?.onboarding_completed === true;
+    const result = await chrome.storage.local.get('onboarding_completed');
+    return result.onboarding_completed === true;
   } catch {
     return true; // fail open — don't block user
   }
@@ -111,18 +107,20 @@ export function useOnboardingGate(isAuthenticated) {
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
-  const handleDone = useCallback(async () => {
+  // showAgain=true means user wants to see the wizard next time → don't mark as done
+  const handleDone = useCallback(async (showAgain = false) => {
     setShowOnboarding(false);
-    await markOnboardingDone();
+    if (!showAgain) await markOnboardingDone();
     setCurrentPage('dashboard');
   }, []);
 
-  const handleSkip = useCallback(async () => {
+  const handleSkip = useCallback(async (showAgain = false) => {
     setShowOnboarding(false);
-    await markOnboardingDone();
+    if (!showAgain) await markOnboardingDone();
   }, []);
 
-  const resetOnboarding = useCallback(() => {
+  const resetOnboarding = useCallback(async () => {
+    await resetOnboardingStorage();
     setShowOnboarding(true);
   }, []);
 
@@ -139,20 +137,22 @@ export function useOnboardingGate(isAuthenticated) {
  */
 export function OnboardingWizard({ onDone, onSkip }) {
   const [step, setStep] = useState(0);
+  // showAgain: true = user wants to see wizard next time (default: false = don't show again)
+  const [showAgain, setShowAgain] = useState(false);
   const current = STEPS[step];
 
   const handleNext = useCallback(() => {
     if (current.isFinal) {
-      onDone();
+      onDone(showAgain);
     } else {
       setStep(s => s + 1);
     }
-  }, [current, onDone]);
+  }, [current, onDone, showAgain]);
 
   const handleCtaLink = useCallback((page) => {
-    onDone(); // counts as completing onboarding
+    onDone(showAgain); // counts as completing onboarding
     setCurrentPage(page);
-  }, [onDone]);
+  }, [onDone, showAgain]);
 
   return (
     <div class="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Onboarding">
@@ -184,13 +184,24 @@ export function OnboardingWizard({ onDone, onSkip }) {
           </button>
         )}
 
+        {/* Show again checkbox */}
+        <label class="onboarding-show-again" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', justifyContent: 'center', marginBottom: 4 }}>
+          <input
+            type="checkbox"
+            checked={showAgain}
+            onChange={e => setShowAgain(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          Hiển thị lại lần sau
+        </label>
+
         {/* Actions */}
         <div class="onboarding-actions">
           {!current.isFinal && (
             <button
               type="button"
               class="btn-onboarding-skip"
-              onClick={onSkip}
+              onClick={() => onSkip(showAgain)}
               aria-label="Bỏ qua hướng dẫn"
             >
               Bỏ qua

@@ -344,7 +344,9 @@ export async function sendWritingJob(jobType, inputs, options = {}) {
       return { success: false, error };
     }
 
-    return { success: true, error: null };
+    // XST-821: Return response text — all providers now return text immediately via LLMProviderFactory
+    const text = response.text || response.payload?.text || null;
+    return { success: true, text, error: null };
   } catch (error) {
     console.error('[WritingAPI] Failed to send writing job:', error);
     return {
@@ -391,7 +393,10 @@ async function sendWritingJobWithFallback(jobType, inputs, options, fallbackTemp
     });
 
     const error = extractError(response);
-    return error ? { success: false, error } : { success: true, error: null };
+    if (error) return { success: false, error };
+    // XST-821: Return response text
+    const text = response.text || response.payload?.text || null;
+    return { success: true, text, error: null };
   } catch (error) {
     console.error('[WritingAPI] Fallback rendering failed:', error);
     throw error;
@@ -641,14 +646,15 @@ export async function insertIntoActiveElement(text) {
 }
 
 /**
- * Auto-select topic for English learning using ChatGPT
+ * Auto-select topic for English learning using the active LLM provider.
+ * XST-819: Handle non-ChatGPT providers that return text immediately.
  * @returns {Promise<{topic?: string, error?: string}>}
  */
 export async function autoSelectTopic() {
   try {
     const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
 
-    // Send prompt
+    // Send prompt via SEND_PROMPT (routes to the active provider via XST-816 fix)
     const response = await chrome.runtime.sendMessage({
       v: 1,
       type: MESSAGE_TYPES.SEND_PROMPT,
@@ -668,7 +674,21 @@ export async function autoSelectTopic() {
       return { topic: null, error: error.message };
     }
 
-    // Poll for response (max 20 attempts = 30 seconds)
+    // ── XST-819: Non-ChatGPT providers (Gemini, Claude) return text immediately ──
+    // For these providers, SEND_PROMPT handler awaits the full response and
+    // includes it in the response payload — no polling needed.
+    const directText = response.text || response.payload?.text;
+    if (directText) {
+      const firstLine = directText
+        .split('\n')
+        .map(s => s.trim())
+        .find(Boolean) || directText;
+
+      const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
+      return { topic, error: null };
+    }
+
+    // ── ChatGPT path: Poll for response (max 20 attempts = 30 seconds) ──────────
     const maxPolls = 20;
     for (let i = 0; i < maxPolls; i++) {
       await new Promise(r => setTimeout(r, 1500));
@@ -698,7 +718,7 @@ export async function autoSelectTopic() {
     // Timeout
     return {
       topic: null,
-      error: 'ChatGPT did not respond in time. Please try again.'
+      error: 'LLM did not respond in time. Please try again.'
     };
   } catch (error) {
     console.error('[WritingAPI] Failed to auto-select topic:', error);

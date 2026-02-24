@@ -137,6 +137,12 @@ export class GeminiWebProvider extends LLMProvider {
 
   /**
    * Check Gemini connection status.
+   *
+   * Handles the MV3 "orphaned content script" problem: when the extension is
+   * reloaded or updated, content scripts on pre-existing tabs lose their
+   * connection to the service worker and can no longer respond to messages.
+   * We detect this by a failed ping and recover by re-injecting the script.
+   *
    * @returns {Promise<'connected' | 'disconnected' | 'error'>}
    */
   async getStatus() {
@@ -144,12 +150,33 @@ export class GeminiWebProvider extends LLMProvider {
       const tabs = await chrome.tabs.query({ url: GEMINI_URL_PATTERN });
       if (tabs.length === 0) return 'disconnected';
 
-      // Try to ping the content script
+      const tabId = tabs[0].id;
+
+      // 1. Try initial ping
       try {
-        const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' });
+        const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
         if (response?.pong) return 'connected';
       } catch {
-        // Content script not responding
+        // Content script not responding — may be orphaned after extension reload
+      }
+
+      // 2. Attempt re-injection to revive orphaned content script
+      try {
+        logger.debug('getStatus: ping failed, attempting content script re-injection', { tabId });
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['content-gemini.js'],
+        });
+        // Give the newly injected script time to register its message listener
+        await new Promise(r => setTimeout(r, 500));
+
+        const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+        if (response?.pong) {
+          logger.info('getStatus: re-injection succeeded, Gemini now connected', { tabId });
+          return 'connected';
+        }
+      } catch (err) {
+        logger.debug('getStatus: re-injection failed', { tabId, error: err?.message });
       }
 
       return 'disconnected';

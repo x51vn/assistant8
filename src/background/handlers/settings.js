@@ -132,12 +132,22 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
     
     const data = await supabaseWithRetry(
       async () => {
+        // ✅ MERGE: Fetch existing config first and deep-merge to avoid wiping unrelated fields
+        // (e.g. saving llm_provider must NOT wipe onboarding_completed or consent_* fields)
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('config')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const mergedConfig = { ...(existing?.config || {}), ...config };
+
         const { data, error } = await supabase
           .from('settings')
           .upsert(
             {
               user_id: userId,
-              config: config
+              config: mergedConfig
             },
             { 
               onConflict: 'user_id',

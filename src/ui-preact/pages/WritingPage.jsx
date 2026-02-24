@@ -311,7 +311,7 @@ export function WritingPage() {
         stopPolling();
         setResultMessage({
           type: 'error',
-          text: '⏱️ Timeout - ChatGPT không phản hồi sau 3 phút'
+          text: '⏱️ Timeout - LLM không phản hồi sau 3 phút'
         });
         setGenerating(false);
         return;
@@ -337,7 +337,7 @@ export function WritingPage() {
 
         setResultMessage({
           type: 'success',
-          text: `Đã tạo! Bạn có thể copy, insert, hoặc mở ChatGPT để tiếp tục`
+          text: `Đã tạo! Bạn có thể copy, insert, hoặc tiếp tục chỉnh sửa.`
         });
 
         setGenerating(false);
@@ -368,7 +368,7 @@ export function WritingPage() {
       setGenerating(true);
       setResultMessage({
         type: 'loading',
-        text: 'ChatGPT is picking a trending topic...'
+        text: 'LLM is picking a trending topic...'
       });
 
       const topicResult = await autoSelectTopic();
@@ -425,6 +425,36 @@ export function WritingPage() {
       return;
     }
 
+    // XST-821: All providers now return text immediately via LLMProviderFactory.
+    // Use the response directly if available — no polling needed.
+    if (sendResult.text) {
+      setOutput({
+        content: sendResult.text,
+        chatId: null,
+        chatUrl: null
+      });
+
+      await loadHistory();
+
+      setResultMessage({
+        type: 'success',
+        text: 'Đã tạo! Bạn có thể copy, insert, hoặc tiếp tục chỉnh sửa.'
+      });
+
+      setGenerating(false);
+
+      // Auto-upload to Confluence if checkbox is checked
+      if (uploadToConfluence && confluenceSpace) {
+        await handleConfluenceUpload(sendResult.text);
+      }
+
+      currentJobRef.current = null;
+      currentInputsRef.current = null;
+      currentOptionsRef.current = null;
+      return;
+    }
+
+    // Fallback: Poll for response (legacy compatibility — should not trigger)
     setResultMessage({
       type: 'loading',
       text: 'Đang chờ output...'

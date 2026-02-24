@@ -34,9 +34,12 @@ export const FEATURE_TYPES = {
 /**
  * Settings key suffix for per-feature provider override.
  * Full key = `llm_provider_${FEATURE_SETTINGS_KEY[feature]}`
+ *
+ * XST-820: CHAT now has its own settings key so users can override
+ * the global default specifically for chat/writing/english features.
  */
 const FEATURE_SETTINGS_KEY = {
-  [FEATURE_TYPES.CHAT]: null, // uses default llm_provider
+  [FEATURE_TYPES.CHAT]: 'chat',  // settings.config.llm_provider_chat
   [FEATURE_TYPES.STOCK_RESEARCH]: 'stock_research',
   [FEATURE_TYPES.WATCHLIST_ENRICH]: 'watchlist_enrich',
 };

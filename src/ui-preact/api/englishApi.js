@@ -173,12 +173,17 @@ export async function deleteEnglish(id) {
 }
 
 /**
- * Send prompt to ChatGPT
+ * Send prompt to the active LLM provider (ChatGPT, Gemini, or Claude).
+ * XST-818: Renamed from sendPromptToChatGPT to reflect multi-provider support.
+ *
+ * For non-ChatGPT providers (Gemini, Claude), the full response text is returned
+ * immediately in `result.text` — no polling of CHATGPT_GET_OUTPUT needed.
+ *
  * @param {string} prompt - Prompt text
- * @param {object} options - ChatGPT options
- * @returns {Promise<{success: boolean, error?: {code, message}}>}
+ * @param {object} options - Provider options
+ * @returns {Promise<{success: boolean, text?: string, error?: {code, message}}>}
  */
-export async function sendPromptToChatGPT(prompt, options = {}) {
+export async function sendPromptToLLM(prompt, options = {}) {
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
@@ -201,7 +206,9 @@ export async function sendPromptToChatGPT(prompt, options = {}) {
       return { success: false, error };
     }
 
-    return { success: true, error: null };
+    // For non-ChatGPT providers, full response text is in the response immediately.
+    const text = response.text || response.payload?.text || null;
+    return { success: true, text, error: null };
   } catch (error) {
     console.error('[EnglishAPI] Failed to send prompt:', error);
     return {
@@ -213,6 +220,8 @@ export async function sendPromptToChatGPT(prompt, options = {}) {
     };
   }
 }
+
+// XST-825: Deprecated alias removed — use sendPromptToLLM directly.
 
 /**
  * Get ChatGPT output (for polling)
@@ -347,20 +356,31 @@ Make it engaging and practical for English learners.`;
 }
 
 /**
- * Auto-select topic using ChatGPT
+ * Auto-select topic using the active LLM provider (ChatGPT, Gemini, or Claude).
+ * XST-819: Handles both fire-and-forget (ChatGPT) and immediate response (Gemini/Claude).
  * @returns {Promise<{topic?: string, error?: {code, message}}>}
  */
 export async function autoSelectTopic() {
   try {
     const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
 
-    // Send prompt
-    const sendResult = await sendPromptToChatGPT(pickPrompt);
+    // Send prompt — XST-821: all providers now return text immediately
+    const sendResult = await sendPromptToLLM(pickPrompt, { focusTab: false });
     if (!sendResult.success) {
       return { topic: null, error: sendResult.error };
     }
 
-    // Poll for response (max 20 attempts = 30 seconds)
+    // XST-821: Use response text directly if available (all providers return text now)
+    if (sendResult.text) {
+      const firstLine = sendResult.text
+        .split('\n')
+        .map(s => s.trim())
+        .find(Boolean) || sendResult.text;
+      const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
+      return { topic, error: null };
+    }
+
+    // Fallback: Poll for response (legacy compatibility — should not trigger)
     const maxPolls = 20;
     for (let i = 0; i < maxPolls; i++) {
       await new Promise(r => setTimeout(r, 1500));
@@ -368,7 +388,6 @@ export async function autoSelectTopic() {
       const outputResult = await getChatGPTOutput();
       
       if (outputResult.output) {
-        // Extract first non-empty line and clean it
         const firstLine = outputResult.output
           .split('\n')
           .map(s => s.trim())

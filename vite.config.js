@@ -96,6 +96,41 @@ async function copyDir(srcDir, destDir) {
   }
 }
 
+/**
+ * Vite plugin: strip ES module export syntax from content scripts.
+ *
+ * Problem: `format: 'es'` makes Rollup append `export default ...;` to every
+ * output chunk, turning them into ES modules. Chrome's manifest `content_scripts`
+ * supports `"type": "module"` for static injection, but
+ * `chrome.scripting.executeScript({ files })` always injects as a CLASSIC script.
+ * Classic scripts cannot contain `export` — they throw:
+ *   "Uncaught SyntaxError: Unexpected token 'export'"
+ *
+ * Solution: post-process the built content script chunks to strip all top-level
+ * export statements. The bundled scripts are already self-contained IIFEs
+ * (Vite/Rollup wraps all imports); the `export default` is the only ES-module
+ * artefact. Without it they load correctly as classic scripts in both contexts.
+ */
+function contentScriptClassicPlugin() {
+  const CONTENT_SCRIPTS = new Set(['content.js', 'content-gemini.js', 'content-claude.js']);
+  return {
+    name: 'content-script-classic',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        if (chunk.type !== 'chunk' || !CONTENT_SCRIPTS.has(fileName)) continue;
+        // Remove Rollup ES-module wrappers from minified single-line bundles.
+        // Handles both `\nexport ...` and `;export ...` tail forms.
+        chunk.code = chunk.code
+          .replace(/;\s*export default [^;]+;?\s*$/, ';')
+          .replace(/\nexport default [^;]+;?\s*$/, '\n')
+          .replace(/;\s*export \{[^}]*\};?\s*$/, ';')
+          .replace(/\nexport \{[^}]*\};?\s*$/, '\n');
+      }
+    },
+  };
+}
+
 function copyExtensionStatic() {
   return {
     name: 'copy-extension-static',
@@ -131,6 +166,7 @@ export default defineConfig({
   plugins: [
     preact(),
     validateEnvPlugin(), // X51LABS-130: Validate env vars before build
+    contentScriptClassicPlugin(), // Strip ES module exports from content scripts
     copyExtensionStatic()
   ],
   resolve: {
