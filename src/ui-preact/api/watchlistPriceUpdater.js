@@ -16,6 +16,8 @@
 import { signal } from '@preact/signals';
 import { watchlistItems, setWatchlistItems } from '../state/watchlistState.js';
 import { fetchStockPricesWithRetry, classifyPricingError } from './portfolioPricing.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { generateCorrelationId } from '../../logger.js';
 
 // Polling state signals
 export const lastUpdateTime = signal(null);
@@ -105,6 +107,29 @@ export async function updatePricesNow() {
 
     setWatchlistItems(updatedItems);
     lastUpdateTime.value = new Date();
+
+    // Persist updated prices to Supabase (fire-and-forget)
+    const priceUpdates = {};
+    updatedItems.forEach(item => {
+      if (prices[item.symbol] !== undefined) {
+        priceUpdates[item.symbol] = {
+          price: item.price,
+          ediff: item.ediff
+        };
+      }
+    });
+
+    if (Object.keys(priceUpdates).length > 0) {
+      chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now(),
+        data: { prices: priceUpdates }
+      }).catch(err => {
+        console.warn('[watchlistPriceUpdater] Failed to persist prices to DB:', err);
+      });
+    }
   } catch (error) {
     // Classify error and set state
     const classified = classifyPricingError(error);

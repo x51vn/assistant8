@@ -83,9 +83,19 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
   const ediffColorClass = getEdiffColorClass(item.ediff);
 
   // pprofit = (target - entry) / entry
-  const pprofit = (item.target && item.entry)
-    ? (item.target - item.entry) / item.entry
+  // When expected profit (target - entry) / target ≤ 10%, null out entry, target, pprofit, ediff
+  const pprofitTarget = (item.target && item.entry && item.target > 0)
+    ? (item.target - item.entry) / item.target
     : null;
+  const isLowProfit = pprofitTarget !== null && pprofitTarget <= 0.10;
+
+  const displayEntry = isLowProfit ? null : item.entry;
+  const displayTarget = isLowProfit ? null : item.target;
+  const pprofit = isLowProfit ? null : (
+    (item.target && item.entry) ? (item.target - item.entry) / item.entry : null
+  );
+  const displayEdiff = isLowProfit ? null : item.ediff;
+  const displayEdiffClass = isLowProfit ? '' : ediffColorClass;
 
   return (
     <tr class={item.highlighted ? 'highlighted-row' : ''}>
@@ -101,10 +111,10 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       <td class="td-number">{formatCurrency(item.price)}</td>
 
       {/* Entry */}
-      <td class="td-number">{formatCurrency(item.entry)}</td>
+      <td class="td-number">{displayEntry != null ? formatCurrency(displayEntry) : '-'}</td>
 
       {/* Target */}
-      <td class="td-number">{formatCurrency(item.target)}</td>
+      <td class="td-number">{displayTarget != null ? formatCurrency(displayTarget) : '-'}</td>
 
       {/* StopLoss */}
       <td class="td-number">{formatCurrency(item.stoploss)}</td>
@@ -115,8 +125,8 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       </td>
 
       {/* EDiff (performance indicator) */}
-      <td class={`td-number ${ediffColorClass}`}>
-        {item.ediff !== null && item.ediff !== undefined ? formatPercent(item.ediff, { fromDecimal: true, decimals: 2 }) : '-'}
+      <td class={`td-number ${displayEdiffClass}`}>
+        {displayEdiff !== null && displayEdiff !== undefined ? formatPercent(displayEdiff, { fromDecimal: true, decimals: 2 }) : '-'}
       </td>
 
       {/* Investment Thesis */}

@@ -62,12 +62,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
 
         if (countResult.error) throw countResult.error;
 
-        // Fetch paginated items, ordered by created_at DESC
+        // Fetch paginated items, ordered by ediff ASC (nulls last) for pre-sorted display
         const dataResult = await supabase
           .from('watchlist')
           .select('*', { count: 'exact' })
           .eq('user_id', userId)
-          .order('created_at', { ascending: false })
+          .order('ediff', { ascending: true, nullsFirst: false })
           .range(offset, offset + normalizedSize - 1);
 
         if (dataResult.error) throw dataResult.error;
@@ -261,6 +261,8 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     if (updates.stoploss !== undefined && updates.stoploss !== null) updateData.stoploss = Number(updates.stoploss);
     if (updates.notes !== undefined) updateData.notes = updates.notes;
     if (updates.highlighted !== undefined) updateData.highlighted = Boolean(updates.highlighted);
+    if (updates.price !== undefined && updates.price !== null) updateData.price = Number(updates.price);
+    if (updates.ediff !== undefined && updates.ediff !== null) updateData.ediff = Number(updates.ediff);
 
     // Update in Supabase with retry
     const result = await supabaseWithRetry(
@@ -508,6 +510,102 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
     }
 
     return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.TOGGLE_FAILED);
+  }
+});
+
+// ============================================
+// BATCH UPDATE PRICES
+// ============================================
+
+/**
+ * Handle XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES
+ * Batch update price and ediff for multiple watchlist items
+ *
+ * @param {Object} message - { prices: { [symbol]: { price, ediff } } }
+ * @returns {Object} Response with update count
+ */
+registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES, async (message) => {
+  const { correlationId } = message;
+  logger.info('Handling XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES', { correlationId });
+
+  try {
+    const userId = await requireAuth(message);
+    const { prices } = message.data || {};
+
+    if (!prices || typeof prices !== 'object') {
+      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.INVALID_INPUT);
+    }
+
+    const symbols = Object.keys(prices);
+    if (symbols.length === 0) {
+      return createResponse(message, MESSAGE_TYPES.XNEEWS_WATCHLIST_PRICES_SAVED, {
+        success: true,
+        updated: 0
+      });
+    }
+
+    // Batch update: run individual updates in parallel (Supabase doesn't support
+    // multi-row UPDATE with different values in one call without RPC)
+    let updated = 0;
+    let failed = 0;
+
+    const updatePromises = symbols.map(async (symbol) => {
+      const { price, ediff } = prices[symbol];
+      try {
+        const updateData = {};
+        if (price !== undefined && price !== null) updateData.price = Number(price);
+        if (ediff !== undefined && ediff !== null) updateData.ediff = Number(ediff);
+
+        if (Object.keys(updateData).length === 0) return;
+
+        const { error: updateError } = await supabase
+          .from('watchlist')
+          .update(updateData)
+          .eq('user_id', userId)
+          .eq('symbol', symbol);
+
+        if (updateError) {
+          logger.warn('Batch price update failed for symbol', { symbol, error: updateError.message });
+          failed++;
+        } else {
+          updated++;
+        }
+      } catch (err) {
+        logger.warn('Batch price update exception for symbol', { symbol, error: err.message });
+        failed++;
+      }
+    });
+
+    await Promise.allSettled(updatePromises);
+
+    logger.info('Watchlist BATCH_UPDATE_PRICES complete', {
+      updated,
+      failed,
+      total: symbols.length,
+      correlationId
+    });
+
+    return createResponse(message, MESSAGE_TYPES.XNEEWS_WATCHLIST_PRICES_SAVED, {
+      success: true,
+      updated,
+      failed
+    });
+
+  } catch (error) {
+    if (error?.errorCode) {
+      return error;
+    }
+
+    logger.error('Watchlist BATCH_UPDATE_PRICES exception', {
+      error: error?.message || error?.error?.message || String(error),
+      correlationId
+    });
+
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+    }
+
+    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.API_ERROR);
   }
 });
 
