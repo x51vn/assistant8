@@ -12,7 +12,7 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
-import { getQueueInfo, resetQueue } from '../services/promptQueue.js';
+import { getQueueInfo, pauseQueue, resumeQueue, isQueuePaused, cancelAllPending } from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/PromptQueueInfo');
 
@@ -37,6 +37,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_GET_INFO, async (message) => {
       activeCount: info.activeCount,
       queuedCount: info.queuedCount,
       runningJob: info.runningJob,
+      isPaused: isQueuePaused(),
       jobs: info.jobs.map(j => ({
         id: j.id,
         type: j.type,
@@ -81,6 +82,66 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_CLEAR_DONE, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to clear done jobs', { correlationId, error: error.message });
+    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+  }
+});
+
+/**
+ * Handle PROMPT_QUEUE_PAUSE
+ * Pauses the queue — running job finishes, but no new jobs start
+ */
+registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_PAUSE, async (message) => {
+  const { correlationId } = message;
+  logger.info('Handling PROMPT_QUEUE_PAUSE', { correlationId });
+
+  try {
+    const result = pauseQueue();
+    return createResponse(message, MESSAGE_TYPES.PROMPT_QUEUE_PAUSED, {
+      success: true,
+      paused: result.paused
+    });
+  } catch (error) {
+    logger.error('Failed to pause queue', { correlationId, error: error.message });
+    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+  }
+});
+
+/**
+ * Handle PROMPT_QUEUE_RESUME
+ * Resumes the queue after pause
+ */
+registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_RESUME, async (message) => {
+  const { correlationId } = message;
+  logger.info('Handling PROMPT_QUEUE_RESUME', { correlationId });
+
+  try {
+    const result = resumeQueue();
+    return createResponse(message, MESSAGE_TYPES.PROMPT_QUEUE_RESUMED, {
+      success: true,
+      paused: result.paused
+    });
+  } catch (error) {
+    logger.error('Failed to resume queue', { correlationId, error: error.message });
+    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+  }
+});
+
+/**
+ * Handle PROMPT_QUEUE_CANCEL_ALL
+ * Cancel all pending (queued) background jobs; running job is NOT cancelled
+ */
+registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_CANCEL_ALL, async (message) => {
+  const { correlationId } = message;
+  logger.info('Handling PROMPT_QUEUE_CANCEL_ALL', { correlationId });
+
+  try {
+    const result = await cancelAllPending();
+    return createResponse(message, MESSAGE_TYPES.PROMPT_QUEUE_ALL_CANCELLED, {
+      success: true,
+      cancelled: result.cancelled
+    });
+  } catch (error) {
+    logger.error('Failed to cancel all pending', { correlationId, error: error.message });
     return createErrorResponse(message, 'OPERATION_FAILED', error.message);
   }
 });

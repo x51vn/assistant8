@@ -59,7 +59,7 @@ registerHandler('ALERT_LIST', async (message) => {
 // ============================================================
 registerHandler('ALERT_CREATE', async (message) => {
   const correlationId = message.correlationId;
-  const { symbol, alert_type, target_value, note } = message;
+  const { symbol, alert_type, target_value, note } = message.data || message;
 
   if (!symbol || !alert_type || target_value == null) {
     return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu thông tin: symbol, alert_type, target_value');
@@ -122,7 +122,7 @@ registerHandler('ALERT_CREATE', async (message) => {
 // ============================================================
 registerHandler('ALERT_DELETE', async (message) => {
   const correlationId = message.correlationId;
-  const { id } = message;
+  const { id } = message.data || message;
   if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
 
   try {
@@ -148,7 +148,7 @@ registerHandler('ALERT_DELETE', async (message) => {
 // ============================================================
 registerHandler('ALERT_TOGGLE', async (message) => {
   const correlationId = message.correlationId;
-  const { id, enabled } = message;
+  const { id, enabled } = message.data || message;
   if (!id || enabled === undefined) {
     return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id hoặc enabled');
   }

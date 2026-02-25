@@ -18,8 +18,8 @@ import * as ChatGPTSession from '../../chatgptSession.js';
 
 const logger = createLogger('ChatGPTProvider');
 
-/** Default timeout for the full send→receive cycle */
-const DEFAULT_TIMEOUT_MS = 120_000;
+/** Default timeout for the full send→receive cycle (10 min – enrichment prompts can be slow) */
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 export class ChatGPTProvider extends LLMProvider {
   /** @type {Function} Injected enqueue function from promptQueue */
@@ -96,14 +96,19 @@ export class ChatGPTProvider extends LLMProvider {
       const remainingMs = Math.max(timeoutMs - elapsed, 10_000);
       const getOutputTimeoutId = setTimeout(() => {}, 0); // unused, kept for clarity
 
-      const outputResult = await Promise.race([
-        ChatGPTSession.getOutput(tabId, { runId, wait: true }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout: ChatGPT không phản hồi')), remainingMs)
-        ),
-      ]);
-
-      clearTimeout(getOutputTimeoutId);
+      let outputResult;
+      try {
+        outputResult = await Promise.race([
+          ChatGPTSession.getOutput(tabId, { runId, wait: true }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout: ChatGPT không phản hồi')), remainingMs)
+          ),
+        ]);
+      } finally {
+        clearTimeout(getOutputTimeoutId);
+        // Always release the tab from Memory Saver lock, regardless of outcome
+        ChatGPTSession.releaseTab(tabId).catch(() => {});
+      }
 
       if (!outputResult?.success || !outputResult?.data?.result) {
         throw new Error(outputResult?.error || 'ChatGPT không trả về kết quả.');

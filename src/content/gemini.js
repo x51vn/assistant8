@@ -343,14 +343,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Export for testing
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    injectPrompt,
-    extractResponse,
-    isLoggedIn,
-    createNewSession,
-    handleMessage,
-    GEMINI_SELECTORS,
-  };
-}
+// ESM exports for testing (stripped from build by contentScriptClassicPlugin)
+export { injectPrompt, extractResponse, isLoggedIn, createNewSession, handleMessage, GEMINI_SELECTORS };
+

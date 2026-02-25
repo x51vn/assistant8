@@ -94,7 +94,7 @@ registerHandler('API_KEY_LIST', async (message) => {
 // ============================================================
 registerHandler('API_KEY_GENERATE', async (message) => {
   const correlationId = message.correlationId;
-  const { label = 'Default Key' } = message;
+  const { label = 'Default Key' } = message.data || message;
 
   try {
     const userId = await requireAuth(message);
@@ -144,7 +144,7 @@ registerHandler('API_KEY_GENERATE', async (message) => {
 // ============================================================
 registerHandler('API_KEY_REVOKE', async (message) => {
   const correlationId = message.correlationId;
-  const { id } = message;
+  const { id } = message.data || message;
   if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
 
   try {

@@ -22,7 +22,8 @@ import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { SYSTEM_PROMPT_KEYS } from '../../shared/systemPrompts.js';
 import { DEFAULT_SYSTEM_PROMPTS } from '../../shared/systemPrompts.js';
-import * as ChatGPTSession from '../../chatgptSession.js';
+import { LLMProviderFactory } from '../../shared/llm/LLMProviderFactory.js';
+import { getProviderForFeature, FEATURE_TYPES } from '../../shared/llm/llmProviderRouting.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
 import { getFeatureFlag } from '../../shared/featureFlags.js';
 import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
@@ -30,7 +31,6 @@ import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 /** Rate-limit window: 1 AI analysis per symbol per hour */
 const AI_ANALYSIS_COOLDOWN_MS = 60 * 60 * 1000;
 import { runStockResearch } from '../services/stock/stockResearchOrchestrator.js';
-import { enqueue as promptQueueEnqueue } from '../services/promptQueue.js';
 import {
   enqueueBackgroundJob,
   cancelJob,
@@ -38,7 +38,6 @@ import {
   resetQueue,
   resumeOnStartup,
   isJobCancelled,
-  setActiveSessionChatId
 } from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/WatchlistEnrich');
@@ -218,9 +217,6 @@ export async function processEnrichmentJob(job) {
 
   logger.info('Processing enrichment job', { symbol, correlationId, attempt: job.attempt });
 
-  // Track the ChatGPT tab acquired during this job so we can
-  // restore autoDiscardable:true when the job finishes (success or failure)
-  let acquiredTabId = null;
 
   try {
     const sanitizedSymbol = symbol?.trim().toUpperCase();
@@ -298,7 +294,9 @@ export async function processEnrichmentJob(job) {
       }
     }
 
-    // XST-803: Check feature flag — route to orchestrator if enabled
+    // XST-803: Route to orchestrator (stock_research_v2=true) or default direct path.
+    // Orchestrator: multi-step pipeline via runStockResearch(), maps entryPrice/targetPrice/stopLoss/recommendation.
+    // Default: single LLMProvider.sendPrompt() with WATCHLIST_ENRICH prompt, parses JSON response directly.
     const settingsConfig = await getUserSettingsConfigForEnrich(userId);
     const useOrchestrator = getFeatureFlag('stock_research_v2', settingsConfig);
 
@@ -308,7 +306,7 @@ export async function processEnrichmentJob(job) {
       );
     }
 
-    // Legacy path: ChatGPTSession (flag off)
+    // Default path: single LLMProvider call (stock_research_v2=false)
 
     // 2. Get enrichment prompt template
     let promptTemplate = DEFAULT_SYSTEM_PROMPTS[SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH];
@@ -346,95 +344,57 @@ export async function processEnrichmentJob(job) {
       .replace('{WATCHLIST_ITEMS_JSON}', JSON.stringify(enrichmentData, null, 2))
       .replace('{AS_OF_DATE}', asOfDate);
 
-    // 4. Check cancellation before ChatGPT call
+    // 4. Check cancellation before sending
     if (await isJobCancelled(correlationId)) {
       return { success: false, error: 'Job cancelled by user' };
     }
 
-    // 5. Open ChatGPT tab
-    const tabResult = await ChatGPTSession.ensureChatGPTTab({
-      createIfNeeded: true,
-      focusTab: true
-    });
-
-    if (tabResult.error) {
-      return { success: false, error: 'Không thể mở ChatGPT. Vui lòng thử lại.' };
-    }
-
-    // Track tab so finally block can restore autoDiscardable
-    acquiredTabId = tabResult.tabId;
-
-    // 6. Send prompt to ChatGPT
+    // 5. Resolve provider and send prompt
+    // Provider (ChatGPT / Gemini / Claude) resolved from user settings via feature routing.
+    // Tab lifecycle is managed internally by the provider.
+    //
+    // IMPORTANT: Pass passthrough enqueue (fn => fn()) instead of promptQueueEnqueue.
+    // This job is ALREADY running inside the p-queue (via enqueueBackgroundJob).
+    // If we passed the real enqueue, the provider would try to queue.add() a nested
+    // task, but concurrency=1 means that nested task waits for THIS job to finish
+    // first — creating a DEADLOCK.
     const enrichmentRunId = generateCorrelationId();
-    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, renderedPrompt.trim(), {
-      createNewChat: true,
-      runId: enrichmentRunId,
+    const providerRouting = getProviderForFeature(FEATURE_TYPES.WATCHLIST_ENRICH, settingsConfig);
+    const provider = LLMProviderFactory.create(providerRouting, { enqueue: fn => fn() });
+
+    logger.info('Sending enrichment prompt via LLM provider', {
+      symbol: sanitizedSymbol,
+      provider: providerRouting.provider,
+      correlationId
     });
 
-    if (!sendResult.success) {
-      return { success: false, error: 'Không thể gửi prompt đánh giá lên ChatGPT.' };
+    let responseText;
+    let chatId = null;
+    let chatUrl = null;
+    try {
+      const result = await provider.sendPrompt(renderedPrompt.trim(), {
+        createNewChat: true,
+        runId: enrichmentRunId,
+      });
+      responseText = result.text;
+      chatId = result.chatId || null;
+      chatUrl = result.chatUrl || null;
+    } catch (sendErr) {
+      return { success: false, error: `Không thể gửi prompt đánh giá: ${sendErr.message}` };
     }
 
-    // 7. Persist prompt to chat_history
-    const chatId = sendResult.data?.chatId || null;
-    const chatUrl = sendResult.data?.chatUrl || null;
+    // 6. Persist prompt to chat_history
     await persistPromptSafe(enrichmentRunId, renderedPrompt, chatId, chatUrl, {
       source: 'WATCHLIST_ENRICH',
       symbol: sanitizedSymbol
     });
 
-    // Update active session with the chatId so the queue monitor and UI know
-    // exactly which ChatGPT conversation this job is using.
-    if (chatId) {
-      await setActiveSessionChatId(correlationId, chatId, chatUrl, tabResult.tabId);
-    }
-
-    // 8. Check cancellation before waiting for response
+    // 7. Check cancellation after response received
     if (await isJobCancelled(correlationId)) {
       return { success: false, error: 'Job cancelled by user' };
     }
 
-    // 9. Wait for ChatGPT response
-    // Pass expectedChatId so getOutput verifies the user hasn't navigated away
-    // Use stableMs=3000 (3s) to avoid capturing incomplete web-search noise
-    const MAX_PARSE_RETRIES = 2;
-    let responseText = null;
-
-    for (let parseAttempt = 0; parseAttempt <= MAX_PARSE_RETRIES; parseAttempt++) {
-      const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
-        wait: true,
-        timeoutMs: 15 * 60 * 1000,
-        stableMs: parseAttempt === 0 ? 3000 : 5000, // Longer wait on retry
-        expectedChatId: chatId  // Session guard
-      });
-
-      if (!outputResult.success || !outputResult.data?.result) {
-        if (outputResult.error?.code === 'SESSION_MISMATCH') {
-          return { success: false, error: 'Người dùng đã chuyển sang chat khác trong khi đánh giá. Vui lòng thử lại.' };
-        }
-        return { success: false, error: 'Hết thời gian chờ. ChatGPT chưa trả lời.' };
-      }
-
-      responseText = outputResult.data.result;
-
-      // Check if response contains actual JSON content (not just web-search noise)
-      if (hasJsonContent(responseText)) {
-        break; // Got JSON content, proceed to parse
-      }
-
-      if (parseAttempt < MAX_PARSE_RETRIES) {
-        logger.warn('Response has no JSON content, re-waiting for ChatGPT', {
-          symbol: sanitizedSymbol,
-          attempt: parseAttempt + 1,
-          previewLength: responseText.length,
-          correlationId
-        });
-        // Brief delay before re-polling
-        await new Promise(r => setTimeout(r, 2000));
-      }
-    }
-
-    // 10. Parse enrichment response
+    // 8. Parse enrichment response
     let enrichmentResponse;
     try {
       const parsed = parseJsonFromResponse(responseText);
@@ -456,7 +416,7 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: 'Dữ liệu từ ChatGPT không hợp lệ' };
     }
 
-    // 11. Build update data
+    // 9. Build update data
     const updateData = {};
     const now = new Date().toISOString();
     if (enrichmentResponse.entry !== undefined && enrichmentResponse.entry !== null) {
@@ -487,7 +447,7 @@ export async function processEnrichmentJob(job) {
     updateData.pprofit = round4(calcPprofit(effectiveTarget, effectiveEntry));
     updateData.last_ai_analysis_at = now;
 
-    // 12. Update watchlist item in Supabase (background-only, UI-independent)
+    // 10. Update watchlist item in Supabase (background-only, UI-independent)
     logger.info('Updating watchlist item with enrichment data', {
       symbol: sanitizedSymbol,
       fields: Object.keys(updateData),
@@ -539,11 +499,6 @@ export async function processEnrichmentJob(job) {
     }
 
     return { success: false, error: 'Lỗi khi đánh giá. Vui lòng thử lại.' };
-  } finally {
-    // Always release the tab from Memory Saver lock, regardless of outcome
-    if (acquiredTabId) {
-      ChatGPTSession.releaseTab(acquiredTabId).catch(() => {});
-    }
   }
 }
 
@@ -571,7 +526,8 @@ async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, s
       userId,
       {
         settingsConfig,
-        enqueue: promptQueueEnqueue,
+        // Passthrough enqueue — already inside p-queue (see default path comment)
+        enqueue: fn => fn(),
         onProgress: (status) => {
           // Broadcast enrichment progress to UI
           try {

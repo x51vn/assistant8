@@ -383,8 +383,6 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
   }
 });
 
-logger.info('Portfolio handlers registered');
-
 /**
  * Handle PORTFOLIO_UPDATE_PRICES
  * Update current prices for all portfolio items from SSI API

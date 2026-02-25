@@ -16,7 +16,8 @@
  */
 
 import { createLogger } from '../../logger.js';
-import * as ChatGPTSession from '../../chatgptSession.js';
+import { LLMProviderFactory } from '../../shared/llm/LLMProviderFactory.js';
+import { getProviderConfig } from './llm.js';
 import { supabase } from '../../supabaseConfig.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
 import { enqueue } from '../services/promptQueue.js';
@@ -631,8 +632,9 @@ async function extractContent(info, tab, correlationId) {
 // ========== SEND FUNCTIONS ==========
 
 /**
- * Send prompt to ChatGPT tab (via unified prompt queue).
- * All ChatGPT sends are serialized through p-queue (concurrency=1).
+ * Send prompt via the active LLM provider (ChatGPT / Gemini / Claude).
+ * Provider is resolved from user settings; defaults to ChatGPT.
+ * The provider's sendPrompt() serializes via p-queue internally.
  *
  * @param {string} finalPrompt
  * @param {Object} modeConfig
@@ -643,61 +645,52 @@ async function extractContent(info, tab, correlationId) {
  * @param {{ truncated: boolean, originalLength: number }} truncation
  */
 async function sendToChatGPT(finalPrompt, modeConfig, prefs, info, tab, correlationId, truncation) {
-  // ===== QUEUE: All ChatGPT sends go through p-queue =====
-  await enqueue(async () => {
-    logger.info('Ensuring ChatGPT tab is ready (queued)', { correlationId });
-    const tabResult = await ChatGPTSession.ensureChatGPTTab({
-      createIfNeeded: true,
-      focusTab: true
-    });
-
-    if (tabResult.error) {
-      logger.error('Failed to ensure ChatGPT tab', { correlationId, error: tabResult.error });
-      logger.endOperation(correlationId, 'error');
-      return;
+  // Resolve active LLM provider from user settings (default: chatgpt)
+  let providerConfig = { provider: 'chatgpt' };
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      providerConfig = await getProviderConfig(session.user.id);
     }
+  } catch {
+    // Use default chatgpt provider if settings can't be loaded
+  }
 
-    const createNewChat = !prefs.continueChat;
-    logger.info('Sending prompt to ChatGPT', {
-      correlationId,
-      tabId: tabResult.tabId,
-      createNewChat,
-      mode: modeConfig.label
-    });
+  const provider = LLMProviderFactory.create(providerConfig, { enqueue });
+  const createNewChat = !prefs.continueChat;
 
-    const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, finalPrompt, {
-      createNewChat,
-      runId: correlationId,
-      reviewOnly: false
-    });
-
-    const chatId = sendResult.data?.chatId || null;
-    const chatUrl = sendResult.data?.chatUrl || null;
-
-    if (sendResult.success) {
-      logger.info('Prompt sent successfully', { correlationId });
-
-      // Persist to chat history with enhanced source labels
-      await persistPromptSafe(correlationId, finalPrompt, chatId, chatUrl, {
-        source: 'CONTEXT_MENU',
-        mode: modeConfig.label,
-        pageTitle: tab?.title || null,
-        pageUrl: tab?.url || null,
-        selectionLength: info.selectionText?.length || 0,
-        linkUrl: info.linkUrl || null,
-        srcUrl: info.srcUrl || null,
-        contentTruncated: truncation.truncated,
-        originalContentLength: truncation.originalLength,
-        createNewChat
-      });
-
-      logger.endOperation(correlationId, 'success');
-    } else {
-      logger.error('Failed to send prompt', { correlationId, error: sendResult.error });
-      logger.endOperation(correlationId, 'error');
-    }
+  logger.info('Sending prompt via LLM provider', {
+    correlationId,
+    provider: providerConfig.provider,
+    createNewChat,
+    mode: modeConfig.label
   });
-  // ===== END QUEUE =====
+
+  // provider.sendPrompt() serializes via p-queue internally
+  const result = await provider.sendPrompt(finalPrompt, {
+    createNewChat,
+    runId: correlationId,
+  });
+
+  const chatId = result.chatId || null;
+  const chatUrl = result.chatUrl || null;
+
+  logger.info('Prompt sent successfully', { correlationId, provider: providerConfig.provider });
+
+  await persistPromptSafe(correlationId, finalPrompt, chatId, chatUrl, {
+    source: 'CONTEXT_MENU',
+    mode: modeConfig.label,
+    pageTitle: tab?.title || null,
+    pageUrl: tab?.url || null,
+    selectionLength: info.selectionText?.length || 0,
+    linkUrl: info.linkUrl || null,
+    srcUrl: info.srcUrl || null,
+    contentTruncated: truncation.truncated,
+    originalContentLength: truncation.originalLength,
+    createNewChat
+  });
+
+  logger.endOperation(correlationId, 'success');
 }
 
 /**

@@ -144,7 +144,7 @@ registerHandler(MESSAGE_TYPES.DATA_EXPORT_REQUEST, async (message) => {
       chat_history: chatHistory,
       errors,
       settings: settingsConfig,
-      english,
+      english: englishItems,
       subscriptions,
       usage_tracking: usageTracking,
       payment_history: paymentHistory,

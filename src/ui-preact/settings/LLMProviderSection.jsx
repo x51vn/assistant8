@@ -57,7 +57,7 @@ export function LLMProviderSection() {
 
   async function handleTestStatus() {
     setStatus('Đang kiểm tra...');
-    const res = await msg('LLM_GET_STATUS');
+    const res = await msg('LLM_GET_STATUS', { provider: active });
     if (res?.success) {
       const icon = res.status === 'connected' ? '✅' : res.status === 'error' ? '❌' : '⚠️';
       setStatus(`${icon} ${res.provider}: ${res.status}`);

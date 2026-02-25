@@ -268,12 +268,22 @@ registerHandler(MESSAGE_TYPES.LLM_SEND_PROMPT, async (message) => {
 
 // ============================================================
 // LLM_GET_STATUS
-// Check connection status of the active LLM provider.
+// Check connection status of a specific or the active LLM provider.
+// Accepts optional { provider } to check a provider before saving.
 // ============================================================
 registerHandler('LLM_GET_STATUS', async (message) => {
   try {
     const userId = await requireAuth(message);
-    const config = await getProviderConfig(userId);
+
+    // If caller specifies a provider, use it directly; otherwise read from DB
+    const requestedProvider = message.provider || message.data?.provider;
+    let config;
+    if (requestedProvider) {
+      config = { provider: requestedProvider };
+    } else {
+      config = await getProviderConfig(userId);
+    }
+
     const provider = LLMProviderFactory.create(config, { enqueue });
     const status = await provider.getStatus();
     const capabilities = provider.getCapabilities();

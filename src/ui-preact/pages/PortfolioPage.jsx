@@ -1,7 +1,6 @@
-import { signal, computed, effect } from '@preact/signals';
+import { computed } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
-import { fetchPortfolio, addPortfolio, updatePortfolio, deletePortfolio } from '../api/portfolioApi.js';
-import { formatCurrency } from '../utils/formatters.js';
+import { fetchPortfolio } from '../api/portfolioApi.js';
 import { startPricePolling, stopPricePolling, updatePricesNow, isUpdatingPrices } from '../api/portfolioPriceUpdater.js';
 import { startIndicesPolling, stopIndicesPolling } from '../api/marketIndicesUpdater.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
@@ -37,57 +36,6 @@ import StockResearchModal from '../components/StockResearchModal.jsx';
 import PortfolioEvalModal from '../components/PortfolioEvalModal.jsx';
 import MarketIndices from '../components/MarketIndices.jsx';
 import { isTeaStockModalOpen, openTeaStockModal, isEvaluateModalOpen, openEvaluateModal } from '../state/portfolioState.js';
-
-/**
- * Helper: Calculate P&L for a stock
- */
-function calculateStockPL(stock) {
-  if (!stock.entry || !stock.currentPrice) return null;
-  
-  const quantity = stock.quantity || 0;
-  const entryPrice = parseFloat(stock.entry) || 0;
-  const currentPrice = parseFloat(stock.currentPrice) || 0;
-  
-  const entryValue = entryPrice * quantity;
-  const currentValue = currentPrice * quantity;
-  const pl = currentValue - entryValue;
-  const plPercent = entryValue > 0 ? (pl / entryValue) * 100 : 0;
-  
-  return {
-    entryValue,
-    currentValue,
-    pl,
-    plPercent,
-    priceChange: currentPrice - entryPrice,
-    priceChangePercent: entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0
-  };
-}
-
-/**
- * Helper: Calculate total portfolio P&L
- */
-function calculatePortfolioTotalPL(portfolio) {
-  let totalEntryValue = 0;
-  let totalCurrentValue = 0;
-
-  portfolio.forEach(stock => {
-    const pl = calculateStockPL(stock);
-    if (pl) {
-      totalEntryValue += pl.entryValue;
-      totalCurrentValue += pl.currentValue;
-    }
-  });
-
-  const totalPL = totalCurrentValue - totalEntryValue;
-  const totalPLPercent = totalEntryValue > 0 ? (totalPL / totalEntryValue) * 100 : 0;
-
-  return {
-    totalEntryValue,
-    totalCurrentValue,
-    totalPL,
-    totalPLPercent
-  };
-}
 
 /**
  * Helper: Extract chat ID from URL

@@ -323,6 +323,69 @@ export async function setActiveSessionChatId(jobId, chatId, chatUrl, tabId = nul
   }
 }
 
+// =============================================
+// PUBLIC API: Queue flow control
+// =============================================
+
+/**
+ * Pause the queue — running job finishes, but no more jobs start.
+ * @returns {{ paused: boolean }}
+ */
+export function pauseQueue() {
+  queue.pause();
+  logger.info('Queue paused', { size: queue.size, pending: queue.pending });
+  broadcastQueuePauseState(true);
+  return { paused: true };
+}
+
+/**
+ * Resume the queue after pause.
+ * @returns {{ paused: boolean }}
+ */
+export function resumeQueue() {
+  queue.start();
+  logger.info('Queue resumed', { size: queue.size, pending: queue.pending });
+  broadcastQueuePauseState(false);
+  return { paused: false };
+}
+
+/**
+ * Whether the queue is currently paused.
+ * @returns {boolean}
+ */
+export function isQueuePaused() {
+  return queue.isPaused;
+}
+
+/**
+ * Cancel all pending (queued) background jobs.
+ * Running job is NOT cancelled — only waiting jobs.
+ * Also clears the p-queue internal list.
+ * @returns {Promise<{ cancelled: number }>}
+ */
+export async function cancelAllPending() {
+  // 1. Cancel persisted 'queued' jobs
+  const jobs = await readPersistedJobs();
+  let cancelled = 0;
+  for (const job of jobs) {
+    if (job.state === 'queued') {
+      job.state = 'cancelled';
+      job.finishedAt = Date.now();
+      cancelled++;
+      broadcastJobStatus(job.id, 'cancelled', job.type, job.payload);
+    }
+  }
+  if (cancelled > 0) {
+    await writePersistedJobs(jobs);
+  }
+
+  // 2. Clear p-queue pending items
+  queue.clear();
+
+  logger.info('All pending jobs cancelled', { cancelled });
+  return { cancelled };
+}
+
 /**
  * Force reset stuck queue
  */
@@ -521,3 +584,24 @@ function broadcastJobStatus(jobId, status, jobType, data = {}) {
 }
 
 logger.info('PromptQueue service initialized (p-queue, concurrency=1)');
+
+// =============================================
+// INTERNAL: Pause-state broadcasting
+// =============================================
+
+/**
+ * Notify UI that queue pause state changed.
+ * @param {boolean} paused
+ */
+function broadcastQueuePauseState(paused) {
+  const message = {
+    v: 1,
+    type: paused ? 'PROMPT_QUEUE_PAUSED' : 'PROMPT_QUEUE_RESUMED',
+    correlationId: generateCorrelationId(),
+    timestamp: Date.now(),
+    paused
+  };
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {});
+  } catch { /* no receiver */ }
+}

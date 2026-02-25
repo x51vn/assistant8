@@ -26,8 +26,8 @@ const GEMINI_URL = 'https://gemini.google.com/app';
 /** @type {string} */
 const GEMINI_URL_PATTERN = 'https://gemini.google.com/*';
 
-/** Default timeout for the full send→receive cycle */
-const DEFAULT_TIMEOUT_MS = 120_000;
+/** Default timeout for the full send→receive cycle (10 min – enrichment prompts can be slow) */
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 /** Max retries for content script ping */
 const MAX_PING_RETRIES = 15;
@@ -226,7 +226,24 @@ export class GeminiWebProvider extends LLMProvider {
     }
 
     // Wait for content script to be ready
-    const ready = await this.#waitForContentScript(tabId);
+    let ready = await this.#waitForContentScript(tabId);
+    if (!ready) {
+      // Content script may be orphaned after extension reload/update.
+      // Re-inject and retry once.
+      logger.info('ensureGeminiTab: ping failed, attempting content script re-injection', { tabId });
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['content-gemini.js'],
+        });
+        // Give the freshly injected script time to register its listener
+        await new Promise(r => setTimeout(r, 1000));
+        ready = await this.#waitForContentScript(tabId);
+      } catch (injectErr) {
+        logger.warn('ensureGeminiTab: re-injection failed', { tabId, error: injectErr?.message });
+      }
+    }
+
     if (!ready) {
       throw new Error('Gemini content script không sẵn sàng. Vui lòng thử lại.');
     }

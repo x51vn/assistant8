@@ -90,7 +90,7 @@ registerHandler('PORTFOLIO_LIST_PORTFOLIOS', async (message) => {
 // ============================================================
 registerHandler('PORTFOLIO_CREATE_PORTFOLIO', async (message) => {
   const correlationId = message.correlationId;
-  const { name, description } = message;
+  const { name, description } = message.data || message;
 
   if (!name?.trim()) return createErrorResponse(message, 'VALIDATION_ERROR', 'Tên portfolio là bắt buộc');
 
@@ -133,7 +133,7 @@ registerHandler('PORTFOLIO_CREATE_PORTFOLIO', async (message) => {
 // ============================================================
 registerHandler('PORTFOLIO_UPDATE_PORTFOLIO', async (message) => {
   const correlationId = message.correlationId;
-  const { id, name, description } = message;
+  const { id, name, description } = message.data || message;
   if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
 
   try {
@@ -166,7 +166,7 @@ registerHandler('PORTFOLIO_UPDATE_PORTFOLIO', async (message) => {
 // ============================================================
 registerHandler('PORTFOLIO_DELETE_PORTFOLIO', async (message) => {
   const correlationId = message.correlationId;
-  const { id } = message;
+  const { id } = message.data || message;
   if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
 
   try {
@@ -207,7 +207,7 @@ registerHandler('PORTFOLIO_DELETE_PORTFOLIO', async (message) => {
 // ============================================================
 registerHandler('PORTFOLIO_SET_DEFAULT', async (message) => {
   const correlationId = message.correlationId;
-  const { id } = message;
+  const { id } = message.data || message;
   if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
 
   try {

@@ -283,6 +283,12 @@ export const MESSAGE_TYPES = {
   PROMPT_QUEUE_INFO: 'PROMPT_QUEUE_INFO',                       // Background → UI: queue state response
   PROMPT_QUEUE_CLEAR_DONE: 'PROMPT_QUEUE_CLEAR_DONE',           // UI → Background: clear terminal jobs
   PROMPT_QUEUE_CLEARED: 'PROMPT_QUEUE_CLEARED',                 // Background → UI: cleared confirmation
+  PROMPT_QUEUE_PAUSE: 'PROMPT_QUEUE_PAUSE',                     // UI → Background: pause queue (no new jobs start)
+  PROMPT_QUEUE_PAUSED: 'PROMPT_QUEUE_PAUSED',                   // Background → UI: queue paused confirmation
+  PROMPT_QUEUE_RESUME: 'PROMPT_QUEUE_RESUME',                   // UI → Background: resume queue
+  PROMPT_QUEUE_RESUMED: 'PROMPT_QUEUE_RESUMED',                 // Background → UI: queue resumed confirmation
+  PROMPT_QUEUE_CANCEL_ALL: 'PROMPT_QUEUE_CANCEL_ALL',           // UI → Background: cancel all pending jobs
+  PROMPT_QUEUE_ALL_CANCELLED: 'PROMPT_QUEUE_ALL_CANCELLED',     // Background → UI: all pending cancelled confirmation
 
   // Billing & Subscription (XST-758..XST-763)
   SUBSCRIPTION_GET: 'SUBSCRIPTION_GET',                         // UI → Background: get current plan + subscription

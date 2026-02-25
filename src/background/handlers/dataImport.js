@@ -119,7 +119,7 @@ async function batchUpsert(table, rows, userId, conflictMode, uniqueCol) {
 // ============================================================
 registerHandler(MESSAGE_TYPES.DATA_IMPORT_REQUEST, async (message) => {
   const correlationId = message.correlationId;
-  const { fileContent, fileType, conflictMode = 'skip' } = message;
+  const { fileContent, fileType, conflictMode = 'skip' } = message.data || message;
 
   if (!fileContent) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu nội dung file');
   if (!['json', 'csv'].includes(fileType)) {

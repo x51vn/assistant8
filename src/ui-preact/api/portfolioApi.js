@@ -116,7 +116,7 @@ export async function addPortfolio(data) {
     }
 
     return {
-      item: response.data || response,
+      item: response.item || response,
       error: null
     };
   } catch (error) {
@@ -162,7 +162,7 @@ export async function updatePortfolio(id, updates) {
     }
 
     return {
-      item: response.data || response,
+      item: response.item || response,
       error: null
     };
   } catch (error) {
