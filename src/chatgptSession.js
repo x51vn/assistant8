@@ -710,8 +710,34 @@ export async function ensureChatGPTTab(options = {}) {
     let chatTab = tabs.find(t => t.url && t.url.includes('chatgpt.com'));
     
     if (chatTab) {
-      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id });
-      
+      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id, discarded: chatTab.discarded });
+
+      // Handle discarded tabs (Chrome Memory Saver killed the page process)
+      // A discarded tab has no JS running — must reload before content script can respond
+      if (chatTab.discarded) {
+        logger.warn('ChatGPT tab was discarded by Chrome Memory Saver, reloading', { tabId: chatTab.id });
+        await chrome.tabs.reload(chatTab.id);
+        await new Promise((resolve) => {
+          let timeoutId = null;
+          const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            chrome.tabs.onUpdated.removeListener(listener);
+          };
+          const listener = (tabId, changeInfo) => {
+            if (tabId === chatTab.id && changeInfo.status === 'complete') {
+              cleanup();
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          timeoutId = setTimeout(() => { cleanup(); resolve(); }, 30000);
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Prevent Chrome Memory Saver from discarding this tab while we use it
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Focus existing tab if requested
       if (focusTab) {
         await chrome.tabs.update(chatTab.id, { active: true });
@@ -781,7 +807,10 @@ export async function ensureChatGPTTab(options = {}) {
         url: 'https://chatgpt.com/', 
         active: focusTab 
       });
-      
+
+      // Prevent Memory Saver from discarding this tab during job processing
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Wait for page to load
       await new Promise((resolve) => {
         let timeoutId = null;
@@ -842,3 +871,18 @@ export async function ensureChatGPTTab(options = {}) {
 }
 
 // waitForContentScript removed — replaced by waitForTabReady (registry + ping, 10s timeout)
+
+/**
+ * Release a tab back to Chrome's normal memory management (allow auto-discard).
+ * Call this after enrichment / job completes so the tab can be managed normally.
+ * @param {number} tabId
+ * @returns {Promise<void>}
+ */
+export async function releaseTab(tabId) {
+  if (!tabId || tabId < 0) return;
+  try {
+    await chrome.tabs.update(tabId, { autoDiscardable: true });
+  } catch {
+    // Tab might already be closed — not critical
+  }
+}

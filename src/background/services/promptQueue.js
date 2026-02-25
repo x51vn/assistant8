@@ -39,7 +39,6 @@ const logger = createLogger('PromptQueue');
 const STORAGE_KEY = 'prompt_queue_jobs';
 const ACTIVE_SESSION_KEY = 'active_session'; // Currently-running ChatGPT session owned by the queue
 const JOB_TTL_MS = 60 * 60 * 1000; // 1h auto-cleanup for terminal jobs
-const MAX_BACKGROUND_JOBS = 50;
 
 // ===== SINGLETON QUEUE (concurrency = 1) =====
 const queue = new PQueue({ concurrency: 1 });
@@ -90,11 +89,6 @@ export async function enqueueBackgroundJob(config) {
     // ===== New job: validate and persist =====
     const jobs = await readPersistedJobs();
     const activeJobs = jobs.filter(j => j.state === 'queued' || j.state === 'running');
-
-    // Queue size limit
-    if (activeJobs.length >= MAX_BACKGROUND_JOBS) {
-      throw new Error('Hàng đợi đã đầy. Vui lòng chờ các tác vụ hiện tại hoàn tất.');
-    }
 
     // Duplicate check (type-specific)
     if (type === 'WATCHLIST_ENRICH' && payload?.symbol) {

@@ -41,13 +41,13 @@ export async function handleAlarm(alarm) {
       }
       
       try {
-        // Send message to portfolio handler to update prices
-        const response = await chrome.runtime.sendMessage({
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
           v: 1,
           type: MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES,
           correlationId,
           timestamp: Date.now()
-        });
+        }, { id: 'alarm' });
         
         if (!response) {
           logger.warn('No response from portfolio price update handler', { correlationId });
@@ -74,13 +74,13 @@ export async function handleAlarm(alarm) {
       logger.info('UPDATE_COMMODITY_PRICES alarm triggered', { correlationId });
       
       try {
-        // Send message to commodity handler to update prices
-        const response = await chrome.runtime.sendMessage({
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
           v: 1,
           type: MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES,
           correlationId,
           timestamp: Date.now()
-        });
+        }, { id: 'alarm' });
         
         if (!response) {
           logger.warn('No response from commodity price update handler', { correlationId });
@@ -112,13 +112,13 @@ export async function handleAlarm(alarm) {
       // Alarm fires every 5 minutes regardless, handler decides to skip
 
       try {
-        // Send message to Supabase price update handler
-        const response = await chrome.runtime.sendMessage({
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
           v: 1,
           type: MESSAGE_TYPES.XNEEWS_PRICE_UPDATE,
           correlationId,
           timestamp: Date.now()
-        });
+        }, { id: 'alarm' });
         
         if (!response) {
           logger.warn('No response from watchlist price update handler', { correlationId });

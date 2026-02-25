@@ -63,7 +63,7 @@ function getEdiffColorClass(ediff) {
 /**
  * WatchlistRow - Single watchlist item row
  */
-function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbol }) {
+function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbols }) {
   const handleToggleHighlight = async () => {
     // Optimistic update
     toggleItemHighlight(item.symbol);
@@ -149,11 +149,11 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
         <button
           class="btn-icon btn-enrich"
           onClick={() => onEnrich(item)}
-          disabled={enrichingSymbol === item.symbol}
+          disabled={enrichingSymbols?.has?.(item.symbol)}
           title="Đánh giá và cập nhật thông tin"
           type="button"
         >
-          {enrichingSymbol === item.symbol ? (
+          {enrichingSymbols?.has?.(item.symbol) ? (
             <i class="fas fa-spinner fa-spin"></i>
           ) : (
             <i class="fas fa-lightbulb"></i>
@@ -236,7 +236,7 @@ function PaginationControls() {
 /**
  * WatchlistTable - Main table component
  */
-export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbol }) {
+export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbols }) {
   if (!hasFilteredItems.value) {
     return (
       <div class="empty-state">
@@ -273,7 +273,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onEnrich={onEnrich}
-                enrichingSymbol={enrichingSymbol}
+                enrichingSymbols={enrichingSymbols}
               />
             ))}
           </tbody>

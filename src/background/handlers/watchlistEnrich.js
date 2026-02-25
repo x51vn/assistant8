@@ -94,14 +94,16 @@ function sanitizeJsonString(raw) {
 
 /**
  * Parse JSON from ChatGPT response
- * Handles: markdown code blocks, control characters, nested items array
+ * Handles: markdown code blocks, control characters, nested items array,
+ *          web-search noise (source cards, site names, "+N" badges)
  */
 function parseJsonFromResponse(responseText) {
-  // Extract JSON candidate text
-  let jsonText = responseText;
+  // Pre-process: strip web-search noise lines before JSON extraction
+  const cleaned = stripWebSearchNoise(responseText);
+  let jsonText = cleaned;
 
   // Try extracting from markdown code block first
-  const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     jsonText = codeBlockMatch[1].trim();
   } else {
@@ -109,12 +111,12 @@ function parseJsonFromResponse(responseText) {
     // Use a greedy match from the FIRST '{' to the LAST '}' — this skips
     // leading noise like ChatGPT web-search source cards (site names, "+N" badges)
     // that can prepend the actual JSON content.
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       jsonText = jsonMatch[0];
     } else {
       // Try JSON array format [{ ... }]
-      const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+      const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
       if (arrayMatch) {
         jsonText = arrayMatch[0];
       }
@@ -126,6 +128,39 @@ function parseJsonFromResponse(responseText) {
 
   const parsed = JSON.parse(sanitized);
   return parsed;
+}
+
+/**
+ * Strip web-search noise from ChatGPT response text.
+ * Removes lines that are only site names (e.g. "cafef.vn", "Investing.com Việt Nam"),
+ * "+N" badges (e.g. "+2", "+4"), and other non-JSON noise that ChatGPT web-search
+ * prepends to responses.
+ */
+function stripWebSearchNoise(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const cleaned = lines.filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    // Remove standalone "+N" badges
+    if (/^\+\d{1,2}$/.test(trimmed)) return false;
+    // Remove lines that are only a domain/site name (no JSON structure)
+    if (/^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(\s.*)?$/.test(trimmed) &&
+        !trimmed.includes('{') && !trimmed.includes('[') && !trimmed.includes(':')) return false;
+    // Remove lines that are only "SiteName" with optional whitespace (common web-search source labels)
+    if (/^[A-Z][a-zA-Z\s.]+\.(com|vn|net|org|io)(\s.*)?$/i.test(trimmed) &&
+        !trimmed.includes('{') && !trimmed.includes(':')) return false;
+    return true;
+  });
+  return cleaned.join('\n');
+}
+
+/**
+ * Check if response text contains parseable JSON content
+ */
+function hasJsonContent(text) {
+  if (!text) return false;
+  return /[{\[]/.test(text);
 }
 
 /**
@@ -183,6 +218,10 @@ export async function processEnrichmentJob(job) {
 
   logger.info('Processing enrichment job', { symbol, correlationId, attempt: job.attempt });
 
+  // Track the ChatGPT tab acquired during this job so we can
+  // restore autoDiscardable:true when the job finishes (success or failure)
+  let acquiredTabId = null;
+
   try {
     const sanitizedSymbol = symbol?.trim().toUpperCase();
     if (!sanitizedSymbol) {
@@ -190,21 +229,59 @@ export async function processEnrichmentJob(job) {
     }
 
     // 0. Get userId early — needed for explicit user_id filter AND enrichment paths
+    //    Also force a session refresh to avoid SW-restart race condition:
+    //    getUser() might succeed with a stale in-memory token while the
+    //    actual DB request would use an expired JWT, causing RLS to return 0 rows.
     const userId = await getUserIdSafe();
     if (!userId) {
       logger.warn('Enrichment job: no authenticated user', { symbol: sanitizedSymbol, correlationId });
       return { success: false, error: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.' };
     }
 
+    // Ensure access token is fresh before making any DB requests (prevents
+    // PGRST116 "no rows" that are actually silent RLS auth failures)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (refreshErr) {
+          logger.warn('Session refresh failed before DB query', { correlationId, error: refreshErr.message });
+          return { success: false, error: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.' };
+        }
+      }
+    } catch (sessionErr) {
+      logger.debug('Session check skipped', { correlationId, error: sessionErr.message });
+    }
+
     // 1. Fetch watchlist item from Supabase with explicit user_id filter
+    //    Use maybeSingle() (not single()) so that "0 rows" → {data:null, error:null}
+    //    instead of PGRST116 error which was previously conflated with auth failures.
     const { data: watchlistItem, error: fetchError } = await supabase
       .from('watchlist')
       .select('*')
       .eq('user_id', userId)
       .eq('symbol', sanitizedSymbol)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !watchlistItem) {
+    if (fetchError) {
+      logger.error('Failed to fetch watchlist item', {
+        symbol: sanitizedSymbol,
+        errorCode: fetchError.code,
+        errorMessage: fetchError.message,
+        correlationId
+      });
+      const isAuthError = fetchError.code === 'PGRST301' ||
+        fetchError.status === 401 ||
+        String(fetchError.message).toLowerCase().includes('jwt') ||
+        String(fetchError.message).toLowerCase().includes('unauthorized');
+      if (isAuthError) {
+        return { success: false, error: 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.' };
+      }
+      return { success: false, error: `Không thể đọc watchlist: ${fetchError.message}` };
+    }
+
+    if (!watchlistItem) {
+      logger.warn('Watchlist item not found', { symbol: sanitizedSymbol, userId, correlationId });
       return { success: false, error: `Mã ${sanitizedSymbol} không tồn tại trong watchlist` };
     }
 
@@ -284,6 +361,9 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: 'Không thể mở ChatGPT. Vui lòng thử lại.' };
     }
 
+    // Track tab so finally block can restore autoDiscardable
+    acquiredTabId = tabResult.tabId;
+
     // 6. Send prompt to ChatGPT
     const enrichmentRunId = generateCorrelationId();
     const sendResult = await ChatGPTSession.sendInput(tabResult.tabId, renderedPrompt.trim(), {
@@ -316,22 +396,43 @@ export async function processEnrichmentJob(job) {
 
     // 9. Wait for ChatGPT response
     // Pass expectedChatId so getOutput verifies the user hasn't navigated away
-    const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
-      wait: true,
-      timeoutMs: 15 * 60 * 1000,
-      stableMs: 1500,
-      expectedChatId: chatId  // Session guard
-    });
+    // Use stableMs=3000 (3s) to avoid capturing incomplete web-search noise
+    const MAX_PARSE_RETRIES = 2;
+    let responseText = null;
 
-    if (!outputResult.success || !outputResult.data?.result) {
-      // Specific message for session mismatch (user navigated away)
-      if (outputResult.error?.code === 'SESSION_MISMATCH') {
-        return { success: false, error: 'Người dùng đã chuyển sang chat khác trong khi đánh giá. Vui lòng thử lại.' };
+    for (let parseAttempt = 0; parseAttempt <= MAX_PARSE_RETRIES; parseAttempt++) {
+      const outputResult = await ChatGPTSession.getOutput(tabResult.tabId, {
+        wait: true,
+        timeoutMs: 15 * 60 * 1000,
+        stableMs: parseAttempt === 0 ? 3000 : 5000, // Longer wait on retry
+        expectedChatId: chatId  // Session guard
+      });
+
+      if (!outputResult.success || !outputResult.data?.result) {
+        if (outputResult.error?.code === 'SESSION_MISMATCH') {
+          return { success: false, error: 'Người dùng đã chuyển sang chat khác trong khi đánh giá. Vui lòng thử lại.' };
+        }
+        return { success: false, error: 'Hết thời gian chờ. ChatGPT chưa trả lời.' };
       }
-      return { success: false, error: 'Hết thời gian chờ. ChatGPT chưa trả lời.' };
-    }
 
-    const responseText = outputResult.data.result;
+      responseText = outputResult.data.result;
+
+      // Check if response contains actual JSON content (not just web-search noise)
+      if (hasJsonContent(responseText)) {
+        break; // Got JSON content, proceed to parse
+      }
+
+      if (parseAttempt < MAX_PARSE_RETRIES) {
+        logger.warn('Response has no JSON content, re-waiting for ChatGPT', {
+          symbol: sanitizedSymbol,
+          attempt: parseAttempt + 1,
+          previewLength: responseText.length,
+          correlationId
+        });
+        // Brief delay before re-polling
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
 
     // 10. Parse enrichment response
     let enrichmentResponse;
@@ -438,6 +539,11 @@ export async function processEnrichmentJob(job) {
     }
 
     return { success: false, error: 'Lỗi khi đánh giá. Vui lòng thử lại.' };
+  } finally {
+    // Always release the tab from Memory Saver lock, regardless of outcome
+    if (acquiredTabId) {
+      ChatGPTSession.releaseTab(acquiredTabId).catch(() => {});
+    }
   }
 }
 

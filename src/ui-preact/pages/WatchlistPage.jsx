@@ -32,7 +32,6 @@ import {
   setWatchlistItems,
   setPaginationData,
   resetWatchlistState,
-  goToPage,
   addWatchlistItem as addItemToState,
   updateWatchlistItem as updateItemInState,
   removeWatchlistItem
@@ -43,8 +42,7 @@ import {
   addWatchlistItem,
   updateWatchlistItem,
   deleteWatchlistItem,
-  enrichWatchlistItem,
-  cancelEnrichment
+  enrichWatchlistItem
 } from '../api/watchlistApi.js';
 import {
   startPricePolling,
@@ -64,10 +62,9 @@ export default function WatchlistPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // Enrichment state (queue-based)
-  const [enrichingSymbol, setEnrichingSymbol] = useState(null); // Symbol currently being enriched
+  // Enrichment state (queue-based) - Set tracks multiple symbols being enriched
+  const [enrichingSymbols, setEnrichingSymbols] = useState(new Set());
   const [enrichmentError, setEnrichmentError] = useState(null);
-  const [enrichmentCorrelationId, setEnrichmentCorrelationId] = useState(null);
 
   /**
    * Check Supabase authentication on mount
@@ -96,41 +93,42 @@ export default function WatchlistPage() {
       switch (type) {
         case 'WATCHLIST_AI_ENRICH_STATUS':
           if (status === 'running' && symbol) {
-            setEnrichingSymbol(symbol);
+            setEnrichingSymbols(prev => new Set([...prev, symbol]));
             setEnrichmentError(null);
+          } else if (status === 'failed' && symbol) {
+            setEnrichmentError({
+              code: 'ENRICHMENT_ERROR',
+              message: msgError || 'Đánh giá thất bại'
+            });
+            setEnrichingSymbols(prev => {
+              const next = new Set(prev);
+              next.delete(symbol);
+              return next;
+            });
           }
           break;
 
         case 'WATCHLIST_AI_ENRICH_DONE':
           if (item) {
-            // Update UI with enriched data from Supabase
             updateItemInState(item);
             console.log('[WatchlistPage] Enrichment done (from background)', symbol);
           }
-          if (enrichingSymbol === symbol) {
-            setEnrichingSymbol(null);
-            setEnrichmentCorrelationId(null);
+          if (symbol) {
+            setEnrichingSymbols(prev => {
+              const next = new Set(prev);
+              next.delete(symbol);
+              return next;
+            });
           }
           break;
 
         case 'WATCHLIST_AI_ENRICH_CANCELLED':
-          if (enrichingSymbol === symbol) {
-            setEnrichingSymbol(null);
-            setEnrichmentCorrelationId(null);
-          }
-          break;
-
-        default:
-          // Check for failed status
-          if (type === 'WATCHLIST_AI_ENRICH_STATUS' && status === 'failed') {
-            setEnrichmentError({
-              code: 'ENRICHMENT_ERROR',
-              message: msgError || 'Đánh giá thất bại'
+          if (symbol) {
+            setEnrichingSymbols(prev => {
+              const next = new Set(prev);
+              next.delete(symbol);
+              return next;
             });
-            if (enrichingSymbol === symbol) {
-              setEnrichingSymbol(null);
-              setEnrichmentCorrelationId(null);
-            }
           }
           break;
       }
@@ -138,7 +136,7 @@ export default function WatchlistPage() {
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [enrichingSymbol]);
+  }, []); // Functional updates on Set — no closure dependency needed
 
   /**
    * Restore enrichment state on mount from chrome.storage.local
@@ -150,13 +148,15 @@ export default function WatchlistPage() {
         const result = await chrome.storage.local.get(['enrichment_queue']);
         const queueData = result.enrichment_queue;
         if (queueData?.jobs) {
-          const activeJob = queueData.jobs.find(
+          const activeJobs = queueData.jobs.filter(
             j => j.state === 'running' || j.state === 'queued'
           );
-          if (activeJob) {
-            setEnrichingSymbol(activeJob.payload?.symbol || null);
-            setEnrichmentCorrelationId(activeJob.correlationId);
-            console.log('[WatchlistPage] Restored enrichment state', activeJob.payload?.symbol);
+          if (activeJobs.length > 0) {
+            const symbols = new Set(
+              activeJobs.map(j => j.payload?.symbol).filter(Boolean)
+            );
+            setEnrichingSymbols(symbols);
+            console.log('[WatchlistPage] Restored enrichment state', [...symbols]);
           }
 
           // Check for recently completed jobs and update UI
@@ -233,13 +233,6 @@ export default function WatchlistPage() {
     searchQuery.value = e.target.value;
     // Client-side search via filteredItems computed signal
     // No need to re-fetch from API
-  };
-
-  /**
-   * Handle refresh button click
-   */
-  const handleRefresh = async () => {
-    goToPage(1); // Resets to page 1 and triggers useEffect
   };
 
   /**
@@ -356,7 +349,7 @@ export default function WatchlistPage() {
   const handleEnrich = async (item) => {
     if (!item || !item.symbol) return;
 
-    setEnrichingSymbol(item.symbol);
+    setEnrichingSymbols(prev => new Set([...prev, item.symbol]));
     setEnrichmentError(null);
 
     try {
@@ -364,12 +357,13 @@ export default function WatchlistPage() {
 
       if (result.error) {
         setEnrichmentError(result.error);
-        setEnrichingSymbol(null);
+        setEnrichingSymbols(prev => {
+          const next = new Set(prev);
+          next.delete(item.symbol);
+          return next;
+        });
         console.error('[WatchlistPage] Enrichment enqueue error:', result.error);
       } else if (result.success) {
-        // Job queued — keep enrichingSymbol active
-        // Background will emit WATCHLIST_AI_ENRICH_DONE when complete
-        setEnrichmentCorrelationId(result.correlationId);
         console.log('[WatchlistPage] Enrichment queued for', item.symbol,
           result.duplicate ? '(duplicate)' : `(position ${result.position})`);
       }
@@ -378,9 +372,65 @@ export default function WatchlistPage() {
         code: 'ENRICHMENT_ERROR',
         message: 'Đánh giá thất bại, vui lòng thử lại'
       });
-      setEnrichingSymbol(null);
+      setEnrichingSymbols(prev => {
+        const next = new Set(prev);
+        next.delete(item.symbol);
+        return next;
+      });
       console.error('[WatchlistPage] Enrichment exception:', err);
     }
+  };
+
+  /**
+   * Handle enrichment for ALL watchlist items (batch enqueue)
+   * Reuses enrichWatchlistItem() for each symbol via the existing p-queue
+   */
+  const handleEnrichAll = async () => {
+    const items = watchlistItems.value;
+    if (!items || items.length === 0) return;
+
+    setEnrichmentError(null);
+
+    const symbols = items.map(item => item.symbol).filter(Boolean);
+
+    // Optimistically mark all symbols as enriching
+    setEnrichingSymbols(prev => {
+      const next = new Set(prev);
+      symbols.forEach(s => next.add(s));
+      return next;
+    });
+
+    // Enqueue each symbol sequentially (reuses existing enrichWatchlistItem API)
+    let failedCount = 0;
+    for (const symbol of symbols) {
+      try {
+        const result = await enrichWatchlistItem(symbol);
+        if (!result.success) {
+          failedCount++;
+          setEnrichingSymbols(prev => {
+            const next = new Set(prev);
+            next.delete(symbol);
+            return next;
+          });
+        }
+      } catch (err) {
+        failedCount++;
+        setEnrichingSymbols(prev => {
+          const next = new Set(prev);
+          next.delete(symbol);
+          return next;
+        });
+      }
+    }
+
+    if (failedCount > 0) {
+      setEnrichmentError({
+        code: 'PARTIAL_ERROR',
+        message: `${failedCount}/${symbols.length} mã không thể thêm vào hàng đợi`
+      });
+    }
+
+    console.log(`[WatchlistPage] Enqueued ${symbols.length - failedCount}/${symbols.length} symbols for enrichment`);
   };
 
   // Auth check in progress
@@ -444,13 +494,13 @@ export default function WatchlistPage() {
         <div class="header-actions">
           <button
             class="btn-secondary"
-            onClick={handleRefresh}
-            disabled={loading.value}
-            title="Làm mới dữ liệu"
+            onClick={handleEnrichAll}
+            disabled={loading.value || enrichingSymbols.size > 0}
+            title="Đánh giá và cập nhật tất cả mã trong watchlist"
             type="button"
           >
-            <i class={`fas fa-sync-alt ${loading.value ? 'fa-spin' : ''}`}></i>
-            Làm mới
+            <i class={`fas fa-lightbulb ${enrichingSymbols.size > 0 ? 'fa-spin' : ''}`}></i>
+            {enrichingSymbols.size > 0 ? `Đang đánh giá (${enrichingSymbols.size})` : 'Đánh giá tất cả'}
           </button>
 
           <button
@@ -551,7 +601,7 @@ export default function WatchlistPage() {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onEnrich={handleEnrich}
-          enrichingSymbol={enrichingSymbol}
+          enrichingSymbols={enrichingSymbols}
         />
       )}
 
