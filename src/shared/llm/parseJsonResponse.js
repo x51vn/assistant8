@@ -26,6 +26,9 @@
  */
 
 import { jsonrepair } from 'jsonrepair';
+import { createLogger } from '../../logger.js';
+
+const logger = createLogger('LLM/JsonParser');
 
 // ─── Web-search noise removal ────────────────────────────────────────────────
 
@@ -380,15 +383,32 @@ export function extractFinancialFieldsFromProse(text) {
  */
 export function parseJsonResponse(rawText) {
   if (!rawText || typeof rawText !== 'string') {
+    logger.warn('parseJsonResponse called with empty/non-string input', {
+      type: typeof rawText, length: rawText?.length ?? 0,
+    });
     return { success: false, data: null, partial: false, strategy: 'none', error: 'Empty or non-string input', rawText: String(rawText ?? '') };
   }
 
   const t = rawText.trim();
+  const inputLen = t.length;
+  logger.debug('parseJsonResponse start', { inputLength: inputLen, preview: t.substring(0, 120) });
+
+  /** @param {object} result */
+  const succeed = (result) => {
+    const keys = result.data ? Object.keys(result.data) : [];
+    logger.info('parseJsonResponse success', {
+      strategy: result.strategy,
+      partial: result.partial,
+      keys: keys.length <= 8 ? keys : `${keys.length} keys`,
+      inputLength: inputLen,
+    });
+    return result;
+  };
 
   // ── Strategy 1: Direct parse ──────────────────────────────────────────────
   {
     const r = tryParse(t);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'direct-parse', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'direct-parse', error: null, rawText });
   }
 
   // ── Strategy 2: Code fence ────────────────────────────────────────────────
@@ -396,53 +416,54 @@ export function parseJsonResponse(rawText) {
     const fenced = extractCodeFence(t);
     if (fenced) {
       const r = tryParse(fenced);
-      if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'code-fence', error: null, rawText };
+      if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'code-fence', error: null, rawText });
     }
   }
 
   // ── Strategy 3: jsonrepair on full text ───────────────────────────────────
   {
     const r = tryRepairAndParse(t);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'repair-full', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'repair-full', error: null, rawText });
   }
 
   // ── Strategy 4: Strip noise → parse ──────────────────────────────────────
   const noisy = stripWebSearchNoise(t);
   if (noisy !== t) {
+    logger.debug('Stripped web-search noise', { originalLen: inputLen, strippedLen: noisy.length });
     const r = tryParse(noisy);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'strip-noise', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'strip-noise', error: null, rawText });
   }
 
   // ── Strategy 5: Strip noise → repair ─────────────────────────────────────
   {
     const r = tryRepairAndParse(noisy);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'strip-noise+repair', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'strip-noise+repair', error: null, rawText });
   }
 
   // ── Strategy 6: Greedy { } → parse ───────────────────────────────────────
   const objSpan = extractObjectSpan(noisy) || extractObjectSpan(t);
   if (objSpan) {
     const r = tryParse(objSpan);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'object-span', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'object-span', error: null, rawText });
   }
 
   // ── Strategy 7: Greedy { } → repair ──────────────────────────────────────
   if (objSpan) {
     const r = tryRepairAndParse(objSpan);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'object-span+repair', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'object-span+repair', error: null, rawText });
   }
 
   // ── Strategy 8: Control-char sanitize → parse ────────────────────────────
   const sanitized = sanitizeControlChars(t);
   if (sanitized !== t) {
     const r = tryParse(sanitized);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'sanitize', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'sanitize', error: null, rawText });
   }
 
   // ── Strategy 9: Sanitize → repair ────────────────────────────────────────
   {
     const r = tryRepairAndParse(sanitized);
-    if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'sanitize+repair', error: null, rawText };
+    if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'sanitize+repair', error: null, rawText });
   }
 
   // ── Strategy 10: Code fence → sanitize → repair ───────────────────────────
@@ -450,7 +471,7 @@ export function parseJsonResponse(rawText) {
     const fenced = extractCodeFence(t);
     if (fenced) {
       const r = tryRepairAndParse(sanitizeControlChars(fenced));
-      if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'code-fence+sanitize+repair', error: null, rawText };
+      if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'code-fence+sanitize+repair', error: null, rawText });
     }
   }
 
@@ -459,7 +480,7 @@ export function parseJsonResponse(rawText) {
     const arrSpan = extractArraySpan(noisy) || extractArraySpan(t);
     if (arrSpan) {
       const r = tryRepairAndParse(arrSpan);
-      if (r.ok) return { success: true, data: r.data, partial: false, strategy: 'array-span+repair', error: null, rawText };
+      if (r.ok) return succeed({ success: true, data: r.data, partial: false, strategy: 'array-span+repair', error: null, rawText });
     }
   }
 
@@ -467,7 +488,7 @@ export function parseJsonResponse(rawText) {
   {
     const r = extractFieldsViaRegex(t);
     if (r.ok) {
-      return { success: true, data: r.data, partial: true, strategy: 'field-regex', error: null, rawText };
+      return succeed({ success: true, data: r.data, partial: true, strategy: 'field-regex', error: null, rawText });
     }
   }
 
@@ -475,10 +496,16 @@ export function parseJsonResponse(rawText) {
   {
     const r = extractFinancialFieldsFromProse(t);
     if (r.ok) {
-      return { success: true, data: r.data, partial: true, strategy: 'prose-financial', error: null, rawText };
+      return succeed({ success: true, data: r.data, partial: true, strategy: 'prose-financial', error: null, rawText });
     }
   }
 
+  logger.warn('parseJsonResponse FAILED — all 13 strategies exhausted', {
+    inputLength: inputLen,
+    preview: t.substring(0, 300),
+    hasJsonChars: /[{\[]/.test(t),
+    hasBraces: t.includes('{'),
+  });
   return {
     success: false,
     data: null,

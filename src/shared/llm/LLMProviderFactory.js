@@ -23,6 +23,9 @@
 import { ChatGPTProvider }   from './ChatGPTProvider.js';
 import { ClaudeWebProvider } from './ClaudeWebProvider.js';
 import { GeminiWebProvider } from './GeminiWebProvider.js';
+import { createLogger } from '../../logger.js';
+
+const logger = createLogger('LLM/Factory');
 
 /** @typedef {'chatgpt' | 'claude' | 'gemini'} ProviderName */
 
@@ -57,6 +60,7 @@ export class LLMProviderFactory {
    */
   static create(config = {}, deps = {}) {
     const { provider = 'chatgpt' } = config;
+    logger.info('Creating LLM provider', { provider, hasEnqueue: !!deps.enqueue });
 
     switch (provider) {
       case 'claude':
@@ -65,6 +69,9 @@ export class LLMProviderFactory {
         return new GeminiWebProvider({ enqueue: deps.enqueue });
       case 'chatgpt':
       default:
+        if (provider !== 'chatgpt') {
+          logger.warn('Unknown provider, falling back to chatgpt', { requestedProvider: provider });
+        }
         return new ChatGPTProvider({ enqueue: deps.enqueue });
     }
   }
@@ -74,6 +81,10 @@ export class LLMProviderFactory {
    * @param {ProviderName} providerId
    */
   static getMeta(providerId) {
-    return SUPPORTED_PROVIDERS.find(p => p.id === providerId) || SUPPORTED_PROVIDERS[0];
+    const meta = SUPPORTED_PROVIDERS.find(p => p.id === providerId);
+    if (!meta) {
+      logger.debug('getMeta: unknown providerId, using first provider', { providerId });
+    }
+    return meta || SUPPORTED_PROVIDERS[0];
   }
 }

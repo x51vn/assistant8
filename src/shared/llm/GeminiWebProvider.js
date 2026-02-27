@@ -156,7 +156,8 @@ export class GeminiWebProvider extends LLMProvider {
       try {
         const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
         if (response?.pong) return 'connected';
-      } catch {
+      } catch (err) {
+        logger.debug('getStatus: initial ping failed', { tabId, error: err?.message });
         // Content script not responding — may be orphaned after extension reload
       }
 
@@ -180,7 +181,8 @@ export class GeminiWebProvider extends LLMProvider {
       }
 
       return 'disconnected';
-    } catch {
+    } catch (err) {
+      logger.debug('getStatus: outer error', { error: err?.message });
       return 'error';
     }
   }
@@ -309,7 +311,8 @@ export class GeminiWebProvider extends LLMProvider {
           });
           return true;
         }
-      } catch {
+      } catch (err) {
+        logger.debug('waitForContentScript: ping attempt failed', { tabId, attempt: i + 1, error: err?.message });
         // Content script not ready yet
       }
 

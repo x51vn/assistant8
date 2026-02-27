@@ -21,6 +21,15 @@ import { writePendingPrompt, drainPendingPrompt } from './pendingPrompt.js';
 import { captureAndReportAssistantResponse } from './capture.js';
 import { activateGuard, deactivateGuard } from './navigationGuard.js';
 
+// Lightweight inline logger (content scripts are classic scripts — can't import shared chunks)
+const LOG_PREFIX = '[Content/Actions]';
+const logger = {
+  debug: (msg, data) => console.debug(LOG_PREFIX, msg, data || ''),
+  info:  (msg, data) => console.log(LOG_PREFIX, msg, data || ''),
+  warn:  (msg, data) => console.warn(LOG_PREFIX, msg, data || ''),
+  error: (msg, data) => console.error(LOG_PREFIX, msg, data || ''),
+};
+
 /**
  * Dispatch a single content-script message action.
  *
@@ -63,15 +72,15 @@ export function handleMessage(request, safeSendResponse) {
 
   // ---- create_new_session ----
   if (request.action === 'create_new_session') {
-    console.log('[Content] Received create_new_session action');
+    logger.debug('create_new_session action received');
     (async () => {
       try {
         const success = await ensureNewChatSession();
         const meta = getChatMeta();
-        console.log('[Content] New session created, success:', success, 'meta:', meta);
+        logger.info('New session created', { success, chatId: meta.chatId });
         safeSendResponse({ success, ...meta });
       } catch (e) {
-        console.error('[Content] create_new_session error:', e);
+        logger.error('create_new_session failed', { error: e?.message });
         safeSendResponse({ success: false, error: String(e?.message || e) });
       }
     })();
@@ -80,7 +89,7 @@ export function handleMessage(request, safeSendResponse) {
 
   // ---- send_input ----
   if (request.action === 'send_input') {
-    console.log('[Content] Received send_input action, prompt length:', request.prompt?.length, 'reviewOnly:', request.reviewOnly);
+    logger.debug('send_input action received', { promptLength: request.prompt?.length, reviewOnly: request.reviewOnly });
     (async () => {
       try {
         const prompt = typeof request.prompt === 'string' ? request.prompt : '';
@@ -91,11 +100,11 @@ export function handleMessage(request, safeSendResponse) {
         const beforeAssistant = getLatestAssistantMessageMeta();
         const beforeMsgCount = getConversationMessageCount();
 
-        console.log('🔍 [Content] Before inputAndSendPrompt, URL:', location.href);
+        logger.debug('Before inputAndSendPrompt', { url: location.href, createNewChat, reviewOnly });
 
         const success = await inputAndSendPrompt(prompt, { createNewChat, reviewOnly });
 
-        console.log('🔍 [Content] After inputAndSendPrompt, success:', success, 'URL:', location.href);
+        logger.debug('After inputAndSendPrompt', { success, url: location.href });
 
         // Wait for ChatGPT to update URL with new chat_id (up to 3s)
         let meta = getChatMeta();
@@ -103,24 +112,23 @@ export function handleMessage(request, safeSendResponse) {
         const maxRetries = 6;
 
         while (!meta.chatId && retries < maxRetries) {
-          console.log(`⏳ [Content] Waiting for chat_id (attempt ${retries + 1}/${maxRetries}), URL:`, location.href);
+          logger.debug('Waiting for chat_id', { attempt: retries + 1, maxRetries });
           await sleep(500);
           meta = getChatMeta();
           retries++;
         }
 
         if (meta.chatId) {
-          console.log(`✅ [Content] Got chat_id after ${retries * 500}ms:`, meta.chatId);
+          logger.debug('Got chat_id', { chatId: meta.chatId, waitedMs: retries * 500 });
         } else {
-          console.warn('⚠️ [Content] No chat_id after waiting, URL might not have updated:', location.href);
+          logger.warn('No chat_id after waiting', { url: location.href, waitedMs: retries * 500 });
         }
 
         const status = reviewOnly ? 'filled' : (success ? 'sent' : 'failed');
 
-        console.log('🔍 [Content] send_input complete:', {
+        logger.info('send_input complete', {
           status,
           chatId: meta.chatId,
-          chatUrl: meta.chatUrl,
           success,
           waitedMs: retries * 500
         });
@@ -147,7 +155,7 @@ export function handleMessage(request, safeSendResponse) {
         }
       } catch (e) {
         deactivateGuard(); // Ensure guard is released on error
-        console.error('[Content] send_input error:', e);
+        logger.error('send_input failed', { error: e?.message });
         safeSendResponse({ status: 'error', error: String(e?.message || e) });
       }
     })();
@@ -156,7 +164,7 @@ export function handleMessage(request, safeSendResponse) {
 
   // ---- get_output ----
   if (request.action === 'get_output') {
-    console.log('[Content] Received get_output action, wait:', request.wait);
+    logger.debug('get_output action received', { wait: request.wait, timeoutMs: request.timeoutMs });
     (async () => {
       try {
         const wait = request.wait !== false;
@@ -169,7 +177,7 @@ export function handleMessage(request, safeSendResponse) {
         // Session guard: if the caller supplied an expectedChatId, verify we are still
         // on that session before we start reading the DOM.
         if (expectedChatId && meta.chatId && meta.chatId !== expectedChatId) {
-          console.warn('[Content] get_output: session mismatch — user navigated to different chat', {
+          logger.warn('get_output: session mismatch — user navigated to different chat', {
             expected: expectedChatId,
             current: meta.chatId
           });
@@ -181,30 +189,28 @@ export function handleMessage(request, safeSendResponse) {
           return;
         }
 
-        console.log('🔍 [Content] get_output state:', {
+        logger.debug('get_output state', {
           wait,
           generating: isGenerating(),
           messageCount: getConversationMessageCount(),
           chatId: meta.chatId,
-          chatUrl: meta.chatUrl
         });
 
         if (!wait) {
           const latest = getLatestAssistantMessageMeta();
-          console.log('🔍 [Content] get_output (no wait), result length:', latest.text?.length || 0);
+          logger.debug('get_output (no wait)', { resultLength: latest.text?.length || 0 });
           safeSendResponse({ result: latest.text, assistantMessageId: latest.messageId, status: 'ok', ...meta });
           return;
         }
 
-        console.log('🔍 [Content] Waiting for stable response...');
+        logger.debug('Waiting for stable response...');
         const waited = await waitForStableAssistantResponse({ timeoutMs, stableMs });
         const latest = getLatestAssistantMessageMeta();
 
-        console.log('🔍 [Content] Response captured:', {
+        logger.info('Response captured', {
           status: waited.status,
           resultLength: (waited.text || latest.text)?.length || 0,
           messageId: latest.messageId,
-          preview: (waited.text || latest.text)?.substring(0, 100)
         });
 
         safeSendResponse({
@@ -214,7 +220,7 @@ export function handleMessage(request, safeSendResponse) {
           ...meta
         });
       } catch (e) {
-        console.error('[Content] get_output error:', e);
+        logger.error('get_output failed', { error: e?.message });
         safeSendResponse({ status: 'error', error: String(e?.message || e) });
       }
     })();
@@ -316,7 +322,7 @@ export function handleMessage(request, safeSendResponse) {
         ...meta,
       });
     })().catch((e) => {
-      console.error('content get_result error:', e);
+      logger.error('get_result failed', { error: e?.message });
       let meta = {};
       try { meta = getChatMeta(); } catch { /* ignore */ }
       safeSendResponse({ status: 'error', error: String(e && e.message ? e.message : e), ...meta });

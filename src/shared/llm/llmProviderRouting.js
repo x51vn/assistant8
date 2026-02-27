@@ -17,6 +17,9 @@
  */
 
 import { ERROR_CODES } from '../errorCodes.js';
+import { createLogger } from '../../logger.js';
+
+const logger = createLogger('LLM/Routing');
 
 // ===== FEATURE TYPES =====
 
@@ -74,21 +77,26 @@ export function getProviderForFeature(feature, settingsConfig = {}) {
   // 1. Check per-feature override
   const featureKey = FEATURE_SETTINGS_KEY[feature];
   let provider;
+  let source = 'feature-default';
 
   if (featureKey) {
     provider = config[`llm_provider_${featureKey}`];
+    if (provider) source = 'per-feature-override';
   }
 
   // 2. Fall back to global default
   if (!provider) {
     provider = config.llm_provider;
+    if (provider) source = 'global-default';
   }
 
   // 3. Fall back to feature default
   if (!provider) {
     provider = FEATURE_DEFAULTS[feature] || 'chatgpt';
+    source = 'feature-default';
   }
 
+  logger.debug('Provider resolved', { feature, provider, source });
   return { provider };
 }
 
@@ -102,28 +110,36 @@ export function classifyLLMError(error) {
   const message = error?.message?.toLowerCase() || '';
   const status = error?.status || error?.statusCode || 0;
 
+  let result;
+
   // Timeout
   if (message.includes('timeout') || message.includes('timed out') || status === 504) {
-    return { errorCode: ERROR_CODES.LLM_TIMEOUT, retryable: true };
+    result = { errorCode: ERROR_CODES.LLM_TIMEOUT, retryable: true };
   }
-
   // Quota / rate limit
-  if (message.includes('quota') || message.includes('rate limit') || status === 429) {
-    return { errorCode: ERROR_CODES.LLM_QUOTA_EXCEEDED, retryable: false };
+  else if (message.includes('quota') || message.includes('rate limit') || status === 429) {
+    result = { errorCode: ERROR_CODES.LLM_QUOTA_EXCEEDED, retryable: false };
   }
-
   // Auth errors
-  if (message.includes('unauthorized') || message.includes('api key') || status === 401 || status === 403) {
-    return { errorCode: ERROR_CODES.AUTH_ERROR, retryable: false };
+  else if (message.includes('unauthorized') || message.includes('api key') || status === 401 || status === 403) {
+    result = { errorCode: ERROR_CODES.AUTH_ERROR, retryable: false };
   }
-
   // Parse / validation
-  if (message.includes('parse') || message.includes('json') || message.includes('format')) {
-    return { errorCode: ERROR_CODES.PARSE_ERROR, retryable: true };
+  else if (message.includes('parse') || message.includes('json') || message.includes('format')) {
+    result = { errorCode: ERROR_CODES.PARSE_ERROR, retryable: true };
+  }
+  // General LLM error
+  else {
+    result = { errorCode: ERROR_CODES.LLM_ERROR, retryable: true };
   }
 
-  // General LLM error
-  return { errorCode: ERROR_CODES.LLM_ERROR, retryable: true };
+  logger.debug('LLM error classified', {
+    errorCode: result.errorCode,
+    retryable: result.retryable,
+    originalMessage: message.substring(0, 100),
+    status,
+  });
+  return result;
 }
 
 /**

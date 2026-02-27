@@ -153,10 +153,41 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
       return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
+    const sanitizedSymbol = symbol.trim().toUpperCase();
+
+    // ── Duplicate check ─────────────────────────────────────────────────────
+    // If (user_id, symbol) already exists → silently return existing item
+    const { data: existingItem } = await supabaseWithRetry(
+      async () => {
+        const res = await supabase
+          .from('watchlist')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('symbol', sanitizedSymbol)
+          .limit(1)
+          .maybeSingle();
+        if (res.error) throw res.error;
+        return res;
+      },
+      { operationName: 'watchlist.create-dup-check', maxRetries: 1, correlationId }
+    );
+
+    if (existingItem) {
+      logger.info('Watchlist CREATE skipped: symbol already exists', {
+        symbol: sanitizedSymbol,
+        correlationId
+      });
+      return createResponse(message, MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATED, {
+        success: true,
+        item: existingItem,
+        duplicate: true
+      });
+    }
+
     // Build insert data - support both camelCase and snake_case
     const insertData = {
       user_id: userId,
-      symbol: symbol.trim().toUpperCase()
+      symbol: sanitizedSymbol
     };
 
     // Optional fields
@@ -285,6 +316,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
 
     // ── Fetch existing item for ediff/pprofit calc ───────────────────────────
     // We need current price + any unchanged entry/target to compute derived fields.
+    // Use limit(1).maybeSingle() to avoid PGRST116 if duplicate rows exist.
     const existing = await supabaseWithRetry(
       async () => {
         const { data, error } = await supabase
@@ -292,7 +324,8 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
           .select('price, entry, target')
           .eq('user_id', userId)
           .eq('symbol', symbol.trim().toUpperCase())
-          .single();
+          .limit(1)
+          .maybeSingle();
         if (error) throw error;
         return data;
       },
@@ -482,12 +515,14 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
     const result = await supabaseWithRetry(
       async () => {
         // First, get current item to get current highlighted status
+        // Use limit(1).maybeSingle() to avoid PGRST116 if duplicate rows exist.
         const getResponse = await supabase
           .from('watchlist')
           .select('highlighted')
           .eq('user_id', userId)
           .eq('symbol', sanitizedSymbol)
-          .single();
+          .limit(1)
+          .maybeSingle();
 
         if (getResponse.error) throw getResponse.error;
 

@@ -163,13 +163,14 @@ export async function processEnrichmentJob(job) {
     }
 
     // 1. Fetch watchlist item from Supabase with explicit user_id filter
-    //    Use maybeSingle() (not single()) so that "0 rows" → {data:null, error:null}
-    //    instead of PGRST116 error which was previously conflated with auth failures.
+    //    Use limit(1).maybeSingle() so that "0 rows" → {data:null, error:null}
+    //    and "multiple rows" (duplicates) → returns first row without PGRST116.
     const { data: watchlistItem, error: fetchError } = await supabase
       .from('watchlist')
       .select('*')
       .eq('user_id', userId)
       .eq('symbol', sanitizedSymbol)
+      .limit(1)
       .maybeSingle();
 
     if (fetchError) {

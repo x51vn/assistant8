@@ -129,7 +129,8 @@ export class ChatGPTProvider extends LLMProvider {
     try {
       const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
       return tabs.length > 0 ? 'connected' : 'disconnected';
-    } catch {
+    } catch (err) {
+      logger.debug('getStatus failed', { error: err?.message });
       return 'error';
     }
   }

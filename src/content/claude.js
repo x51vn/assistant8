@@ -13,6 +13,17 @@
  * MV3-safe: Runs in page context, self-contained functions.
  */
 
+const PENDING_PROMPT_KEY = '__chatgpt_assistant_pending_prompt_v1';
+
+// Lightweight content-script logger (avoids importing full logger.js to keep bundle small)
+const LOG_PREFIX = '[Content/Claude]';
+const clog = {
+  debug: (msg, data) => console.debug(LOG_PREFIX, msg, data || ''),
+  info:  (msg, data) => console.log(LOG_PREFIX, msg, data || ''),
+  warn:  (msg, data) => console.warn(LOG_PREFIX, msg, data || ''),
+  error: (msg, data) => console.error(LOG_PREFIX, msg, data || ''),
+};
+
 // ===== SELECTOR CHAINS (multiple fallbacks) =====
 
 const CLAUDE_SELECTORS = {
@@ -80,7 +91,9 @@ function findElement(selectors) {
     try {
       const el = document.querySelector(sel);
       if (el) return el;
-    } catch { /* selector parse error — skip */ }
+    } catch (e) {
+      clog.debug('Selector parse error', { selector: sel, error: e?.message });
+    }
   }
   return null;
 }
@@ -123,6 +136,8 @@ async function injectPrompt(promptText) {
   if (!promptText || typeof promptText !== 'string') {
     throw new Error('Invalid prompt text');
   }
+
+  clog.info('injectPrompt start', { promptLength: promptText.length });
 
   // 1. Find input area
   const input = await waitForElement(CLAUDE_SELECTORS.input, 10000);
@@ -177,6 +192,7 @@ async function injectPrompt(promptText) {
   submitBtn.click();
   await sleep(300);
 
+  clog.info('injectPrompt success');
   return { success: true };
 }
 
@@ -195,6 +211,7 @@ async function extractResponse(options = {}) {
   const stableMs = options.stableMs || 2000;
   const pollIntervalMs = options.pollIntervalMs || 500;
 
+  clog.debug('extractResponse start', { timeoutMs, stableMs });
   const startTime = Date.now();
   let lastText = '';
   let lastChangeTime = Date.now();
@@ -223,6 +240,7 @@ async function extractResponse(options = {}) {
 
     // Check if response is stable (no loading + no changes for stableMs)
     if (responseText && !isLoading && (Date.now() - lastChangeTime >= stableMs)) {
+      clog.info('extractResponse stable', { textLength: responseText.length, elapsedMs: Date.now() - startTime });
       return responseText;
     }
 
@@ -231,9 +249,11 @@ async function extractResponse(options = {}) {
 
   // Timeout — return whatever we have
   if (lastText) {
+    clog.warn('extractResponse timeout but has partial text', { textLength: lastText.length, timeoutMs });
     return lastText;
   }
 
+  clog.error('extractResponse timeout with no response', { timeoutMs });
   throw new Error('Claude response timeout: no response received within ' + timeoutMs + 'ms');
 }
 
@@ -290,6 +310,7 @@ async function createNewSession() {
  */
 function handleMessage(message, sender, sendResponse) {
   const { action } = message;
+  clog.debug('handleMessage', { action });
 
   switch (action) {
     case 'ping':
@@ -299,13 +320,19 @@ function handleMessage(message, sender, sendResponse) {
     case 'inject_prompt':
       injectPrompt(message.prompt)
         .then(result => sendResponse(result))
-        .catch(err => sendResponse({ success: false, error: err.message }));
+        .catch(err => {
+          clog.error('inject_prompt failed', { error: err.message });
+          sendResponse({ success: false, error: err.message });
+        });
       return true; // Async response
 
     case 'extract_response':
       extractResponse(message.options || {})
         .then(text => sendResponse({ success: true, text }))
-        .catch(err => sendResponse({ success: false, error: err.message }));
+        .catch(err => {
+          clog.error('extract_response failed', { error: err.message });
+          sendResponse({ success: false, error: err.message });
+        });
       return true; // Async response
 
     case 'check_login':
@@ -315,7 +342,10 @@ function handleMessage(message, sender, sendResponse) {
     case 'create_new_session':
       createNewSession()
         .then(result => sendResponse(result))
-        .catch(err => sendResponse({ success: false, error: err.message }));
+        .catch(err => {
+          clog.error('create_new_session failed', { error: err.message });
+          sendResponse({ success: false, error: err.message });
+        });
       return true;
 
     default:
@@ -338,7 +368,9 @@ try {
     hostname: window.location.hostname,
     provider: 'claude',
   }).catch(() => { /* No listeners — safe to ignore */ });
-} catch { /* chrome.runtime not available */ }
+} catch (e) {
+  clog.debug('Ready signal not sent', { error: e?.message });
+}
 
 // ===== HELPER =====
 
