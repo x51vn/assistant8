@@ -14,6 +14,8 @@
  * Pattern: Follows watchlistEnrichParser.js parsing conventions
  */
 
+import { parseJsonResponse } from '../llm/parseJsonResponse.js';
+
 // ===== CONSTANTS =====
 
 const SYMBOL_REGEX = /^[A-Z0-9]{1,10}$/;
@@ -91,6 +93,11 @@ export function validateStockResearchOutput(rawText, options = {}) {
       warnings: [],
       autoCorrections: false,
     };
+  }
+
+  if (parseResult.partial) {
+    warnings.push(`JSON extracted via field-regex fallback (strategy: ${parseResult.strategy}) — data may be incomplete`);
+    autoCorrections = true;
   }
 
   const raw = parseResult.data;
@@ -265,57 +272,25 @@ export function validateStockResearchOutput(rawText, options = {}) {
 // ===== INTERNAL HELPERS =====
 
 /**
- * Extract JSON object from raw text (pure JSON or code-fenced).
+ * Extract JSON object from raw text.
+ * Delegates to the shared 12-strategy parseJsonResponse utility
+ * which handles code fences, control chars, web-search noise,
+ * jsonrepair, and field-by-field regex fallback.
+ *
  * @param {string} text
- * @returns {{ success: boolean, data?: Object, error?: string }}
+ * @returns {{ success: boolean, data?: Object, error?: string, partial?: boolean, strategy?: string }}
  */
 export function extractJSON(text) {
-  if (!text || typeof text !== 'string') {
-    return { success: false, error: 'Input is empty or not a string' };
+  const result = parseJsonResponse(text);
+  if (!result.success) {
+    return { success: false, error: result.error };
   }
-
-  const trimmed = text.trim();
-
-  // Attempt 1: Parse as pure JSON
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return { success: true, data: parsed };
-    }
-    return { success: false, error: 'Parsed value is not a JSON object' };
-  } catch (_) {
-    // Not pure JSON, try code fence
-  }
-
-  // Attempt 2: Extract from code fence ```json ... ``` or ``` ... ```
-  const codeFenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (codeFenceMatch && codeFenceMatch[1]) {
-    try {
-      const inner = codeFenceMatch[1].trim();
-      const parsed = JSON.parse(inner);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return { success: true, data: parsed };
-      }
-      return { success: false, error: 'Code-fenced content is not a JSON object' };
-    } catch (_) {
-      return { success: false, error: 'Code-fenced content is not valid JSON' };
-    }
-  }
-
-  // Attempt 3: Find JSON-like substring { ... } (greedy, last resort)
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return { success: true, data: parsed };
-      }
-    } catch (_) {
-      // Not valid JSON
-    }
-  }
-
-  return { success: false, error: 'No valid JSON object found in text' };
+  return {
+    success: true,
+    data: result.data,
+    partial: result.partial,
+    strategy: result.strategy,
+  };
 }
 
 /**

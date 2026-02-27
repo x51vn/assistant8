@@ -91,21 +91,17 @@ export class ChatGPTProvider extends LLMProvider {
         throw new Error(sendResult.error || 'Failed to send prompt to ChatGPT');
       }
 
-      // 3. Await full response — with remaining timeout
+      // 3. Await full response — delegate timeout handling to getOutput
+      // Compute remaining time and pass it to getOutput so it can use
+      // its retry/cache fallback logic instead of being preemptively
+      // rejected by a separate timer.
       const elapsed = Date.now() - startTime;
       const remainingMs = Math.max(timeoutMs - elapsed, 10_000);
-      const getOutputTimeoutId = setTimeout(() => {}, 0); // unused, kept for clarity
 
       let outputResult;
       try {
-        outputResult = await Promise.race([
-          ChatGPTSession.getOutput(tabId, { runId, wait: true }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout: ChatGPT không phản hồi')), remainingMs)
-          ),
-        ]);
+        outputResult = await ChatGPTSession.getOutput(tabId, { runId, wait: true, timeoutMs: remainingMs });
       } finally {
-        clearTimeout(getOutputTimeoutId);
         // Always release the tab from Memory Saver lock, regardless of outcome
         ChatGPTSession.releaseTab(tabId).catch(() => {});
       }

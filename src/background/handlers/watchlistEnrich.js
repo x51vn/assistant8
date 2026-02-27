@@ -27,6 +27,7 @@ import { getProviderForFeature, FEATURE_TYPES } from '../../shared/llm/llmProvid
 import { persistPromptSafe } from './_persistPromptHelper.js';
 import { getFeatureFlag } from '../../shared/featureFlags.js';
 import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
+import { parseJsonResponse, isNoiseOnlyResponse, extractFinancialFieldsFromProse } from '../../shared/llm/parseJsonResponse.js';
 
 /** Rate-limit window: 1 AI analysis per symbol per hour */
 const AI_ANALYSIS_COOLDOWN_MS = 60 * 60 * 1000;
@@ -43,115 +44,27 @@ import {
 const logger = createLogger('Handlers/WatchlistEnrich');
 
 /**
- * Sanitize JSON string from ChatGPT response
- * ChatGPT responses captured from DOM often contain literal control characters
- * (newlines, tabs) inside JSON string values, which is invalid JSON.
+ * Parse JSON from LLM response — delegates to the shared 12-strategy extractor.
+ * Throws if no parseable JSON is found (callers rely on throw for error handling).
  *
- * Strategy: Replace control characters inside JSON string literals with spaces,
- * while preserving structural newlines between JSON tokens.
- */
-function sanitizeJsonString(raw) {
-  // Replace control characters (0x00-0x1F) inside JSON string values
-  // Walk through the string tracking whether we're inside a quoted string
-  let result = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-    const code = raw.charCodeAt(i);
-
-    if (escaped) {
-      result += ch;
-      escaped = false;
-      continue;
-    }
-
-    if (ch === '\\' && inString) {
-      escaped = true;
-      result += ch;
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = !inString;
-      result += ch;
-      continue;
-    }
-
-    // If inside a string value, replace control chars with space
-    if (inString && code < 0x20) {
-      result += ' ';
-      continue;
-    }
-
-    result += ch;
-  }
-
-  return result;
-}
-
-/**
- * Parse JSON from ChatGPT response
- * Handles: markdown code blocks, control characters, nested items array,
- *          web-search noise (source cards, site names, "+N" badges)
+ * @param {string} responseText
+ * @returns {Object} parsed JSON object
+ * @throws {Error} if extraction fails after all strategies
  */
 function parseJsonFromResponse(responseText) {
-  // Pre-process: strip web-search noise lines before JSON extraction
-  const cleaned = stripWebSearchNoise(responseText);
-  let jsonText = cleaned;
-
-  // Try extracting from markdown code block first
-  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    jsonText = codeBlockMatch[1].trim();
-  } else {
-    // Try extracting JSON object from surrounding text.
-    // Use a greedy match from the FIRST '{' to the LAST '}' — this skips
-    // leading noise like ChatGPT web-search source cards (site names, "+N" badges)
-    // that can prepend the actual JSON content.
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonText = jsonMatch[0];
-    } else {
-      // Try JSON array format [{ ... }]
-      const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        jsonText = arrayMatch[0];
-      }
-    }
+  const result = parseJsonResponse(responseText);
+  if (!result.success) {
+    throw new Error(`JSON extraction failed: ${result.error}`);
   }
-
-  // Sanitize control characters inside JSON string values
-  const sanitized = sanitizeJsonString(jsonText);
-
-  const parsed = JSON.parse(sanitized);
-  return parsed;
-}
-
-/**
- * Strip web-search noise from ChatGPT response text.
- * Removes lines that are only site names (e.g. "cafef.vn", "Investing.com Việt Nam"),
- * "+N" badges (e.g. "+2", "+4"), and other non-JSON noise that ChatGPT web-search
- * prepends to responses.
- */
-function stripWebSearchNoise(text) {
-  if (!text) return '';
-  const lines = text.split('\n');
-  const cleaned = lines.filter(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return false;
-    // Remove standalone "+N" badges
-    if (/^\+\d{1,2}$/.test(trimmed)) return false;
-    // Remove lines that are only a domain/site name (no JSON structure)
-    if (/^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(\s.*)?$/.test(trimmed) &&
-        !trimmed.includes('{') && !trimmed.includes('[') && !trimmed.includes(':')) return false;
-    // Remove lines that are only "SiteName" with optional whitespace (common web-search source labels)
-    if (/^[A-Z][a-zA-Z\s.]+\.(com|vn|net|org|io)(\s.*)?$/i.test(trimmed) &&
-        !trimmed.includes('{') && !trimmed.includes(':')) return false;
-    return true;
-  });
-  return cleaned.join('\n');
+  if (result.partial) {
+    logger.warn('parseJsonFromResponse: used field-regex fallback (partial data)', {
+      strategy: result.strategy,
+      keys: Object.keys(result.data || {}),
+    });
+  } else {
+    logger.debug('parseJsonFromResponse: success', { strategy: result.strategy });
+  }
+  return result.data;
 }
 
 /**
@@ -383,6 +296,44 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: `Không thể gửi prompt đánh giá: ${sendErr.message}` };
     }
 
+    // 5b. Auto-retry: if response is pure web-search noise (no JSON at all),
+    //     send a follow-up prompt in the SAME chat asking for JSON output.
+    //     ChatGPT sometimes returns only source cards without actual analysis.
+    const MAX_NOISE_RETRIES = 2;
+    for (let retryIdx = 0; retryIdx < MAX_NOISE_RETRIES && isNoiseOnlyResponse(responseText); retryIdx++) {
+      logger.warn('Response is noise-only (web-search cards), retrying with JSON reminder', {
+        symbol: sanitizedSymbol,
+        retryIdx: retryIdx + 1,
+        responsePreview: responseText?.substring(0, 200),
+        correlationId
+      });
+
+      if (await isJobCancelled(correlationId)) {
+        return { success: false, error: 'Job cancelled by user' };
+      }
+
+      try {
+        const retryPrompt = retryIdx === 0
+          ? `Vui lòng trả lời lại dưới dạng JSON theo format đã yêu cầu cho mã ${sanitizedSymbol}. Chỉ trả về JSON object, không kèm text.`
+          : `Hãy phân tích cổ phiếu ${sanitizedSymbol} và trả kết quả dưới dạng JSON với các trường: entry, target, stoploss, investment_thesis. Chỉ trả về JSON.`;
+
+        const retryResult = await provider.sendPrompt(retryPrompt, {
+          createNewChat: false,  // Continue same conversation
+          runId: enrichmentRunId,
+        });
+        responseText = retryResult.text;
+        chatId = retryResult.chatId || chatId;
+        chatUrl = retryResult.chatUrl || chatUrl;
+      } catch (retryErr) {
+        logger.warn('Noise-retry prompt failed', {
+          symbol: sanitizedSymbol,
+          error: retryErr.message,
+          correlationId
+        });
+        break; // Stop retrying, proceed to parse whatever we have
+      }
+    }
+
     // 6. Persist prompt to chat_history
     await persistPromptSafe(enrichmentRunId, renderedPrompt, chatId, chatUrl, {
       source: 'WATCHLIST_ENRICH',
@@ -394,22 +345,56 @@ export async function processEnrichmentJob(job) {
       return { success: false, error: 'Job cancelled by user' };
     }
 
+    // 7b. Final noise check — if still no content after retries, return clear error
+    if (isNoiseOnlyResponse(responseText)) {
+      logger.error('Response still noise-only after retries', {
+        symbol: sanitizedSymbol,
+        responsePreview: responseText?.substring(0, 300),
+        correlationId
+      });
+      return {
+        success: false,
+        error: `AI chỉ trả về kết quả tìm kiếm web, không có nội dung phân tích cho ${sanitizedSymbol}. Vui lòng thử lại.`
+      };
+    }
+
     // 8. Parse enrichment response
     let enrichmentResponse;
     try {
       const parsed = parseJsonFromResponse(responseText);
-      enrichmentResponse = extractEnrichmentItem(parsed, sanitizedSymbol);
+
+      // Handle arrays — extractEnrichmentItem expects an object
+      const dataObj = Array.isArray(parsed)
+        ? (parsed.find(it => it.symbol?.toUpperCase() === sanitizedSymbol) || parsed[0] || {})
+        : parsed;
+
+      enrichmentResponse = extractEnrichmentItem(dataObj, sanitizedSymbol);
       if (!enrichmentResponse) {
         throw new Error('Could not extract enrichment data from response');
       }
     } catch (parseError) {
-      logger.error('Failed to parse enrichment response', {
-        error: parseError.message,
-        symbol: sanitizedSymbol,
-        responsePreview: responseText.substring(0, 200),
-        correlationId
-      });
-      return { success: false, error: 'ChatGPT trả lời không đúng định dạng JSON' };
+      // Last resort: try extracting financial fields from prose/broken text
+      const proseResult = extractFinancialFieldsFromProse(responseText);
+      if (proseResult.ok && validateEnrichmentData(proseResult.data)) {
+        logger.warn('JSON parse failed but extracted financial fields from prose', {
+          symbol: sanitizedSymbol,
+          fields: Object.keys(proseResult.data),
+          correlationId
+        });
+        enrichmentResponse = proseResult.data;
+      } else {
+        logger.error('Failed to parse enrichment response', {
+          error: parseError.message,
+          symbol: sanitizedSymbol,
+          responsePreview: responseText.substring(0, 500),
+          proseAttempt: proseResult.ok ? 'partial but invalid' : 'no fields found',
+          correlationId
+        });
+        return {
+          success: false,
+          error: `AI trả lời không đúng định dạng JSON. Chi tiết: ${parseError.message.substring(0, 120)}`
+        };
+      }
     }
 
     if (!validateEnrichmentData(enrichmentResponse)) {

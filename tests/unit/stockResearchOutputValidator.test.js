@@ -44,10 +44,10 @@ describe('extractJSON', () => {
     expect(extractJSON('   ').success).toBe(false);
   });
 
-  it('rejects non-object JSON (array)', () => {
+  it('accepts non-object JSON (array) — arrays now supported', () => {
     const result = extractJSON('[1,2,3]');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('not a JSON object');
+    expect(result.success).toBe(true);
+    expect(Array.isArray(result.data)).toBe(true);
   });
 
   it('rejects pure text without JSON', () => {
