@@ -59,8 +59,8 @@ export async function handleAlarm(alarm) {
         } else {
           logger.info('Price update completed', {
             correlationId,
-            updated: response.data?.updated,
-            failed: response.data?.failed
+            updated: response.updated,
+            failed: response.failed
           });
         }
       } catch (error) {

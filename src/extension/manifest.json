@@ -70,11 +70,19 @@
   "web_accessible_resources": [
     {
       "resources": ["prompts/*.md"],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ]
     },
     {
       "resources": ["privacy-policy.html", "terms-of-service.html"],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ]
     }
   ]
 }

@@ -164,9 +164,20 @@ Extension tuân thủ **Google API Services User Data Policy** (Limited-Use requ
 
 - Dữ liệu lưu trong Supabase tuân theo chính sách của dự án.
 - **Temporary data** trong `chrome.storage.local`:
-  - Search result cache: TTL 30 phút, LRU max 50 entries, tự động evict.
-  - Rate limiter usage stats: Session-scoped, reset khi extension reload.
-  - Auth session token: Persist cho đến khi user đăng xuất.
+
+  | Storage key | Nội dung | TTL / Cleanup |
+  |---|---|---|
+  | `sb-*-auth-token` | Supabase auth session token (qua adapter) | Persist đến khi user đăng xuất |
+  | Search result cache (LRU) | Google Search results cho Stock Research | TTL 30 phút, LRU max 50 entries, tự động evict |
+  | Rate limiter usage stats | Request rate counter | Session-scoped, reset khi extension reload |
+  | `x51labs_chat_history_outbox_v1` | Chat prompt/response chờ flush lên Supabase | TTL 72 giờ, max 30 items, tự động evict khi load |
+  | `enrichment_queue` | Watchlist AI enrichment job queue | TTL 1 giờ cho terminal jobs, auto-clean khi load |
+  | `x51labs_prompt_queue_*` | Prompt queue jobs + active session | Cleared khi job kết thúc hoặc cancelled |
+  | `x51labs_context_menu_prefs` | Context menu preference flags | Persist, nhỏ (< 1KB) |
+  | `__llm_provider_cache` | Cached LLM provider name | Persist, nhỏ (< 100B) |
+  | `x51labs_extension_start_marker` | Debug marker cho SW reload detection | Overwritten mỗi lần SW start |
+  | `lastResult` | Cached last ChatGPT response (fallback) | TTL 1 giờ (checked on read) |
+
 - User có thể:
   - Xoá items (portfolio/assets/errors/english/history) thông qua UI (tuỳ module).
   - Xoá Stock Research history và insights qua UI.

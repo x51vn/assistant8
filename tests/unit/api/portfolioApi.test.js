@@ -128,7 +128,7 @@ describe('Portfolio API - Message Routing', () => {
   describe('AC-7: addPortfolio - MESSAGE_TYPES.PORTFOLIO_ADD', () => {
     it('calls chrome.runtime.sendMessage with PORTFOLIO_ADD and data', async () => {
       chrome.runtime.sendMessage.mockResolvedValueOnce({
-        data: { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000 }
+        item: { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000 }
       });
 
       const data = { symbol: 'VNM', quantity: 100, avgPrice: 85000 };
@@ -151,7 +151,8 @@ describe('Portfolio API - Message Routing', () => {
     it('returns added item on success', async () => {
       const item = { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000 };
       chrome.runtime.sendMessage.mockResolvedValueOnce({
-        data: item
+        success: true,
+        item
       });
 
       const result = await addPortfolio({ symbol: 'VNM', quantity: 100, avgPrice: 85000 });
@@ -165,7 +166,8 @@ describe('Portfolio API - Message Routing', () => {
     it('updatePortfolio sets loading and clears error on success', async () => {
       const updatedItem = { id: '1', quantity: 150, avg_price: 85000 };
       chrome.runtime.sendMessage.mockResolvedValueOnce({
-        data: updatedItem
+        success: true,
+        item: updatedItem
       });
 
       const result = await updatePortfolio('1', { quantity: 150 });

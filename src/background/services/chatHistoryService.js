@@ -22,6 +22,8 @@ const logger = createLogger('Services/ChatHistory');
 const OUTBOX_KEY = 'x51labs_chat_history_outbox_v1';
 // Keep this conservative to avoid chrome.storage.local quota issues when offline.
 const OUTBOX_MAX_ITEMS = 30;
+// TTL for outbox items — auto-evict items older than 72 hours to limit local data retention.
+const OUTBOX_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 
 // Prevent accidentally sending/recording extremely large payloads via runtime messaging.
 const MAX_PROMPT_CHARS = 50_000;
@@ -98,7 +100,23 @@ function mergeMetadata(base, patch) {
 async function loadOutbox() {
   const stored = await chrome.storage.local.get([OUTBOX_KEY]);
   const items = stored[OUTBOX_KEY];
-  return Array.isArray(items) ? items : [];
+  if (!Array.isArray(items)) return [];
+
+  // TTL eviction: drop items older than OUTBOX_TTL_MS
+  const now = Date.now();
+  const fresh = items.filter((item) => {
+    if (!item) return false;
+    const age = now - (item.lastUpdatedAt || item.timestamp || 0);
+    return age < OUTBOX_TTL_MS;
+  });
+
+  // Persist cleaned list if any items were evicted
+  if (fresh.length < items.length) {
+    logger.info('Outbox TTL eviction', { evicted: items.length - fresh.length, remaining: fresh.length });
+    await chrome.storage.local.set({ [OUTBOX_KEY]: fresh }).catch(() => {});
+  }
+
+  return fresh;
 }
 
 async function saveOutbox(items) {
