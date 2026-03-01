@@ -358,6 +358,18 @@ export const MESSAGE_TYPES = {
   LLM_SET_PROVIDER: 'LLM_SET_PROVIDER',
   LLM_PROVIDER_SET: 'LLM_PROVIDER_SET',
 
+  // LLM API Key Management (llmClient)
+  SETTINGS_APIKEY_SET: 'SETTINGS_APIKEY_SET',               // UI → Background: persist API key to Supabase
+  SETTINGS_APIKEY_SET_DONE: 'SETTINGS_APIKEY_SET_DONE',     // Background → UI: key stored
+  SETTINGS_APIKEY_GET: 'SETTINGS_APIKEY_GET',               // UI → Background: read API key
+  SETTINGS_APIKEY_DATA: 'SETTINGS_APIKEY_DATA',             // Background → UI: key payload
+  SETTINGS_APIKEY_DELETE: 'SETTINGS_APIKEY_DELETE',          // UI → Background: remove key
+  SETTINGS_APIKEY_DELETED: 'SETTINGS_APIKEY_DELETED',       // Background → UI: key removed
+  SETTINGS_APIKEY_MIGRATE: 'SETTINGS_APIKEY_MIGRATE',       // UI → Background: migrate local keys → Supabase
+  SETTINGS_APIKEY_MIGRATED: 'SETTINGS_APIKEY_MIGRATED',     // Background → UI: migration complete
+  SETTINGS_APIKEY_HEALTHCHECK: 'SETTINGS_APIKEY_HEALTHCHECK', // UI → Background: test connection
+  SETTINGS_APIKEY_HEALTH_RESULT: 'SETTINGS_APIKEY_HEALTH_RESULT', // Background → UI: health result
+
   // === Stock Research Pipeline (XST-781) ===
   STOCK_RESEARCH_RUN: 'STOCK_RESEARCH_RUN',
   STOCK_RESEARCH_STATUS: 'STOCK_RESEARCH_STATUS',

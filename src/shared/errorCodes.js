@@ -82,6 +82,13 @@ export const ERROR_CODES = {
   LLM_QUOTA_EXCEEDED: 'LLM_QUOTA_EXCEEDED',
   PARSE_ERROR: 'PARSE_ERROR',
   PERSIST_ERROR: 'PERSIST_ERROR',
+
+  // ===== LLM API Key Management =====
+  LLM_APIKEY_INVALID: 'LLM_APIKEY_INVALID',
+  LLM_APIKEY_NOT_FOUND: 'LLM_APIKEY_NOT_FOUND',
+  LLM_APIKEY_SAVE_FAILED: 'LLM_APIKEY_SAVE_FAILED',
+  LLM_APIKEY_MIGRATE_FAILED: 'LLM_APIKEY_MIGRATE_FAILED',
+  LLM_HEALTHCHECK_FAILED: 'LLM_HEALTHCHECK_FAILED',
 };
 
 // ============================================================================
@@ -158,6 +165,13 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.LLM_QUOTA_EXCEEDED]: 'Đã hết quota AI provider. Vui lòng kiểm tra API key hoặc thử provider khác.',
   [ERROR_CODES.PARSE_ERROR]: 'AI trả lời không đúng format. Đang thử lại...',
   [ERROR_CODES.PERSIST_ERROR]: 'Không thể lưu kết quả. Dữ liệu vẫn hiển thị nhưng không được lưu.',
+
+  // LLM API Key Management
+  [ERROR_CODES.LLM_APIKEY_INVALID]: 'API key không hợp lệ. Vui lòng kiểm tra lại.',
+  [ERROR_CODES.LLM_APIKEY_NOT_FOUND]: 'Không tìm thấy API key cho provider này.',
+  [ERROR_CODES.LLM_APIKEY_SAVE_FAILED]: 'Không thể lưu API key. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED]: 'Di chuyển API key sang Supabase thất bại. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_HEALTHCHECK_FAILED]: 'Kiểm tra kết nối thất bại. Vui lòng kiểm tra API key và thử lại.',
 };
 
 // ============================================================================

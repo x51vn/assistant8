@@ -51,6 +51,7 @@ import './apiKeys.js'; // XST-778: Enterprise API key management
 import './multiPortfolio.js'; // XST-779: Multi-Portfolio support
 // llmProvider.js merged into llm.js (see above)
 import './stockResearch.js'; // XST-797: Stock Research Pipeline handlers
+import './settingsApiKeys.js'; // llmClient: LLM API key management (set/get/migrate/healthcheck)
 
 logger.info('All message handlers registered');
 

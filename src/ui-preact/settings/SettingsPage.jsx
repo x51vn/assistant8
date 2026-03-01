@@ -15,7 +15,6 @@ import { SettingsForm } from './SettingsForm.jsx';
 import { StatusMessage } from '../components/StatusMessage.jsx';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.jsx';
 import { UserSection } from '../components/UserSection.jsx';
-import { PromptQueueSection } from '../components/PromptQueueSection.jsx';
 import { ChangePasswordSection } from '../components/auth/ChangePasswordSection.jsx';
 import { DeleteAccountSection } from '../components/auth/DeleteAccountSection.jsx';
 import { SubscriptionPage } from '../components/billing/SubscriptionPage.jsx';
@@ -29,6 +28,7 @@ import { LLMProviderSection } from './LLMProviderSection.jsx';
 import { StockResearchSection } from './StockResearchSection.jsx';
 import { DataImportSection } from './DataImportSection.jsx';
 import { APIKeysSection } from './APIKeysSection.jsx';
+import { LLMApiKeysSection } from './LLMApiKeysSection.jsx';
 import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useState, useEffect, useRef } from 'preact/hooks';
@@ -210,7 +210,6 @@ export function SettingsPage() {
       {needsConsent && <ConsentDialog onConsentSaved={handleConsentSaved} />}
       <div class="settings-layout">
         <SettingsForm onSave={handleSave} />
-        <PromptQueueSection />
         <ChangePasswordSection />
         <SubscriptionPage />
         <UserSection />
@@ -224,6 +223,9 @@ export function SettingsPage() {
 
         {/* XST-777: Data Import */}
         <DataImportSection />
+
+        {/* LLM API Key Management (litellm, jira, confluence) */}
+        <LLMApiKeysSection />
 
         {/* XST-778: Enterprise API Keys */}
         <APIKeysSection isEnterprise={planId === 'enterprise'} />

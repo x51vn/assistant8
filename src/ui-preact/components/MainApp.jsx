@@ -15,6 +15,7 @@ import { ErrorsPage } from '../pages/ErrorsPage.jsx';
 import { JiraPage } from '../pages/JiraPage.jsx';
 import { WritingPage } from '../pages/WritingPage.jsx';
 import { AlertsPage } from '../pages/AlertsPage.jsx';
+import { JobsPage } from '../pages/JobsPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { PromptsPage } from '../pages/PromptsPage.jsx';
@@ -54,6 +55,8 @@ export function MainApp() {
         return <JiraPage />;
       case 'alerts':
         return <AlertsPage />;
+      case 'jobs':
+        return <JobsPage />;
       case 'writing':
         return <WritingPage />;
       case 'settings':
