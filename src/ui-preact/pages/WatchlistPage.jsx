@@ -42,7 +42,8 @@ import {
   addWatchlistItem,
   updateWatchlistItem,
   deleteWatchlistItem,
-  enrichWatchlistItem
+  enrichWatchlistItem,
+  enrichWatchlistBatch
 } from '../api/watchlistApi.js';
 import {
   startPricePolling,
@@ -95,11 +96,13 @@ export default function WatchlistPage() {
           if (status === 'running' && symbol) {
             setEnrichingSymbols(prev => new Set([...prev, symbol]));
             setEnrichmentError(null);
-          } else if (status === 'failed' && symbol) {
-            setEnrichmentError({
-              code: 'ENRICHMENT_ERROR',
-              message: msgError || 'Đánh giá thất bại'
-            });
+          } else if ((status === 'failed' || status === 'skipped') && symbol) {
+            if (status === 'failed') {
+              setEnrichmentError({
+                code: 'ENRICHMENT_ERROR',
+                message: msgError || 'Đánh giá thất bại'
+              });
+            }
             setEnrichingSymbols(prev => {
               const next = new Set(prev);
               next.delete(symbol);
@@ -145,22 +148,29 @@ export default function WatchlistPage() {
   useEffect(() => {
     const restoreEnrichmentState = async () => {
       try {
-        const result = await chrome.storage.local.get(['enrichment_queue']);
-        const queueData = result.enrichment_queue;
-        if (queueData?.jobs) {
-          const activeJobs = queueData.jobs.filter(
+        const result = await chrome.storage.local.get(['enrichment_queue', 'prompt_queue_jobs']);
+        // Check both legacy enrichment_queue and unified prompt_queue_jobs
+        const jobs = result.prompt_queue_jobs || result.enrichment_queue?.jobs || [];
+        if (jobs.length > 0) {
+          const activeJobs = jobs.filter(
             j => j.state === 'running' || j.state === 'queued'
           );
           if (activeJobs.length > 0) {
-            const symbols = new Set(
-              activeJobs.map(j => j.payload?.symbol).filter(Boolean)
-            );
+            const symbols = new Set();
+            for (const j of activeJobs) {
+              // Single enrichment: payload.symbol
+              if (j.payload?.symbol) symbols.add(j.payload.symbol);
+              // Batch enrichment: payload.symbols[]
+              if (Array.isArray(j.payload?.symbols)) {
+                j.payload.symbols.forEach(s => symbols.add(s));
+              }
+            }
             setEnrichingSymbols(symbols);
             console.log('[WatchlistPage] Restored enrichment state', [...symbols]);
           }
 
           // Check for recently completed jobs and update UI
-          const recentDone = queueData.jobs.filter(
+          const recentDone = jobs.filter(
             j => j.state === 'done' && j.result?.item && (Date.now() - j.finishedAt) < 60000
           );
           for (const doneJob of recentDone) {
@@ -382,8 +392,9 @@ export default function WatchlistPage() {
   };
 
   /**
-   * Handle enrichment for ALL watchlist items (batch enqueue)
-   * Reuses enrichWatchlistItem() for each symbol via the existing p-queue
+   * Handle enrichment for ALL watchlist items (batch mode)
+   * Uses batch API to send max 10 symbols per LLM prompt instead of 1-by-1.
+   * Background splits into chunks automatically.
    */
   const handleEnrichAll = async () => {
     const items = watchlistItems.value;
@@ -400,37 +411,26 @@ export default function WatchlistPage() {
       return next;
     });
 
-    // Enqueue each symbol sequentially (reuses existing enrichWatchlistItem API)
-    let failedCount = 0;
-    for (const symbol of symbols) {
-      try {
-        const result = await enrichWatchlistItem(symbol);
-        if (!result.success) {
-          failedCount++;
-          setEnrichingSymbols(prev => {
-            const next = new Set(prev);
-            next.delete(symbol);
-            return next;
-          });
-        }
-      } catch (err) {
-        failedCount++;
-        setEnrichingSymbols(prev => {
-          const next = new Set(prev);
-          next.delete(symbol);
-          return next;
+    try {
+      const result = await enrichWatchlistBatch(symbols);
+      if (!result.success) {
+        setEnrichmentError({
+          code: result.error?.code || 'BATCH_ERROR',
+          message: result.error?.message || 'Không thể gửi yêu cầu đánh giá batch'
         });
+        // Clear all enriching indicators on total failure
+        setEnrichingSymbols(new Set());
+      } else {
+        console.log(`[WatchlistPage] Batch enrichment enqueued: ${result.totalSymbols} symbols in ${result.batches} batch(es)`);
       }
-    }
-
-    if (failedCount > 0) {
+    } catch (err) {
       setEnrichmentError({
-        code: 'PARTIAL_ERROR',
-        message: `${failedCount}/${symbols.length} mã không thể thêm vào hàng đợi`
+        code: 'NETWORK_ERROR',
+        message: 'Lỗi gửi yêu cầu đánh giá. Vui lòng thử lại.'
       });
+      setEnrichingSymbols(new Set());
+      console.error('[WatchlistPage] Batch enrichment exception:', err);
     }
-
-    console.log(`[WatchlistPage] Enqueued ${symbols.length - failedCount}/${symbols.length} symbols for enrichment`);
   };
 
   // Auth check in progress

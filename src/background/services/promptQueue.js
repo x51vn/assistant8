@@ -553,7 +553,7 @@ async function cleanupActiveSession() {
 function broadcastJobStatus(jobId, status, jobType, data = {}) {
   let messageType;
 
-  if (jobType === 'WATCHLIST_ENRICH') {
+  if (jobType === 'WATCHLIST_ENRICH' || jobType === 'WATCHLIST_ENRICH_BATCH') {
     // Backward compat: WatchlistPage listens for these specific types
     messageType = status === 'done'
       ? 'WATCHLIST_AI_ENRICH_DONE'

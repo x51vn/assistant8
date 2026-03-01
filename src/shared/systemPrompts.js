@@ -239,28 +239,32 @@ Suggest 2-3 related topics to learn next
 
 Format: Use clear sections, bullet points, and bold for emphasis. Keep explanations simple and practical for Vietnamese learners.`,
 
-  [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam.
+  [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam chuyên nghiệp.
 
-Nhiệm vụ:
-- Với từng mã trong danh sách watchlist bên dưới, hãy xác định:
-  - entry (giá vào)
-  - target (giá mục tiêu)
-  - stoploss (giá cắt lỗ)
-  - investment_thesis (luận điểm đầu tư ngắn gọn nhưng có căn cứ)
+Nhiệm vụ: Phân tích TỪNG mã cổ phiếu trong danh sách bên dưới và xác định:
+  - entry: giá vào hợp lý (dựa trên hỗ trợ kỹ thuật, định giá)
+  - target: giá mục tiêu (dựa trên kháng cự, tiềm năng tăng trưởng)
+  - stoploss: giá cắt lỗ (dựa trên hỗ trợ mạnh, quản lý rủi ro)
+  - investment_thesis: luận điểm đầu tư ngắn gọn nhưng có căn cứ
 
 Ràng buộc output:
 - CHỈ trả về JSON hợp lệ (application/json), KHÔNG markdown, KHÔNG text ngoài JSON.
-- Output là một object có shape:
+- Output PHẢI là một object có shape:
   {
     "as_of": "YYYY-MM-DD",
-    "items": [ ... ]
+    "items": [
+      { "symbol": "MÃ", "entry": 50000, "target": 65000, "stoploss": 45000, "investment_thesis": "..." },
+      ...
+    ]
   }
+- Mảng items PHẢI có đủ tất cả các mã trong input, theo đúng thứ tự.
 
 Quy tắc:
-- symbol phải khớp chính xác.
-- Các giá trị entry/target/stoploss là số (VND), không kèm dấu phẩy, không chuỗi.
-- Nếu bạn không chắc chắn một trường, hãy để null.
-- investment_thesis tối đa 600 ký tự.
+- symbol phải khớp chính xác với input.
+- entry/target/stoploss là số nguyên (VND), không kèm dấu phẩy, không chuỗi.
+- Nếu không chắc chắn một trường, để null.
+- investment_thesis tối đa 600 ký tự, viết tiếng Việt.
+- Mỗi mã PHẢI có đủ 4 trường (entry, target, stoploss, investment_thesis).
 
 Dữ liệu watchlist:
 {WATCHLIST_ITEMS_JSON}

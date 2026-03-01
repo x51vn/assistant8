@@ -270,7 +270,8 @@ export const MESSAGE_TYPES = {
   XNEEWS_PRICES_UPDATED: 'XNEEWS_PRICES_UPDATED',      // Broadcast from handler to UI
 
   // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
-  WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment
+  WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment (single symbol)
+  WATCHLIST_AI_ENRICH_BATCH_RUN: 'WATCHLIST_AI_ENRICH_BATCH_RUN', // UI → Background: batch enrichment (max 10 symbols per prompt)
   WATCHLIST_AI_ENRICH_STATUS: 'WATCHLIST_AI_ENRICH_STATUS',     // Background → UI: progress update
   WATCHLIST_AI_ENRICH_CANCEL: 'WATCHLIST_AI_ENRICH_CANCEL',     // UI → Background: cancel running enrichment
   WATCHLIST_AI_ENRICH_CANCELLED: 'WATCHLIST_AI_ENRICH_CANCELLED', // Background → UI: enrichment cancelled
