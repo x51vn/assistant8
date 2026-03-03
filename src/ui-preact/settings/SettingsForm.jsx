@@ -4,16 +4,11 @@
  */
 
 import { h } from 'preact';
-import { useEffect, useState, useCallback } from 'preact/hooks';
-import { CheckboxField } from '../components/CheckboxField.jsx';
+import { useEffect, useState } from 'preact/hooks';
 import { NumberField } from '../components/NumberField.jsx';
 import AllPromptsSection from '../components/AllPromptsSection.jsx';
 import {
   allPrompts,
-  autoRun,
-  evaluatePrevious,
-  reviewPrompt,
-  realtimeEnabled,
   interval,
   atlassianBaseUrl,
   atlassianEmail,
@@ -34,10 +29,6 @@ import { testAtlassianConnection } from '../api/atlassianApi.js';
 export function SettingsForm({ onSave }) {
   // ===== LOCAL STATE MIRRORS (prevents auto-save) =====
   // These hold temporary form changes that are only persisted when user clicks Save
-  const [localAutoRun, setLocalAutoRun] = useState(false);
-  const [localEvaluatePrevious, setLocalEvaluatePrevious] = useState(false);
-  const [localReviewPrompt, setLocalReviewPrompt] = useState(false);
-  const [localRealtimeEnabled, setLocalRealtimeEnabled] = useState(false);
   const [localInterval, setLocalInterval] = useState(5);
   const [localAllPrompts, setLocalAllPrompts] = useState({});
   // Atlassian credentials
@@ -61,10 +52,6 @@ export function SettingsForm({ onSave }) {
         setLocalAllPrompts(structuredClone(prompts));
 
         // Initialize other local state from signals
-        setLocalAutoRun(autoRun.value);
-        setLocalEvaluatePrevious(evaluatePrevious.value);
-        setLocalReviewPrompt(reviewPrompt.value);
-        setLocalRealtimeEnabled(realtimeEnabled.value);
         setLocalInterval(interval.value);
         // Initialize Atlassian credentials from signals
         setLocalAtlassianBaseUrl(atlassianBaseUrl.value);
@@ -84,10 +71,6 @@ export function SettingsForm({ onSave }) {
     e.preventDefault();
     if (isFormValid.value && !isSaving.value) {
       // Copy local state to signals before saving
-      autoRun.value = localAutoRun;
-      evaluatePrevious.value = localEvaluatePrevious;
-      reviewPrompt.value = localReviewPrompt;
-      realtimeEnabled.value = localRealtimeEnabled;
       interval.value = localInterval;
       allPrompts.value = structuredClone(localAllPrompts);
       // Copy Atlassian credentials to signals
@@ -117,52 +100,6 @@ export function SettingsForm({ onSave }) {
           </p>
         </section>
       )}
-
-      {/* Settings Checkboxes */}
-      <section class="form-section">
-        <h3 class="section-title">
-          <i class="fas fa-sliders-h"></i>
-          Automation Settings
-        </h3>
-
-        <div class="checkbox-group">
-          <CheckboxField
-            id="autoRun"
-            label="Auto-run on startup"
-            icon="fa-play-circle"
-            description="Tự động chạy master prompt khi mở extension"
-            checked={localAutoRun}
-            onChange={setLocalAutoRun}
-          />
-
-          <CheckboxField
-            id="evaluatePrevious"
-            label="Evaluate previous results"
-            icon="fa-history"
-            description="Đánh giá kết quả từ lần chạy trước"
-            checked={localEvaluatePrevious}
-            onChange={setLocalEvaluatePrevious}
-          />
-
-          <CheckboxField
-            id="reviewPrompt"
-            label="Review prompt before sending"
-            icon="fa-eye"
-            description="Xem lại prompt trước khi gửi đi"
-            checked={localReviewPrompt}
-            onChange={setLocalReviewPrompt}
-          />
-
-          <CheckboxField
-            id="realtimeEnabled"
-            label="Enable realtime updates"
-            icon="fa-sync"
-            description="Kích hoạt cập nhật realtime từ Supabase"
-            checked={localRealtimeEnabled}
-            onChange={setLocalRealtimeEnabled}
-          />
-        </div>
-      </section>
 
       {/* Number Input */}
       <section class="form-section">
