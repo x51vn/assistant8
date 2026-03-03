@@ -370,6 +370,26 @@ export const MESSAGE_TYPES = {
   SETTINGS_APIKEY_HEALTHCHECK: 'SETTINGS_APIKEY_HEALTHCHECK', // UI → Background: test connection
   SETTINGS_APIKEY_HEALTH_RESULT: 'SETTINGS_APIKEY_HEALTH_RESULT', // Background → UI: health result
 
+  // === Market Daily Assessment ===
+  MARKET_ASSESSMENT_RUN: 'MARKET_ASSESSMENT_RUN',               // UI → Background: trigger assessment
+  MARKET_ASSESSMENT_STATUS: 'MARKET_ASSESSMENT_STATUS',         // Background → UI: progress update
+  MARKET_ASSESSMENT_DONE: 'MARKET_ASSESSMENT_DONE',             // Background → UI: run completed
+  MARKET_ASSESSMENT_FAILED: 'MARKET_ASSESSMENT_FAILED',         // Background → UI: run failed
+  MARKET_ASSESSMENT_GET_HISTORY: 'MARKET_ASSESSMENT_GET_HISTORY', // UI → Background: fetch history
+  MARKET_ASSESSMENT_HISTORY_DATA: 'MARKET_ASSESSMENT_HISTORY_DATA', // Background → UI: history results
+  MARKET_ASSESSMENT_GET_DETAIL: 'MARKET_ASSESSMENT_GET_DETAIL', // UI → Background: single run detail
+  MARKET_ASSESSMENT_DETAIL_DATA: 'MARKET_ASSESSMENT_DETAIL_DATA', // Background → UI: run detail
+  MARKET_ASSESSMENT_DELETE_RUN: 'MARKET_ASSESSMENT_DELETE_RUN',   // UI → Background: delete a run
+  MARKET_ASSESSMENT_RUN_DELETED: 'MARKET_ASSESSMENT_RUN_DELETED', // Background → UI: run deleted
+
+  // === Sectors CRUD ===
+  SECTORS_GET: 'SECTORS_GET',                                   // UI → Background: list sectors
+  SECTORS_DATA: 'SECTORS_DATA',                                 // Background → UI: sectors list
+  SECTORS_UPSERT: 'SECTORS_UPSERT',                             // UI → Background: add/update sector
+  SECTORS_UPSERTED: 'SECTORS_UPSERTED',                         // Background → UI: sector saved
+  SECTORS_DELETE: 'SECTORS_DELETE',                              // UI → Background: delete sector
+  SECTORS_DELETED: 'SECTORS_DELETED',                            // Background → UI: sector deleted
+
   // === Stock Research Pipeline (XST-781) ===
   STOCK_RESEARCH_RUN: 'STOCK_RESEARCH_RUN',
   STOCK_RESEARCH_STATUS: 'STOCK_RESEARCH_STATUS',

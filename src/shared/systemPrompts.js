@@ -14,7 +14,8 @@ export const SYSTEM_PROMPT_KEYS = {
   TEA_STOCK: 'prompt.teaStock',
   CONTEXT_MENU: 'prompt.contextMenu',
   ENGLISH: 'prompt.english',
-  WATCHLIST_ENRICH: 'prompt.watchlistEnrich'
+  WATCHLIST_ENRICH: 'prompt.watchlistEnrich',
+  MARKET_ASSESSMENT: 'prompt.marketDailyAssessment'
 };
 
 /**
@@ -239,6 +240,47 @@ Suggest 2-3 related topics to learn next
 
 Format: Use clear sections, bullet points, and bold for emphasis. Keep explanations simple and practical for Vietnamese learners.`,
 
+  [SYSTEM_PROMPT_KEYS.MARKET_ASSESSMENT]: `Bạn là chuyên gia phân tích thị trường chứng khoán Việt Nam.
+
+Nhiệm vụ: Đánh giá tổng quan thị trường và lựa chọn cổ phiếu tiềm năng.
+
+Ràng buộc output:
+- CHỈ trả về JSON hợp lệ (application/json), KHÔNG markdown, KHÔNG text ngoài JSON.
+- Output PHẢI là object có shape:
+{
+  "as_of_date": "YYYY-MM-DD",
+  "records": [
+    {
+      "symbol": "VCB",
+      "sector_name": "Ngân hàng",
+      "market_regime_state": "ON",
+      "market_regime_score": 72,
+      "market_regime_explanation": "VN-Index trên MA50, thanh khoản cải thiện...",
+      "sector_score": 75,
+      "sector_trend": "UP",
+      "sector_explanation": "Ngành ngân hàng hưởng lợi từ lãi suất giảm...",
+      "symbol_score": 80,
+      "action": "BUY",
+      "symbol_explanation": "VCB - P/E hấp dẫn, tăng trưởng tín dụng tốt..."
+    }
+  ]
+}
+
+Quy tắc BẮT BUỘC:
+- records.length == 10 (chính xác 10 mã)
+- records phải thuộc đúng 2 ngành khác nhau (sector_name)
+- Tất cả symbol không được trùng nhau
+- market_regime_state: "ON" hoặc "OFF"
+- sector_trend: "UP", "NEUTRAL", hoặc "DOWN"
+- action: "BUY", "HOLD", "SELL", hoặc "WATCH"
+- Tất cả score nằm trong [0..100]
+- Mỗi record PHẢI có đủ các trường: market regime (state/score/explanation), sector (score/trend/explanation), symbol (score/action/explanation)
+
+{SECTOR_CONSTRAINT}
+
+Hãy lựa chọn 2 ngành tiềm năng nhất và 5 mã mỗi ngành (tổng 10 mã).
+Ngày đánh giá: {AS_OF_DATE}`,
+
   [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam chuyên nghiệp.
 
 Nhiệm vụ: Phân tích TỪNG mã cổ phiếu trong danh sách bên dưới và xác định:
@@ -337,6 +379,15 @@ export function getDefaultSystemPromptMetadata() {
       category: 'System Prompts',
       icon: 'fa-magic',
       description: 'Tạo entry/target/stoploss/thesis cho từng mã trong watchlist. JSON-only.',
+      isSystem: true,
+      required: false
+    },
+    {
+      key: SYSTEM_PROMPT_KEYS.MARKET_ASSESSMENT,
+      title: 'Đánh giá Thị trường',
+      category: 'System Prompts',
+      icon: 'fa-chart-area',
+      description: 'Đánh giá thị trường hằng ngày: regime, ngành và mã tiềm năng. JSON-only.',
       isSystem: true,
       required: false
     }

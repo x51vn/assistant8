@@ -19,6 +19,7 @@ import { JobsPage } from '../pages/JobsPage.jsx';
 import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { PromptsPage } from '../pages/PromptsPage.jsx';
+import { MarketPage } from '../pages/MarketPage.jsx';
 import { OnboardingWizard, useOnboardingGate } from './OnboardingWizard.jsx';
 import { ShortcutsHelp } from './ShortcutsHelp.jsx';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
@@ -43,6 +44,8 @@ export function MainApp() {
         return <PromptsPage />;
       case 'portfolio':
         return <PortfolioPage />;
+      case 'market':
+        return <MarketPage />;
       case 'watchlist':
         return <WatchlistPage />;
       case 'assets':
