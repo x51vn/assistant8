@@ -20,6 +20,7 @@ import { SettingsPage } from '../settings/SettingsPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { PromptsPage } from '../pages/PromptsPage.jsx';
 import { MarketPage } from '../pages/MarketPage.jsx';
+import { PromptImprovementPage } from '../pages/PromptImprovementPage.jsx';
 import { OnboardingWizard, useOnboardingGate } from './OnboardingWizard.jsx';
 import { ShortcutsHelp } from './ShortcutsHelp.jsx';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
@@ -62,6 +63,8 @@ export function MainApp() {
         return <JobsPage />;
       case 'writing':
         return <WritingPage />;
+      case 'improvement':
+        return <PromptImprovementPage />;
       case 'settings':
         return <SettingsPage />;
       default:

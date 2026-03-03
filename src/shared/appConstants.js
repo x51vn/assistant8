@@ -134,3 +134,9 @@ export const ALARM_UPDATE_PRICES = 'updateStockPrices';
  * @type {string}
  */
 export const ALARM_DAILY_CLEANUP = 'dailyCleanup';
+
+/**
+ * Chrome alarm name for daily prompt improvement purge
+ * @type {string}
+ */
+export const ALARM_PROMPT_IMPROVEMENT_PURGE = 'promptImprovementPurge';

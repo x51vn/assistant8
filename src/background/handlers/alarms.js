@@ -6,7 +6,7 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP } from '../../shared/appConstants.js';
+import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, ALARM_PROMPT_IMPROVEMENT_PURGE } from '../../shared/appConstants.js';
 import { generateCorrelationId } from '../../logger.js';
 import { route } from '../messageRouter.js';
 import { isMarketHours } from '../utils/marketHours.js';
@@ -180,6 +180,36 @@ export async function handleAlarm(alarm) {
         logger.info('Cleanup completed', { correlationId });
       } catch (error) {
         logger.error('DAILY_CLEANUP alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // PROMPT_IMPROVEMENT_PURGE alarm - Purge expired prompt_runs (7d) and prompt_lessons
+    if (alarm.name === ALARM_PROMPT_IMPROVEMENT_PURGE || alarm.name === 'promptImprovementPurge') {
+      logger.info('PROMPT_IMPROVEMENT_PURGE alarm triggered', { correlationId });
+
+      try {
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.PROMPT_IMPROVEMENT_PURGE,
+          correlationId,
+          timestamp: Date.now()
+        }, { id: 'alarm' });
+
+        if (!response || response.errorCode) {
+          logger.error('Prompt improvement purge failed', {
+            correlationId,
+            error: response?.errorMessage
+          });
+        } else {
+          logger.info('Prompt improvement purge completed', {
+            correlationId,
+            purgedRuns: response.purgedRuns,
+            purgedLessons: response.purgedLessons
+          });
+        }
+      } catch (error) {
+        logger.error('PROMPT_IMPROVEMENT_PURGE alarm failed', { correlationId, error: error.message });
       }
       return;
     }

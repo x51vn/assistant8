@@ -368,7 +368,8 @@ async function setupAlarms() {
       'AUTORUN',
       'updateCommodityPrices',
       'watchlistPriceUpdate',
-      'SESSION_CHECK'
+      'SESSION_CHECK',
+      'promptImprovementPurge'
     ]);
 
     // CHECK alarm - portfolio price updates (stocks, during market hours)
@@ -387,6 +388,10 @@ async function setupAlarms() {
     // Allows graceful handling instead of sudden logout
     chrome.alarms.create('SESSION_CHECK', { periodInMinutes: 1 });
 
+    // ✅ Prompt Improvement purge - runs daily (every 24h)
+    // Purges expired prompt_runs (7 days) and archived prompt_lessons
+    chrome.alarms.create('promptImprovementPurge', { periodInMinutes: 1440 });
+
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
     // This avoids reading from chrome.storage.local (deprecated)
@@ -395,7 +400,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
 
-    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min)');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, PURGE: daily)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }

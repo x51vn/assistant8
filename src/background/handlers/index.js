@@ -54,6 +54,7 @@ import './stockResearch.js'; // XST-797: Stock Research Pipeline handlers
 import './settingsApiKeys.js'; // llmClient: LLM API key management (set/get/migrate/healthcheck)
 import './sectors.js'; // Market Assessment: Sectors CRUD
 import './marketAssessment.js'; // Market Assessment: Daily assessment pipeline
+import './promptImprovement.js'; // Prompt Improvement Loop: runs, lessons, evaluator, injection
 
 logger.info('All message handlers registered');
 

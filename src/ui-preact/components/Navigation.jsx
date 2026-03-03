@@ -26,6 +26,7 @@ export function Navigation({ currentPage, onPageChange }) {
     { id: 'errors', label: 'Errors', icon: 'fas fa-exclamation-triangle' },
     { id: 'jira', label: 'Jira', icon: 'fab fa-jira' },
     { id: 'prompts', label: 'Prompts', icon: 'fas fa-scroll' },
+    { id: 'improvement', label: 'Đánh giá', icon: 'fas fa-star-half-alt' },
     { id: 'jobs', label: 'Jobs', icon: 'fas fa-tasks' },
     { id: 'settings', label: 'Settings', icon: 'fas fa-cog' }
   ];

@@ -400,6 +400,36 @@ export const MESSAGE_TYPES = {
   SEARCH_GOOGLE_RUN: 'SEARCH_GOOGLE_RUN',
   SEARCH_GOOGLE_RESULT: 'SEARCH_GOOGLE_RESULT',
 
+  // === Prompt Improvement Loop ===
+  PROMPT_RUN_SAVE: 'PROMPT_RUN_SAVE',                         // UI → Background: save a prompt run
+  PROMPT_RUN_SAVED: 'PROMPT_RUN_SAVED',                       // Background → UI: run saved
+  PROMPT_RUNS_LIST: 'PROMPT_RUNS_LIST',                       // UI → Background: list runs (7d)
+  PROMPT_RUNS_DATA: 'PROMPT_RUNS_DATA',                       // Background → UI: runs list
+  PROMPT_RUN_GET: 'PROMPT_RUN_GET',                           // UI → Background: get single run
+  PROMPT_RUN_DETAIL: 'PROMPT_RUN_DETAIL',                     // Background → UI: run detail
+  PROMPT_RUN_DELETE: 'PROMPT_RUN_DELETE',                      // UI → Background: delete a run
+  PROMPT_RUN_DELETED: 'PROMPT_RUN_DELETED',                   // Background → UI: run deleted
+  PROMPT_RUN_PIN: 'PROMPT_RUN_PIN',                           // UI → Background: toggle pin
+  PROMPT_RUN_PINNED: 'PROMPT_RUN_PINNED',                     // Background → UI: pin toggled
+  PROMPT_RUN_BUILD_EVAL: 'PROMPT_RUN_BUILD_EVAL',             // UI → Background: build evaluator prompt
+  PROMPT_RUN_EVAL_PROMPT: 'PROMPT_RUN_EVAL_PROMPT',           // Background → UI: evaluator prompt text
+  PROMPT_EVAL_PARSE: 'PROMPT_EVAL_PARSE',                     // UI → Background: parse evaluator JSON output
+  PROMPT_EVAL_PARSED: 'PROMPT_EVAL_PARSED',                   // Background → UI: parsed evaluation result
+  PROMPT_LESSON_SAVE: 'PROMPT_LESSON_SAVE',                   // UI → Background: save a lesson
+  PROMPT_LESSON_SAVED: 'PROMPT_LESSON_SAVED',                 // Background → UI: lesson saved
+  PROMPT_LESSONS_LIST: 'PROMPT_LESSONS_LIST',                 // UI → Background: list lessons
+  PROMPT_LESSONS_DATA: 'PROMPT_LESSONS_DATA',                 // Background → UI: lessons list
+  PROMPT_LESSON_UPDATE: 'PROMPT_LESSON_UPDATE',               // UI → Background: update lesson
+  PROMPT_LESSON_UPDATED: 'PROMPT_LESSON_UPDATED',             // Background → UI: lesson updated
+  PROMPT_LESSON_DELETE: 'PROMPT_LESSON_DELETE',                // UI → Background: delete lesson
+  PROMPT_LESSON_DELETED: 'PROMPT_LESSON_DELETED',             // Background → UI: lesson deleted
+  PROMPT_LESSONS_INJECT: 'PROMPT_LESSONS_INJECT',             // UI → Background: inject lessons into prompt
+  PROMPT_LESSONS_INJECTED: 'PROMPT_LESSONS_INJECTED',         // Background → UI: injected prompt
+  PROMPT_IMPROVEMENT_STATS: 'PROMPT_IMPROVEMENT_STATS',       // UI → Background: daily stats
+  PROMPT_IMPROVEMENT_STATS_DATA: 'PROMPT_IMPROVEMENT_STATS_DATA', // Background → UI: stats
+  PROMPT_IMPROVEMENT_PURGE: 'PROMPT_IMPROVEMENT_PURGE',       // UI/Alarm → Background: purge expired
+  PROMPT_IMPROVEMENT_PURGED: 'PROMPT_IMPROVEMENT_PURGED',     // Background → UI: purge result
+
   // Error
   ERROR: 'ERROR'
 };
