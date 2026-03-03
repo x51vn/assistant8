@@ -94,12 +94,12 @@ const handleSearch = async () => {
     });
 
     if (response?.errorCode) {
-      searchError.value = response.errorMessage || 'Failed to get response from ChatGPT';
-    } else if (response?.data) {
-      searchResults.value = response.data;
+      searchError.value = response.errorMessage || 'Failed to get response from LLM';
+    } else if (response?.text) {
+      searchResults.value = response.text;
 
       // Extract stock symbols
-      const stocks = extractStocks(response.data);
+      const stocks = extractStocks(response.text);
       parsedStocks.value = stocks.map(symbol => ({
         symbol: symbol.toUpperCase(),
         name: symbol,
@@ -109,7 +109,7 @@ const handleSearch = async () => {
       searchError.value = 'Unexpected response format';
     }
   } catch (error) {
-    searchError.value = error.message || 'Failed to search stocks via ChatGPT';
+    searchError.value = error.message || 'Failed to search stocks';
   } finally {
     hideLoading();
   }
@@ -224,7 +224,7 @@ export default function TeaStockModal() {
             /* Search Results */
             <div class="search-results">
               <div class="results-header">
-                <h3>ChatGPT Analysis</h3>
+                <h3>LLM Analysis</h3>
                 <p class="results-subtitle">Found {parsedStocks.value.length} stocks</p>
               </div>
 

@@ -269,22 +269,22 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
             <strong className="asset-value">
               {asset.quantity} {getGoldUnitLabel(asset.unit || extractGoldUnitFromNotes(asset.notes))} vàng
             </strong>
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted, #999)', marginTop: '4px' }}>
               {goldLoading ? (
                 <>
                   <i className="fas fa-spinner fa-spin"></i> Cập nhật giá...
                 </>
               ) : goldError ? (
                 <>
-                  <span style={{ color: '#d32f2f' }}>⚠️ {goldError}</span>
+                  <span style={{ color: 'var(--danger-color, #d32f2f)' }}>⚠️ {goldError}</span>
                   <button
                     onClick={fetchGoldPrice}
                     style={{
                       marginLeft: '6px',
                       padding: '2px 6px',
                       fontSize: '11px',
-                      backgroundColor: '#f0f0f0',
-                      border: '1px solid #ccc',
+                      backgroundColor: 'var(--bg-tertiary, #f0f0f0)',
+                      border: '1px solid var(--border-color, #ccc)',
                       borderRadius: '3px',
                       cursor: 'pointer'
                     }}
@@ -299,7 +299,7 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
                 </>
               ) : (
                 <>
-                  <span style={{ color: '#999' }}>Chưa có dữ liệu giá</span>
+                  <span style={{ color: 'var(--text-muted, #999)' }}>Chưa có dữ liệu giá</span>
                 </>
               )}
             </div>
@@ -309,7 +309,7 @@ export default function AssetCard({ asset, onEdit, onDelete }) {
             <strong className="asset-value">
               {asset.quantity} {asset.symbol || extractCryptoSymbolFromName(asset.name) || 'coin'}
             </strong>
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted, #999)', marginTop: '4px' }}>
               ≈ {formatCurrency(asset.current_value, asset.currency)} {asset.unit_price ? `(${formatCurrency(asset.unit_price, asset.currency)}/coin)` : ''}
             </div>
           </>

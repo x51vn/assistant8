@@ -39,7 +39,7 @@ export default function PortfolioTable({ onEdit, onDelete, onEvaluateStock }) {
     if (!items || items.length === 0) return [];
 
     const regular = items.filter(item => item.symbol !== 'CASH').sort((a, b) =>
-      a.symbol.localeCompare(b.symbol)
+      (a.symbol || '').localeCompare(b.symbol || '')
     );
     const cash = items.filter(item => item.symbol === 'CASH');
 

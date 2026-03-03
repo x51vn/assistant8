@@ -57,23 +57,81 @@ export async function requireAuth(message) {
   try {
     logger.debug('Checking authentication', { correlationId });
     
-    // Get current user from Supabase session WITH RETRY
-    // This handles transient errors like network issues
-    const result = await supabaseWithRetry(
-      async () => {
-        const authResult = await supabase.auth.getUser();
-        // If error, throw it so retry logic handles it
-        if (authResult.error) {
-          throw authResult.error;
+    // ---------------------------------------------------------------
+    // STEP 1: Fast path — check local session first (no network)
+    // If expired or missing → try to refresh BEFORE calling getUser.
+    // This ensures the user never has to re-login as long as a valid
+    // refresh_token exists in chrome.storage.local.
+    // ---------------------------------------------------------------
+    try {
+      const { data: { session: localSession } } = await supabase.auth.getSession();
+      if (localSession) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const expiresAt = localSession.expires_at || 0;
+        // If token expires in < 60 s → proactively refresh
+        if (expiresAt - nowSec < 60) {
+          logger.info('Token expiring soon, refreshing proactively', { correlationId, secondsLeft: expiresAt - nowSec });
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            logger.warn('Proactive refresh failed, will try getUser anyway', { correlationId, error: refreshError.message });
+          } else if (refreshData?.session) {
+            logger.info('Proactive token refresh succeeded', { correlationId });
+          }
         }
-        return authResult;
-      },
-      {
-        operationName: 'supabase.auth.getUser',
-        maxRetries: 2,
-        correlationId
       }
-    );
+    } catch (sessionErr) {
+      // Non-fatal — continue to getUser which will fail properly if needed
+      logger.debug('Session pre-check failed (non-fatal)', { correlationId, error: sessionErr?.message });
+    }
+    
+    // ---------------------------------------------------------------
+    // STEP 2: Validate user server-side (with retry)
+    // ---------------------------------------------------------------
+    let result;
+    try {
+      result = await supabaseWithRetry(
+        async () => {
+          const authResult = await supabase.auth.getUser();
+          if (authResult.error) throw authResult.error;
+          return authResult;
+        },
+        {
+          operationName: 'supabase.auth.getUser',
+          maxRetries: 2,
+          correlationId
+        }
+      );
+    } catch (getUserError) {
+      // ---------------------------------------------------------------
+      // STEP 3: If getUser failed with a token error, attempt one more
+      // refresh + retry cycle before giving up.
+      // ---------------------------------------------------------------
+      const errMsg = getUserError?.message || '';
+      const errCode = getUserError?.code || '';
+      const isTokenError = errCode === 'invalid_jwt' || errCode === 'session_expired' ||
+        errCode === 'jwt_error' || errMsg.includes('JWT') ||
+        errMsg.includes('Session expired') || errMsg.includes('Auth session missing');
+      
+      if (isTokenError) {
+        logger.info('getUser failed with token error, attempting emergency refresh', { correlationId, errCode, errMsg });
+        const { data: emergencyData, error: emergencyError } = await supabase.auth.refreshSession();
+        if (!emergencyError && emergencyData?.session) {
+          logger.info('Emergency refresh succeeded, retrying getUser', { correlationId });
+          const retryResult = await supabase.auth.getUser();
+          if (!retryResult.error && retryResult.data?.user) {
+            result = retryResult;
+          } else {
+            // Refresh succeeded but getUser still fails — token truly invalid
+            throw getUserError;
+          }
+        } else {
+          // Refresh itself failed — no valid refresh_token → user must re-login
+          throw getUserError;
+        }
+      } else {
+        throw getUserError;
+      }
+    }
     
     // Extract user from result
     const { data: { user }, error } = result;
@@ -164,6 +222,18 @@ export async function requireAuth(message) {
       );
     }
     
+    // JWT or session expiration errors → AUTH_EXPIRED (trigger re-login)
+    if (errorCode === 'invalid_jwt' || errorCode === 'session_expired' || errorCode === 'jwt_error' ||
+        errorMessage.includes('JWT') || errorMessage.includes('Session expired')) {
+      logger.warn('Auth token expired or invalid', { correlationId, errorCode, errorMessage });
+      throw createErrorResponse(
+        message,
+        ERROR_CODES.AUTH_EXPIRED,
+        getUserFriendlyMessage(ERROR_CODES.AUTH_EXPIRED),
+        { technicalError: errorMessage }
+      );
+    }
+
     // Invalid API key (configuration error)
     if (errorMessage.includes('Invalid API key') || errorStatus === 401) {
       logger.error('Invalid Supabase credentials', { 

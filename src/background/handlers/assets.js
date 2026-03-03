@@ -245,9 +245,10 @@ registerHandler(MESSAGE_TYPES.ASSET_ADD, async (message) => {
     // Normalize data
     const normalized = normalizeAssetData(assetData);
 
-    // For gold assets: remove current_value if present (will be calculated at display time)
+    // For gold assets: store 0 as placeholder — actual value is calculated at display time
+    // from live market prices (quantity × price_per_unit). Never null (NOT NULL constraint).
     if (assetData.asset_type === 'gold') {
-      delete normalized.current_value;
+      normalized.current_value = 0;
     }
 
     // Insert to Supabase

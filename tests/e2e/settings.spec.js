@@ -66,7 +66,7 @@ test.describe('Settings Tests', () => {
     await settingsTab.click();
     await page.waitForTimeout(500);
 
-    // Check for basic settings controls (not Firebase-specific)
+    // Check for basic settings controls
     const settingsPage = page.locator('#settings-page');
     await expect(settingsPage).toBeVisible();
     
@@ -78,31 +78,31 @@ test.describe('Settings Tests', () => {
     await settingsTab.click();
     await page.waitForTimeout(500);
 
-    // Find Firebase sync checkbox
-    const firebaseSyncCheckbox = page.locator('input[type="checkbox"]').first();
+    // Find settings checkbox
+    const syncCheckbox = page.locator('input[type="checkbox"]').first();
     
     // Get initial state
-    const initialState = await firebaseSyncCheckbox.isChecked();
-    console.log(`Initial Firebase sync state: ${initialState}`);
+    const initialState = await syncCheckbox.isChecked();
+    console.log(`Initial setting state: ${initialState}`);
     
     // Toggle it
-    await firebaseSyncCheckbox.click();
+    await syncCheckbox.click();
     await page.waitForTimeout(500);
     
     // Verify state changed
-    const newState = await firebaseSyncCheckbox.isChecked();
+    const newState = await syncCheckbox.isChecked();
     expect(newState).not.toBe(initialState);
     
-    console.log(`✅ Firebase sync toggled to: ${newState}`);
+    console.log(`✅ Setting toggled to: ${newState}`);
     
     // Toggle back
-    await firebaseSyncCheckbox.click();
+    await syncCheckbox.click();
     await page.waitForTimeout(500);
     
-    const finalState = await firebaseSyncCheckbox.isChecked();
+    const finalState = await syncCheckbox.isChecked();
     expect(finalState).toBe(initialState);
     
-    console.log(`✅ Firebase sync restored to: ${finalState}`);
+    console.log(`✅ Setting restored to: ${finalState}`);
   });
 
   test('should have backup/restore buttons', async () => {

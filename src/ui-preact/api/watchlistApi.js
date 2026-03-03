@@ -228,6 +228,59 @@ export async function enrichWatchlistItem(symbol) {
 }
 
 /**
+ * Enqueue a batch of watchlist items for AI enrichment.
+ * Background splits into chunks of max 10, each chunk → ONE LLM prompt.
+ * Returns immediately with batch info — processing happens async.
+ *
+ * @param {string[]} symbols - Array of stock symbols to enrich
+ * @returns {Promise<{success: boolean, totalSymbols?: number, batches?: number, jobs?: Array, error?: Object}>}
+ */
+export async function enrichWatchlistBatch(symbols) {
+  try {
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Danh sách mã cổ phiếu là bắt buộc'
+        }
+      };
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN,
+      correlationId: generateCorrelationId(),
+      timestamp: Date.now(),
+      data: { symbols }
+    });
+
+    const error = extractError(response);
+    if (error) {
+      console.error('[WatchlistAPI] Batch enrichment enqueue failed:', error);
+      return { success: false, error };
+    }
+
+    return {
+      success: response.success === true,
+      totalSymbols: response.totalSymbols || 0,
+      batches: response.batches || 0,
+      jobs: response.jobs || [],
+      message: response.message || 'Đã thêm vào hàng đợi đánh giá batch'
+    };
+  } catch (error) {
+    console.error('[WatchlistAPI] Failed to enqueue batch enrichment:', error);
+    return {
+      success: false,
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'Không thể gửi yêu cầu đánh giá batch. Vui lòng thử lại.'
+      }
+    };
+  }
+}
+
+/**
  * Cancel a pending enrichment job
  * @param {string} correlationId - Job correlationId to cancel
  * @returns {Promise<{success: boolean, error?: Object}>}

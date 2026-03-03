@@ -124,7 +124,7 @@ function PromptCard({ promptKey, prompt, isExpanded, onToggle, onContentChange }
   const meta = PROMPT_META[promptKey] || {
     name: promptKey,
     icon: '📄',
-    color: '#666',
+    color: 'var(--text-secondary, #666)',
     description: 'Custom prompt'
   };
 

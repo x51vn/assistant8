@@ -63,6 +63,7 @@ describe('supabaseWithRetry', () => {
         operationName: 'testOperation',
         maxRetries: 3
       });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       // Fast-forward through all retries
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2); // 1s
@@ -80,6 +81,7 @@ describe('supabaseWithRetry', () => {
       const promise = supabaseWithRetry(operation, {
         maxRetries: 2
       });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2); // First retry
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 4); // Second attempt (exhausted)
@@ -93,6 +95,7 @@ describe('supabaseWithRetry', () => {
         .mockRejectedValue(new Error('Connection refused'));
 
       const promise = supabaseWithRetry(operation, { maxRetries: 2 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2);
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 4);
@@ -110,6 +113,7 @@ describe('supabaseWithRetry', () => {
       const operation = vi.fn().mockRejectedValue(error);
 
       const promise = supabaseWithRetry(operation, { maxRetries: 2 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2);
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 4);
@@ -125,6 +129,7 @@ describe('supabaseWithRetry', () => {
       const operation = vi.fn().mockRejectedValue(error);
 
       const promise = supabaseWithRetry(operation, { maxRetries: 2 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2);
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 4);
@@ -223,6 +228,7 @@ describe('supabaseWithRetry', () => {
       const operation = vi.fn().mockRejectedValue(error);
 
       const promise = supabaseWithRetry(operation, { maxRetries: 2 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 2);
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 4);
@@ -238,6 +244,7 @@ describe('supabaseWithRetry', () => {
       const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
 
       const promise = supabaseWithRetry(operation, { maxRetries: 3 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       // First retry delay: 1s
       await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * 1);
@@ -262,6 +269,7 @@ describe('supabaseWithRetry', () => {
       const operation = vi.fn().mockRejectedValue(new Error('Network error'));
 
       const promise = supabaseWithRetry(operation, { maxRetries: 5 });
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       // Fast-forward through all attempts
       for (let i = 0; i < 5; i++) {
@@ -276,6 +284,7 @@ describe('supabaseWithRetry', () => {
       const operation = vi.fn().mockRejectedValue(new Error('Network error'));
 
       const promise = supabaseWithRetry(operation);
+      promise.catch(() => {}); // Prevent unhandled rejection during timer advancement
 
       for (let i = 0; i < MAX_RETRIES; i++) {
         await vi.advanceTimersByTimeAsync(RETRY_DELAY_BASE_MS * Math.pow(2, i));

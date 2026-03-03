@@ -59,9 +59,7 @@ export function AuthProvider({ children }) {
         // ✅ Load settings immediately if already logged in
         if (result.authenticated) {
           try {
-            console.log('[AuthContext] User already authenticated, loading settings...');
             await loadSettings();
-            console.log('[AuthContext] Settings loaded successfully');
           } catch (err) {
             console.error('[AuthContext] Failed to load settings:', err);
           }
@@ -79,11 +77,8 @@ export function AuthProvider({ children }) {
   // ✅ Also loads settings when user becomes authenticated
   useEffect(() => {
     const cleanup = listenAuthStateChanges(async ({ authenticated: isAuth, user: authUser, sessionExpired }) => {
-      console.log('[AuthContext] Auth state changed via listener:', { authenticated: isAuth, hasUser: !!authUser, sessionExpired });
-      
       // ✅ FIX: Handle SESSION_EXPIRED with user-friendly message
       if (sessionExpired) {
-        console.log('[AuthContext] Session expired - showing login required');
         setAuthenticated(false);
         setUser(null);
         setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
@@ -99,9 +94,7 @@ export function AuthProvider({ children }) {
       // ✅ Load settings when user logs in (auth state changes to authenticated)
       if (isAuth && authUser) {
         try {
-          console.log('[AuthContext] User authenticated, loading settings...');
           await loadSettings();
-          console.log('[AuthContext] Settings loaded successfully after auth change');
         } catch (err) {
           console.error('[AuthContext] Failed to load settings after auth change:', err);
         }
@@ -113,21 +106,15 @@ export function AuthProvider({ children }) {
 
   // Login handler
   const handleLogin = async (email, password) => {
-    console.log('[AuthContext] Starting login...');
     setGlobalLoading(true, 'Đang đăng nhập...');
     setError(null);
     const result = await login(email, password);
-    console.log('[AuthContext] Login result:', { authenticated: result.authenticated, user: result.user, error: result.error });
-    
     // ✅ FIX: Don't set state here - listenAuthStateChanges will handle it
     // This prevents double render/flash on login
-    // Only set error if login failed
     if (result.error) {
       setError(result.error);
     }
-    
     hideLoading();
-    console.log('[AuthContext] Login complete, waiting for auth state broadcast');
     return result;
   };
 

@@ -419,8 +419,25 @@ export async function getOutput(tabId, options = {}) {
           action: 'get_output',
           wait: options.wait !== false,
           timeoutMs: options.timeoutMs || 15 * 60 * 1000,
-          stableMs: options.stableMs || 1500
+          stableMs: options.stableMs || 1500,
+          expectedChatId: options.expectedChatId || null  // Session guard
         });
+        
+        // Session mismatch: user navigated to a different chat while we were waiting
+        if (response && response.status === 'session_mismatch') {
+          logger.warn('[getOutput] Session mismatch — user navigated away', {
+            expectedChatId: options.expectedChatId,
+            currentChatId: response.currentChatId,
+            correlationId
+          });
+          logger.endOperation(correlationId, 'error', 'session_mismatch');
+          return createApiErrorResponse(
+            ERROR_CODES.SESSION_MISMATCH,
+            `Session changed: expected chatId=${options.expectedChatId}, actual chatId=${response.currentChatId}`,
+            'getOutput',
+            { expectedChatId: options.expectedChatId, currentChatId: response.currentChatId }
+          );
+        }
         
         if (response && response.result) {
           // X51LABS-62: Cache partial result
@@ -693,16 +710,42 @@ export async function ensureChatGPTTab(options = {}) {
     let chatTab = tabs.find(t => t.url && t.url.includes('chatgpt.com'));
     
     if (chatTab) {
-      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id });
-      
+      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id, discarded: chatTab.discarded });
+
+      // Handle discarded tabs (Chrome Memory Saver killed the page process)
+      // A discarded tab has no JS running — must reload before content script can respond
+      if (chatTab.discarded) {
+        logger.warn('ChatGPT tab was discarded by Chrome Memory Saver, reloading', { tabId: chatTab.id });
+        await chrome.tabs.reload(chatTab.id);
+        await new Promise((resolve) => {
+          let timeoutId = null;
+          const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            chrome.tabs.onUpdated.removeListener(listener);
+          };
+          const listener = (tabId, changeInfo) => {
+            if (tabId === chatTab.id && changeInfo.status === 'complete') {
+              cleanup();
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          timeoutId = setTimeout(() => { cleanup(); resolve(); }, 30000);
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Prevent Chrome Memory Saver from discarding this tab while we use it
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Focus existing tab if requested
       if (focusTab) {
         await chrome.tabs.update(chatTab.id, { active: true });
       }
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult = await waitForTabReady(chatTab.id);
+      if (readyResult.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: false };
       } else {
@@ -735,9 +778,9 @@ export async function ensureChatGPTTab(options = {}) {
           // Additional wait for React to load
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // Try ping again after reload
-          const readyAfterReload = await waitForContentScript(chatTab.id);
-          if (readyAfterReload) {
+          // Try again after reload (registry-based + ping fallback, 10s)
+          const readyAfterReload = await waitForTabReady(chatTab.id);
+          if (readyAfterReload.success) {
             logger.endOperation(correlationId, 'success');
             return { tabId: chatTab.id, isNew: false };
           }
@@ -764,7 +807,10 @@ export async function ensureChatGPTTab(options = {}) {
         url: 'https://chatgpt.com/', 
         active: focusTab 
       });
-      
+
+      // Prevent Memory Saver from discarding this tab during job processing
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Wait for page to load
       await new Promise((resolve) => {
         let timeoutId = null;
@@ -790,13 +836,13 @@ export async function ensureChatGPTTab(options = {}) {
       // Additional wait for React to load
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult2 = await waitForTabReady(chatTab.id);
+      if (readyResult2.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: true };
       } else {
-        const errorMsg = 'Content script not ready after waiting';
+        const errorMsg = `Content script not ready after waiting: ${readyResult2.error || 'timeout'}`;
         logger.endOperation(correlationId, 'error', errorMsg);
         return { 
           tabId: chatTab.id, 
@@ -824,77 +870,19 @@ export async function ensureChatGPTTab(options = {}) {
   }
 }
 
+// waitForContentScript removed — replaced by waitForTabReady (registry + ping, 10s timeout)
+
 /**
- * Wait for content script to be ready with retry logic
- * @param {number} tabId - The tab ID to check
- * @param {WaitForContentScriptOptions} [options={}] - Options
- * @returns {Promise<boolean>}
+ * Release a tab back to Chrome's normal memory management (allow auto-discard).
+ * Call this after enrichment / job completes so the tab can be managed normally.
+ * @param {number} tabId
+ * @returns {Promise<void>}
  */
-export async function waitForContentScript(tabId, options = {}) {
-  const maxRetries = options.maxRetries || 10;
-  const retryDelay = options.retryDelay || 500;
-  
-  // First, verify tab exists
+export async function releaseTab(tabId) {
+  if (!tabId || tabId < 0) return;
   try {
-    const tab = await chrome.tabs.get(tabId);
-    logger.debug('Tab exists', { tabId, url: tab.url, status: tab.status });
-  } catch (error) {
-    logger.warn('Tab does not exist', { tabId, error: error.message });
-    return false;
+    await chrome.tabs.update(tabId, { autoDiscardable: true });
+  } catch {
+    // Tab might already be closed — not critical
   }
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      // Ping content script to check if it's ready
-      const pingResponse = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-      if (pingResponse && pingResponse.pong === true) {
-        logger.debug('Content script ready', { tabId, attempt: i + 1 });
-        return true;
-      }
-      logger.warn('Content script responded but pong !== true', { 
-        tabId, 
-        attempt: i + 1,
-        response: pingResponse 
-      });
-    } catch (error) {
-      // Check if tab still exists (might have been closed during retries)
-      try {
-        await chrome.tabs.get(tabId);
-      } catch (tabError) {
-        logger.warn('Tab closed during content script check', { tabId });
-        return false;
-      }
-      
-      logger.debug('Content script not ready, retrying', { 
-        tabId, 
-        attempt: i + 1, 
-        maxRetries,
-        error: error.message
-      });
-      if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      }
-    }
-  }
-  
-  logger.error('Content script not ready after max retries', { 
-    tabId, 
-    maxRetries,
-    troubleshooting: {
-      possibleCauses: [
-        'Extension not reloaded after build',
-        'Tab opened before extension loaded',
-        'Content script failed to inject',
-        'ChatGPT URL changed',
-        'JavaScript error in content script'
-      ],
-      solutions: [
-        '1. Reload extension at chrome://extensions',
-        '2. Close and reopen ChatGPT tab',
-        '3. Check browser console for errors',
-        '4. Check manifest.json content_scripts matches'
-      ]
-    }
-  });
-  return false;
 }

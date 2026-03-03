@@ -7,7 +7,7 @@
 import { signal } from '@preact/signals';
 
 // Default page when user logs in
-export const currentPage = signal('portfolio');
+export const currentPage = signal('dashboard');
 
 /**
  * Change current page

@@ -132,15 +132,15 @@ ${(portfolioItems.value || []).map(item =>
     });
 
     if (response?.errorCode) {
-      chatError.value = response.errorMessage || 'Failed to get response from ChatGPT';
-    } else if (response?.data) {
-      chatResponse.value = response.data;
+      chatError.value = response.errorMessage || 'Failed to get response from LLM';
+    } else if (response?.text) {
+      chatResponse.value = response.text;
       isSaved.value = true;
     } else {
       chatError.value = 'Unexpected response format';
     }
   } catch (error) {
-    chatError.value = error.message || 'Failed to send prompt to ChatGPT';
+    chatError.value = error.message || 'Failed to send prompt';
   } finally {
     hideLoading();
   }
@@ -236,7 +236,7 @@ export default function EvaluatePortfolioModal() {
             /* Response Display */
             <div class="response-display">
               <div class="response-header">
-                <h3>ChatGPT Analysis</h3>
+                <h3>LLM Analysis</h3>
                 {isSaved.value && <span class="badge badge--success"><i class="fas fa-check"></i> Saved to History</span>}
               </div>
               <div class="response-content">

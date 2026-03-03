@@ -218,7 +218,12 @@ function determineIfRetryable(error) {
     if (error.code === 'PGRST116') {
       return false;
     }
-    
+
+    // PGRST205 = Table not in schema cache - NO RETRY (table doesn't exist)
+    if (error.code === 'PGRST205') {
+      return false;
+    }
+
     // PGRST301 = Auth error - NO RETRY
     if (error.code === 'PGRST301') {
       return false;

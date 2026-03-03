@@ -1,6 +1,7 @@
 import { h, render } from 'preact';
 import { AuthProvider } from '../context/AuthContext.jsx';
 import { App } from '../App.jsx';
+import '../styles/themes.css'; // XST-771: CSS custom properties for light/dark themes
 
 /**
  * X51LABS-149: Preact Settings App Entry Point

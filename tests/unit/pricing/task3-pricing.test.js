@@ -9,8 +9,15 @@ import * as pricing from '../../../src/ui-preact/api/portfolioPricing.js';
 import * as updater from '../../../src/ui-preact/api/portfolioPriceUpdater.js';
 import { portfolioItems, setPortfolioItems, resetPortfolioState } from '../../../src/ui-preact/state/portfolioState.js';
 
-// Mock fetch
-global.fetch = vi.fn();
+// Mock the pricing module's fetch function at module level
+// The actual implementation uses MarketDataClient internally, not global.fetch
+vi.mock('../../../src/ui-preact/api/portfolioPricing.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    fetchStockPricesWithRetry: vi.fn().mockResolvedValue({})
+  };
+});
 
 describe('Task 3: Real-time Pricing - SSI API Integration', () => {
   beforeEach(() => {
@@ -46,12 +53,7 @@ describe('Task 3: Real-time Pricing - SSI API Integration', () => {
     });
 
     it('updates lastUpdateTime on successful fetch', async () => {
-      const mockPrice = { lastPrice: 87000 };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => mockPrice
-      });
+      pricing.fetchStockPricesWithRetry.mockResolvedValueOnce({ 'VNM': 87000 });
 
       setPortfolioItems([
         { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000, current_price: 85000 }
@@ -66,11 +68,7 @@ describe('Task 3: Real-time Pricing - SSI API Integration', () => {
 
   describe('AC-2: SSI API Returns New Prices - Signal Updates Trigger Re-render', () => {
     it('updates currentPrice when SSI API returns new price', async () => {
-      const mockPrice = { lastPrice: 87500 };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockPrice
-      });
+      pricing.fetchStockPricesWithRetry.mockResolvedValueOnce({ 'VNM': 87500 });
 
       setPortfolioItems([
         { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000, current_price: 85000 }
@@ -84,11 +82,7 @@ describe('Task 3: Real-time Pricing - SSI API Integration', () => {
     });
 
     it('recalculates totalValue and totalPL after price update', async () => {
-      const mockPrices = { lastPrice: 90000 };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockPrices
-      });
+      pricing.fetchStockPricesWithRetry.mockResolvedValueOnce({ 'VNM': 90000 });
 
       setPortfolioItems([
         { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000, current_price: 85000 }
@@ -113,13 +107,10 @@ describe('Task 3: Real-time Pricing - SSI API Integration', () => {
         current_price: 50000
       }));
 
-      global.fetch.mockImplementation(async (url) => {
-        const symbol = url.split('/').pop();
-        return {
-          ok: true,
-          json: async () => ({ lastPrice: 55000 })
-        };
-      });
+      // Mock returns all prices at 55000
+      const priceMap = {};
+      symbols.forEach(s => { priceMap[s] = 55000; });
+      pricing.fetchStockPricesWithRetry.mockResolvedValueOnce(priceMap);
 
       setPortfolioItems(items);
       await updater.updatePricesNow();
@@ -133,23 +124,18 @@ describe('Task 3: Real-time Pricing - SSI API Integration', () => {
     });
 
     it('skips CASH symbol (no price fetching)', async () => {
-      global.fetch.mockClear();
+      // fetchStockPricesWithRetry only receives non-CASH symbols from updater
+      pricing.fetchStockPricesWithRetry.mockResolvedValueOnce({ 'VNM': 87000 });
 
       setPortfolioItems([
         { id: '1', symbol: 'VNM', quantity: 100, avg_price: 85000, current_price: 85000 },
         { id: '2', symbol: 'CASH', quantity: 1000, avg_price: 1, current_price: 1 }
       ]);
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ lastPrice: 87000 })
-      });
-
       await updater.updatePricesNow();
 
-      // Only 1 fetch call (for VNM, not CASH)
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-      expect(global.fetch.mock.calls[0][0]).toContain('VNM');
+      // fetchStockPricesWithRetry should only receive ['VNM'], not CASH
+      expect(pricing.fetchStockPricesWithRetry).toHaveBeenCalledWith(['VNM']);
     });
   });
 

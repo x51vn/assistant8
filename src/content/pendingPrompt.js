@@ -15,6 +15,14 @@
 import { sleep, getChatMeta } from './utils.js';
 import { inputAndSendPrompt, waitForEmptyNewChat } from './editor.js';
 
+// Lightweight inline logger (content scripts are classic scripts — can't import shared chunks)
+const LOG_PREFIX = '[Content/PendingPrompt]';
+const logger = {
+  debug: (msg, data) => console.debug(LOG_PREFIX, msg, data || ''),
+  info:  (msg, data) => console.log(LOG_PREFIX, msg, data || ''),
+  warn:  (msg, data) => console.warn(LOG_PREFIX, msg, data || ''),
+  error: (msg, data) => console.error(LOG_PREFIX, msg, data || ''),
+};
 const PENDING_PROMPT_KEY = '__chatgpt_assistant_pending_prompt_v1';
 
 /**
@@ -27,8 +35,10 @@ function readPendingPrompt() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.prompt !== 'string') return null;
+    logger.debug('readPendingPrompt found', { runId: parsed.runId, promptLength: parsed.prompt?.length });
     return parsed;
-  } catch {
+  } catch (err) {
+    logger.warn('readPendingPrompt failed to parse', { error: err?.message });
     return null;
   }
 }
@@ -40,8 +50,9 @@ function readPendingPrompt() {
 export function writePendingPrompt(pending) {
   try {
     sessionStorage.setItem(PENDING_PROMPT_KEY, JSON.stringify(pending));
-  } catch {
-    // ignore
+    logger.debug('writePendingPrompt saved', { runId: pending?.runId, promptLength: pending?.prompt?.length });
+  } catch (err) {
+    logger.error('writePendingPrompt failed', { error: err?.message });
   }
 }
 
@@ -51,8 +62,9 @@ export function writePendingPrompt(pending) {
 function clearPendingPrompt() {
   try {
     sessionStorage.removeItem(PENDING_PROMPT_KEY);
-  } catch {
-    // ignore
+    logger.debug('clearPendingPrompt done');
+  } catch (err) {
+    logger.warn('clearPendingPrompt failed', { error: err?.message });
   }
 }
 
@@ -83,8 +95,9 @@ async function trySendPendingPromptOnce() {
       timestamp: Date.now(),
       data: { runId: pending.runId || null, ...meta }
     });
-  } catch {
-    // ignore
+    logger.info('Pending prompt sent successfully', { runId: pending.runId, chatId: meta.chatId });
+  } catch (err) {
+    logger.warn('Failed to notify background of prompt sent', { error: err?.message });
   }
 
   return true;
@@ -111,8 +124,8 @@ export async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
       try {
         const ok = await trySendPendingPromptOnce();
         if (ok) return;
-      } catch {
-        // ignore and retry
+      } catch (err) {
+        logger.debug('drainPendingPrompt retry failed', { error: err?.message, elapsedMs: Date.now() - start });
       }
 
       await sleep(500);
@@ -121,6 +134,7 @@ export async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
     // Timeout: notify background
     const pending = readPendingPrompt();
     if (pending && pending.runId) {
+      logger.warn('drainPendingPrompt timeout', { runId: pending.runId, timeoutMs });
       try {
         chrome.runtime.sendMessage({
           v: 1,
@@ -132,8 +146,8 @@ export async function drainPendingPrompt({ timeoutMs = 30000 } = {}) {
             error: 'timeout_sending_prompt'
           }
         });
-      } catch {
-        // ignore
+      } catch (err) {
+        logger.error('Failed to notify background of prompt timeout', { error: err?.message });
       }
       clearPendingPrompt();
     }

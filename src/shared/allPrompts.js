@@ -19,6 +19,7 @@ export const ALL_PROMPT_KEYS = {
   CONTEXT_MENU: 'prompt.contextMenu',
   ENGLISH: 'prompt.english',
   WATCHLIST_ENRICH: 'prompt.watchlistEnrich',
+  MARKET_ASSESSMENT: 'prompt.marketDailyAssessment',
 
   // Writing templates (6)
   EMAIL: 'writing.email',
@@ -98,7 +99,8 @@ export function getSystemPromptKeys() {
     ALL_PROMPT_KEYS.TEA_STOCK,
     ALL_PROMPT_KEYS.CONTEXT_MENU,
     ALL_PROMPT_KEYS.ENGLISH,
-    ALL_PROMPT_KEYS.WATCHLIST_ENRICH
+    ALL_PROMPT_KEYS.WATCHLIST_ENRICH,
+    ALL_PROMPT_KEYS.MARKET_ASSESSMENT
   ];
 }
 

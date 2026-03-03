@@ -27,6 +27,9 @@ export const ERROR_CODES = {
   AUTH_LOGOUT_FAILED: 'AUTH_LOGOUT_FAILED',
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_NOT_CONFIRMED: 'AUTH_EMAIL_NOT_CONFIRMED',
+  AUTH_PASSWORD_SAME: 'AUTH_PASSWORD_SAME',
+  AUTH_PASSWORD_WEAK: 'AUTH_PASSWORD_WEAK',
+  AUTH_ACCOUNT_DELETE_FAILED: 'AUTH_ACCOUNT_DELETE_FAILED',
   
   // ===== Validation Errors =====
   INVALID_INPUT: 'INVALID_INPUT',
@@ -61,6 +64,31 @@ export const ERROR_CODES = {
   // ===== Generic =====
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   OPERATION_FAILED: 'OPERATION_FAILED',
+
+  // ===== Billing & Subscription (XST-758..XST-763) =====
+  USAGE_LIMIT_EXCEEDED: 'USAGE_LIMIT_EXCEEDED',
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  SUBSCRIPTION_NOT_FOUND: 'SUBSCRIPTION_NOT_FOUND',
+  CHECKOUT_FAILED: 'CHECKOUT_FAILED',
+  PORTAL_FAILED: 'PORTAL_FAILED',
+  STRIPE_ERROR: 'STRIPE_ERROR',
+
+  // ===== Stock Research Pipeline (XST-781) =====
+  SEARCH_FAILED: 'SEARCH_FAILED',
+  SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
+  SEARCH_QUOTA_EXCEEDED: 'SEARCH_QUOTA_EXCEEDED',
+  LLM_TIMEOUT: 'LLM_TIMEOUT',
+  LLM_ERROR: 'LLM_ERROR',
+  LLM_QUOTA_EXCEEDED: 'LLM_QUOTA_EXCEEDED',
+  PARSE_ERROR: 'PARSE_ERROR',
+  PERSIST_ERROR: 'PERSIST_ERROR',
+
+  // ===== LLM API Key Management =====
+  LLM_APIKEY_INVALID: 'LLM_APIKEY_INVALID',
+  LLM_APIKEY_NOT_FOUND: 'LLM_APIKEY_NOT_FOUND',
+  LLM_APIKEY_SAVE_FAILED: 'LLM_APIKEY_SAVE_FAILED',
+  LLM_APIKEY_MIGRATE_FAILED: 'LLM_APIKEY_MIGRATE_FAILED',
+  LLM_HEALTHCHECK_FAILED: 'LLM_HEALTHCHECK_FAILED',
 };
 
 // ============================================================================
@@ -82,6 +110,9 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.AUTH_LOGOUT_FAILED]: 'Không thể đăng xuất. Vui lòng thử lại.',
   [ERROR_CODES.AUTH_INVALID_CREDENTIALS]: 'Email hoặc mật khẩu không đúng.',
   [ERROR_CODES.AUTH_EMAIL_NOT_CONFIRMED]: 'Email chưa được xác nhận. Vui lòng kiểm tra hộp thư.',
+  [ERROR_CODES.AUTH_PASSWORD_SAME]: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
+  [ERROR_CODES.AUTH_PASSWORD_WEAK]: 'Mật khẩu phải có ít nhất 8 ký tự bao gồm: chữ hoa, chữ thường, chữ số và ký tự đặc biệt.',
+  [ERROR_CODES.AUTH_ACCOUNT_DELETE_FAILED]: 'Không thể xóa tài khoản. Vui lòng thử lại sau.',
   
   // Validation
   [ERROR_CODES.INVALID_INPUT]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
@@ -116,6 +147,31 @@ export const ERROR_MESSAGES_VN = {
   // Generic
   [ERROR_CODES.UNKNOWN_ERROR]: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   [ERROR_CODES.OPERATION_FAILED]: 'Thao tác thất bại. Vui lòng thử lại.',
+
+  // Billing
+  [ERROR_CODES.USAGE_LIMIT_EXCEEDED]: 'Bạn đã đạt giới hạn của gói hiện tại. Nâng cấp lên Pro để tiếp tục.',
+  [ERROR_CODES.PLAN_NOT_FOUND]: 'Không tìm thấy gói dịch vụ.',
+  [ERROR_CODES.SUBSCRIPTION_NOT_FOUND]: 'Không tìm thấy thông tin đăng ký.',
+  [ERROR_CODES.CHECKOUT_FAILED]: 'Không thể tạo phiên thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.PORTAL_FAILED]: 'Không thể mở trang quản lý thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.STRIPE_ERROR]: 'Lỗi thanh toán. Vui lòng thử lại hoặc dùng thẻ khác.',
+
+  // Stock Research Pipeline
+  [ERROR_CODES.SEARCH_FAILED]: 'Không thể tìm kiếm thông tin. Vui lòng thử lại sau.',
+  [ERROR_CODES.SEARCH_TIMEOUT]: 'Tìm kiếm quá thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.SEARCH_QUOTA_EXCEEDED]: 'Đã hết lượt tìm kiếm hôm nay. Thử lại vào ngày mai hoặc tắt Search.',
+  [ERROR_CODES.LLM_TIMEOUT]: 'AI provider không phản hồi trong thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_ERROR]: 'Lỗi từ AI provider. Vui lòng thử provider khác hoặc thử lại sau.',
+  [ERROR_CODES.LLM_QUOTA_EXCEEDED]: 'Đã hết quota AI provider. Vui lòng kiểm tra API key hoặc thử provider khác.',
+  [ERROR_CODES.PARSE_ERROR]: 'AI trả lời không đúng format. Đang thử lại...',
+  [ERROR_CODES.PERSIST_ERROR]: 'Không thể lưu kết quả. Dữ liệu vẫn hiển thị nhưng không được lưu.',
+
+  // LLM API Key Management
+  [ERROR_CODES.LLM_APIKEY_INVALID]: 'API key không hợp lệ. Vui lòng kiểm tra lại.',
+  [ERROR_CODES.LLM_APIKEY_NOT_FOUND]: 'Không tìm thấy API key cho provider này.',
+  [ERROR_CODES.LLM_APIKEY_SAVE_FAILED]: 'Không thể lưu API key. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED]: 'Di chuyển API key sang Supabase thất bại. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_HEALTHCHECK_FAILED]: 'Kiểm tra kết nối thất bại. Vui lòng kiểm tra API key và thử lại.',
 };
 
 // ============================================================================
@@ -182,6 +238,11 @@ export function isRetryableError(errorCode) {
     ERROR_CODES.SUPABASE_CONNECTION_ERROR,
     ERROR_CODES.DATABASE_ERROR,
     ERROR_CODES.SSI_API_ERROR,
+    ERROR_CODES.SEARCH_FAILED,
+    ERROR_CODES.SEARCH_TIMEOUT,
+    ERROR_CODES.LLM_TIMEOUT,
+    ERROR_CODES.LLM_ERROR,
+    ERROR_CODES.PERSIST_ERROR,
   ];
   return retryableErrors.includes(errorCode);
 }

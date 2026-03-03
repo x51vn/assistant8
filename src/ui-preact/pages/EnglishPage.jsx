@@ -18,8 +18,7 @@ import {
   addEnglish,
   deleteEnglish,
   openEnglishChat,
-  sendPromptToChatGPT,
-  getChatGPTOutput,
+  sendPromptToLLM,
   getEnglishPromptTemplate,
   autoSelectTopic
 } from '../api/englishApi.js';
@@ -107,20 +106,12 @@ export function EnglishPage() {
   const [generating, setGenerating] = useState(false);
   const [resultMessage, setResultMessage] = useState(null);
   const [toast, setToast] = useState(null);
-  const pollIntervalRef = useRef(null);
   const currentPromptRef = useRef(null);
   const currentTopicRef = useRef(null);
 
   // Load English list on mount
   useEffect(() => {
     loadEnglishList();
-    
-    // Cleanup polling on unmount
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
   }, []);
 
   const showToast = (message, type = 'success') => {
@@ -167,69 +158,6 @@ export function EnglishPage() {
     }
   };
 
-  const stopPolling = () => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-  };
-
-  const pollForResponse = async () => {
-    let pollCount = 0;
-    const maxPolls = 60; // 3 minutes (60 * 3s)
-    
-    pollIntervalRef.current = setInterval(async () => {
-      pollCount++;
-      
-      if (pollCount > maxPolls) {
-        stopPolling();
-        setResultMessage({
-          type: 'error',
-          text: '⏱️ Timeout - ChatGPT không phản hồi sau 3 phút'
-        });
-        setGenerating(false);
-        return;
-      }
-      
-      setResultMessage({
-        type: 'loading',
-        text: `Đang chờ response... (${pollCount * 3}s)`
-      });
-      
-      const result = await getChatGPTOutput();
-      
-      if (result.output) {
-        stopPolling();
-        
-        // Save to Supabase
-        const saveResult = await addEnglish(
-          result.chatId,
-          currentTopicRef.current,
-          currentPromptRef.current
-        );
-        
-        if (saveResult.error) {
-          setResultMessage({
-            type: 'error',
-            text: `Lỗi lưu: ${saveResult.error.message}`
-          });
-        } else {
-          setResultMessage({
-            type: 'success',
-            text: `Đã lưu! (Chat: ${result.chatId.substring(0, 8)})\n\nNhấn vào item để mở ChatGPT`
-          });
-          
-          // Refresh list
-          await loadEnglishList();
-        }
-        
-        setGenerating(false);
-        currentPromptRef.current = null;
-        currentTopicRef.current = null;
-      }
-    }, 3000);
-  };
-
   const handleGenerate = async () => {
     let finalTopic = topic.trim();
     
@@ -238,7 +166,7 @@ export function EnglishPage() {
       setGenerating(true);
       setResultMessage({
         type: 'loading',
-        text: 'Yêu cầu ChatGPT chọn topic phổ biến nhất trong tuần...'
+        text: 'Đang yêu cầu LLM chọn topic phổ biến nhất trong tuần...'
       });
       
       const topicResult = await autoSelectTopic();
@@ -256,7 +184,7 @@ export function EnglishPage() {
       setTopic(finalTopic);
       setResultMessage({
         type: 'info',
-        text: `ChatGPT đã chọn topic: ${finalTopic}`
+        text: `Đã chọn topic: ${finalTopic}`
       });
       
       // Small delay to show selected topic
@@ -274,7 +202,7 @@ export function EnglishPage() {
     currentPromptRef.current = prompt;
     currentTopicRef.current = finalTopic;
     
-    const sendResult = await sendPromptToChatGPT(prompt);
+    const sendResult = await sendPromptToLLM(prompt);
     
     if (sendResult.error) {
       setResultMessage({
@@ -285,13 +213,42 @@ export function EnglishPage() {
       return;
     }
     
-    // Start polling for response
-    setResultMessage({
-      type: 'loading',
-      text: 'Đang chờ response...'
-    });
+    // XST-821: All providers now return text immediately via LLMProviderFactory.
+    // Use the response directly — no polling needed.
+    if (sendResult.text) {
+      // Save to Supabase — pass chatId from provider (null for Gemini/Claude)
+      const saveResult = await addEnglish(
+        sendResult.chatId || null,
+        currentTopicRef.current,
+        currentPromptRef.current
+      );
+      
+      if (saveResult.error) {
+        setResultMessage({
+          type: 'error',
+          text: `Lỗi lưu: ${saveResult.error.message}`
+        });
+      } else {
+        setResultMessage({
+          type: 'success',
+          text: `Đã tạo bài học thành công!`
+        });
+        
+        await loadEnglishList();
+      }
+      
+      setGenerating(false);
+      currentPromptRef.current = null;
+      currentTopicRef.current = null;
+      return;
+    }
     
-    pollForResponse();
+    // Should not reach here — SEND_PROMPT always returns text or error.
+    setResultMessage({
+      type: 'error',
+      text: 'LLM không trả về nội dung. Vui lòng thử lại.'
+    });
+    setGenerating(false);
   };
 
   return (

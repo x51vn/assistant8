@@ -13,8 +13,8 @@ X51LABS-90: Playwright-based E2E test suite for ChatGPT Assistant Chrome Extensi
 
 ### 2. Settings Tests (`settings.spec.js`)
 - ✅ Navigate to Settings tab
-- ✅ Firebase sync toggle display
-- ✅ Toggle Firebase sync on/off
+- ✅ Settings controls display
+- ✅ Toggle setting on/off
 - ✅ Backup/restore buttons available
 - ✅ Version information display
 
@@ -149,7 +149,7 @@ Test reports are generated in `tests/e2e/reports/` directory.
 Potential additions for more comprehensive testing:
 - Context menu integration tests
 - Prompt template loading tests
-- Firebase sync integration tests (requires auth)
+- Supabase sync integration tests (requires auth)
 - ChatGPT API interaction tests (requires login)
 - Market data provider tests
 - Portfolio P/L calculation accuracy tests

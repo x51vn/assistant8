@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chính sách Bảo mật — ChatGPT Assistant</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; line-height: 1.7; color: #333; }
+    h1 { font-size: 1.6rem; border-bottom: 2px solid #4f46e5; padding-bottom: 8px; }
+    h2 { font-size: 1.15rem; margin-top: 32px; color: #4f46e5; }
+    h3 { font-size: 1rem; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { text-align: left; padding: 8px 12px; border: 1px solid #ddd; }
+    th { background: #f5f3ff; }
+    .lang-switch { float: right; margin-top: -8px; }
+    .lang-switch a { color: #4f46e5; text-decoration: none; font-size: 0.9rem; }
+    .updated { color: #666; font-size: 0.88rem; }
+    footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #eee; font-size: 0.85rem; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="lang-switch"><a href="#english">🇬🇧 English</a></div>
+
+  <!-- ═══════════════════════════════════════════ TIẾNG VIỆT ══ -->
+  <h1>Chính sách Bảo mật</h1>
+  <p class="updated">Cập nhật lần cuối: 22 tháng 2 năm 2026 | Phiên bản 1.0</p>
+
+  <p>
+    ChatGPT Assistant ("Extension", "chúng tôi") là tiện ích trình duyệt Chrome giúp bạn quản lý
+    danh mục chứng khoán, lưu lịch sử chat với ChatGPT và phân tích thị trường.
+    Chính sách này mô tả loại dữ liệu chúng tôi thu thập, lý do thu thập và cách xử lý.
+  </p>
+
+  <h2>1. Dữ liệu chúng tôi thu thập</h2>
+  <table>
+    <tr><th>Loại dữ liệu</th><th>Ví dụ</th><th>Mục đích</th></tr>
+    <tr><td>Thông tin tài khoản</td><td>Email (Supabase Auth)</td><td>Xác thực, phân biệt dữ liệu người dùng</td></tr>
+    <tr><td>Dữ liệu danh mục</td><td>Mã CP, số lượng, giá vốn</td><td>Quản lý portfolio, tính P&amp;L</td></tr>
+    <tr><td>Watchlist</td><td>Danh sách cổ phiếu theo dõi</td><td>Hiển thị giá và cảnh báo</td></tr>
+    <tr><td>Lịch sử chat</td><td>Nội dung prompt &amp; phản hồi ChatGPT</td><td>Lưu trữ lịch sử, phân tích</td></tr>
+    <tr><td>Cài đặt người dùng</td><td>Tùy chọn hiển thị, prompts tùy chỉnh</td><td>Cá nhân hóa trải nghiệm</td></tr>
+    <tr><td>Dữ liệu tài sản</td><td>Danh mục vàng, crypto, nợ</td><td>Tính net worth tổng hợp</td></tr>
+    <tr><td>Ghi chú lỗi</td><td>Tiêu đề, mô tả lỗi do bạn nhập</td><td>Theo dõi sự cố cá nhân</td></tr>
+  </table>
+
+  <h2>2. Dữ liệu KHÔNG thu thập</h2>
+  <ul>
+    <li>Tài khoản ngân hàng, thẻ tín dụng, mật khẩu giao dịch</li>
+    <li>Lịch sử duyệt web ngoài chatgpt.com</li>
+    <li>Vị trí địa lý (GPS)</li>
+    <li>Dữ liệu nhân khẩu học</li>
+    <li>Cookie hoặc theo dõi quảng cáo</li>
+  </ul>
+
+  <h2>3. Cách chúng tôi lưu trữ dữ liệu</h2>
+  <p>
+    Tất cả dữ liệu người dùng được lưu trên <strong>Supabase</strong> (nền tảng đám mây PostgreSQL,
+    máy chủ tại Singapore/AWS). Supabase cung cấp mã hóa TLS khi truyền và mã hóa AES-256 khi lưu trữ.
+    Row Level Security (RLS) đảm bảo mỗi người dùng chỉ truy cập được dữ liệu của chính họ.
+  </p>
+  <p>
+    Extension không lưu dữ liệu kinh doanh xuống máy tính của bạn — chỉ lưu token phiên đăng nhập
+    trong <code>chrome.storage.local</code> (được mã hóa bởi trình duyệt).
+  </p>
+
+  <h2>4. Chia sẻ với bên thứ ba</h2>
+  <table>
+    <tr><th>Dịch vụ</th><th>Dữ liệu chia sẻ</th><th>Mục đích</th></tr>
+    <tr>
+      <td><strong>Supabase</strong> (supabase.com)</td>
+      <td>Tất cả dữ liệu người dùng được lưu trữ tại đây</td>
+      <td>Cơ sở dữ liệu &amp; xác thực</td>
+    </tr>
+    <tr>
+      <td><strong>SSI iBoard API</strong> (iboard.ssi.com.vn)</td>
+      <td>Mã cổ phiếu (không có thông tin cá nhân)</td>
+      <td>Lấy giá cổ phiếu Việt Nam</td>
+    </tr>
+    <tr>
+      <td><strong>ChatGPT</strong> (chatgpt.com)</td>
+      <td>Nội dung prompt bạn gửi qua giao diện ChatGPT</td>
+      <td>Xử lý AI — theo chính sách OpenAI</td>
+    </tr>
+    <tr>
+      <td><strong>Stripe</strong> (stripe.com)</td>
+      <td>Email, thông tin thanh toán (gói trả phí)</td>
+      <td>Xử lý thanh toán — không lưu thẻ phía chúng tôi</td>
+    </tr>
+    <tr>
+      <td><strong>Sentry</strong> (sentry.io)</td>
+      <td>Stack trace lỗi kỹ thuật (ẩn danh, không có PII)</td>
+      <td>Giám sát lỗi — chỉ khi bạn cho phép</td>
+    </tr>
+  </table>
+  <p>Chúng tôi <strong>không bán</strong> dữ liệu cá nhân của bạn.</p>
+
+  <h2>5. Quyền của bạn (GDPR)</h2>
+  <ul>
+    <li><strong>Quyền truy cập</strong>: Xem tất cả dữ liệu qua Settings → "Xuất dữ liệu"</li>
+    <li><strong>Quyền chỉnh sửa</strong>: Chỉnh sửa trực tiếp trong extension</li>
+    <li><strong>Quyền xóa</strong>: Settings → "Xóa tài khoản" — xóa toàn bộ dữ liệu ngay lập tức</li>
+    <li><strong>Quyền di chuyển</strong>: Export sang JSON qua Settings → "Xuất dữ liệu"</li>
+    <li><strong>Quyền phản đối analytics</strong>: Settings → "Quản lý quyền riêng tư" → tắt báo cáo lỗi</li>
+  </ul>
+
+  <h2>6. Quyền Chrome Extension</h2>
+  <table>
+    <tr><th>Quyền</th><th>Lý do sử dụng</th></tr>
+    <tr><td><code>storage</code></td><td>Lưu token phiên đăng nhập Supabase</td></tr>
+    <tr><td><code>tabs</code></td><td>Mở tab ChatGPT, Stripe Checkout</td></tr>
+    <tr><td><code>scripting</code></td><td>Tương tác với giao diện chatgpt.com để gửi prompt</td></tr>
+    <tr><td><code>alarms</code></td><td>Cập nhật giá cổ phiếu mỗi 5 phút trong giờ giao dịch</td></tr>
+    <tr><td><code>sidePanel</code></td><td>Hiển thị giao diện extension bên cạnh trình duyệt</td></tr>
+    <tr><td><code>contextMenus</code></td><td>Menu chuột phải để gửi prompt nhanh</td></tr>
+    <tr><td><code>activeTab</code></td><td>Đọc URL tab đang mở để phát hiện chatgpt.com</td></tr>
+  </table>
+
+  <h2>7. Thời gian lưu trữ</h2>
+  <p>
+    Dữ liệu được lưu trữ cho đến khi bạn xóa tài khoản. Lịch sử chat có thể bị tự động xóa sau
+    số ngày theo gói dịch vụ (30 ngày — Miễn phí, 365 ngày — Pro, không giới hạn — Enterprise).
+  </p>
+
+  <h2>8. Liên hệ</h2>
+  <p>
+    Mọi câu hỏi về quyền riêng tư, vui lòng liên hệ: <strong>myx51fc@gmail.com</strong><br/>
+    Chúng tôi sẽ phản hồi trong vòng 72 giờ làm việc.
+  </p>
+
+  <h2>9. Thay đổi chính sách</h2>
+  <p>
+    Khi cập nhật chính sách, chúng tôi sẽ thông báo trong extension và yêu cầu xác nhận lại.
+    Phiên bản hiện tại: <strong>1.0</strong> (2026-02-22).
+  </p>
+
+  <!-- ═══════════════════════════════════════════════ ENGLISH ══ -->
+  <hr id="english" style="margin: 48px 0;" />
+  <h1>Privacy Policy <span style="font-size:1rem;color:#666;">(English)</span></h1>
+  <p class="updated">Last updated: February 22, 2026 | Version 1.0</p>
+
+  <p>
+    ChatGPT Assistant is a Chrome browser extension that helps you manage a stock portfolio,
+    save ChatGPT chat history, and analyze the Vietnamese stock market.
+    This policy explains what data we collect, why, and how we handle it.
+  </p>
+
+  <h2>1. Data We Collect</h2>
+  <table>
+    <tr><th>Data Type</th><th>Examples</th><th>Purpose</th></tr>
+    <tr><td>Account info</td><td>Email address (via Supabase Auth)</td><td>Authentication &amp; user data isolation</td></tr>
+    <tr><td>Portfolio data</td><td>Stock symbols, quantity, average price</td><td>Portfolio management, P&amp;L calculation</td></tr>
+    <tr><td>Watchlist</td><td>Tracked stock symbols</td><td>Price display and alerts</td></tr>
+    <tr><td>Chat history</td><td>Prompts sent &amp; ChatGPT responses</td><td>Chat history storage &amp; analysis</td></tr>
+    <tr><td>Settings</td><td>Display preferences, custom prompts</td><td>Personalisation</td></tr>
+    <tr><td>Asset data</td><td>Gold, crypto, debt records</td><td>Net worth aggregation</td></tr>
+    <tr><td>Error notes</td><td>Title &amp; description (user-entered)</td><td>Personal issue tracking</td></tr>
+  </table>
+
+  <h2>2. Data We Do NOT Collect</h2>
+  <ul>
+    <li>Bank accounts, credit cards, trading passwords</li>
+    <li>Browsing history outside chatgpt.com</li>
+    <li>GPS location</li>
+    <li>Demographic data</li>
+    <li>Cookies or advertising trackers</li>
+  </ul>
+
+  <h2>3. Storage</h2>
+  <p>
+    All user data is stored on <strong>Supabase</strong> (PostgreSQL cloud platform, Singapore/AWS region).
+    Supabase provides TLS in-transit encryption and AES-256 at-rest encryption. Row Level Security
+    (RLS) ensures each user can only access their own data. No business data is stored locally
+    on your device — only the session token is kept in <code>chrome.storage.local</code>
+    (encrypted by the browser).
+  </p>
+
+  <h2>4. Third-Party Services</h2>
+  <table>
+    <tr><th>Service</th><th>Data Shared</th><th>Purpose</th></tr>
+    <tr><td><strong>Supabase</strong></td><td>All user data hosted here</td><td>Database &amp; auth</td></tr>
+    <tr><td><strong>SSI iBoard API</strong></td><td>Stock symbols (no PII)</td><td>Vietnamese stock prices</td></tr>
+    <tr><td><strong>ChatGPT / OpenAI</strong></td><td>Prompts you send via ChatGPT's interface</td><td>AI processing — governed by OpenAI's policy</td></tr>
+    <tr><td><strong>Stripe</strong></td><td>Email, payment info (paid plans)</td><td>Payment processing — we never store card numbers</td></tr>
+    <tr><td><strong>Sentry</strong></td><td>Anonymous technical error traces (no PII)</td><td>Error monitoring — only with your consent</td></tr>
+  </table>
+  <p>We <strong>do not sell</strong> your personal data.</p>
+
+  <h2>5. Your Rights (GDPR Article 12–22)</h2>
+  <ul>
+    <li><strong>Access</strong>: View all your data via Settings → "Export Data"</li>
+    <li><strong>Rectification</strong>: Edit directly within the extension</li>
+    <li><strong>Erasure</strong>: Settings → "Delete Account" — immediately deletes all your data</li>
+    <li><strong>Portability</strong>: Export to JSON via Settings → "Export Data"</li>
+    <li><strong>Object to analytics</strong>: Settings → "Privacy" → disable error reporting</li>
+  </ul>
+
+  <h2>6. Chrome Permissions</h2>
+  <table>
+    <tr><th>Permission</th><th>Why it's needed</th></tr>
+    <tr><td><code>storage</code></td><td>Store Supabase session token</td></tr>
+    <tr><td><code>tabs</code></td><td>Open ChatGPT tab, Stripe Checkout tab</td></tr>
+    <tr><td><code>scripting</code></td><td>Interact with chatgpt.com to send prompts</td></tr>
+    <tr><td><code>alarms</code></td><td>Update stock prices every 5 minutes during market hours</td></tr>
+    <tr><td><code>sidePanel</code></td><td>Show extension UI beside the browser</td></tr>
+    <tr><td><code>contextMenus</code></td><td>Right-click menu for quick prompt sending</td></tr>
+    <tr><td><code>activeTab</code></td><td>Read active tab URL to detect chatgpt.com</td></tr>
+  </table>
+
+  <h2>7. Retention</h2>
+  <p>
+    Data is retained until you delete your account. Chat history may be auto-purged based on your
+    plan (30 days — Free, 365 days — Pro, unlimited — Enterprise).
+  </p>
+
+  <h2>8. Contact</h2>
+  <p>
+    Privacy questions: <strong>myx51fc@gmail.com</strong> — we respond within 72 business hours.
+  </p>
+
+  <h2>9. Changes</h2>
+  <p>
+    Policy updates will be notified in the extension and require re-consent.
+    Current version: <strong>1.0</strong> (2026-02-22).
+  </p>
+
+  <footer>
+    &copy; 2026 ChatGPT Assistant | <a href="terms-of-service.html">Terms of Service</a>
+  </footer>
+</body>
+</html>

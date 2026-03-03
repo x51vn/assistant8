@@ -1,12 +1,17 @@
 /**
  * useAuth Hook - Unit Tests
  * X51LABS-162: Build AuthContext & useAuth Custom Hook
- * 
- * Tests all 7 Acceptance Criteria defined in Jira ticket
+ *
+ * Tests all 7 Acceptance Criteria defined in Jira ticket.
+ *
+ * NOTE: AuthContext deliberately does NOT expose a `loading` property.
+ * Loading state is managed globally via appState.js (setGlobalLoading/hideLoading).
+ * Login/logout handlers do NOT update auth state directly — they rely on
+ * listenAuthStateChanges callback to propagate changes from background.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/preact';
+import { render, screen, waitFor } from '../../test-utils/preact-render.js';
 import { h } from 'preact';
 import { useAuth } from '../../../src/ui-preact/hooks/useAuth.js';
 import { AuthProvider } from '../../../src/ui-preact/context/AuthContext.jsx';
@@ -31,39 +36,43 @@ vi.mock('../../../src/ui-preact/api/authApi.js', () => ({
   listenAuthStateChanges: vi.fn(() => () => {}) // Return cleanup function
 }));
 
+// Mock appState to prevent side effects
+vi.mock('../../../src/ui-preact/state/appState.js', () => ({
+  setGlobalLoading: vi.fn(),
+  hideLoading: vi.fn(),
+  globalLoading: { value: false },
+  globalLoadingMessage: { value: '' }
+}));
+
+// Mock settings loader
+vi.mock('../../../src/ui-preact/api/settingsApi.js', () => ({
+  loadSettings: vi.fn().mockResolvedValue({})
+}));
+
 // Test component to access hook values
-function TestComponent({ onRender, onLogin, onLogout, onCheckAuth }) {
+function TestComponent({ onRender }) {
   const auth = useAuth();
-  
-  // Call onRender with auth state
+
+  // Call onRender with auth state on every render
   if (onRender) {
     onRender(auth);
   }
-  
+
   return h('div', { 'data-testid': 'test-component' },
     h('div', { 'data-testid': 'authenticated' }, String(auth.authenticated)),
     h('div', { 'data-testid': 'user' }, JSON.stringify(auth.user)),
-    h('div', { 'data-testid': 'loading' }, String(auth.loading)),
-    h('div', { 'data-testid': 'error' }, String(auth.error)),
-    h('button', { 
-      'data-testid': 'login-btn',
-      onClick: onLogin ? () => onLogin(auth.login) : undefined
-    }, 'Login'),
-    h('button', {
-      'data-testid': 'logout-btn',
-      onClick: onLogout ? () => onLogout(auth.logout) : undefined
-    }, 'Logout'),
-    h('button', {
-      'data-testid': 'check-btn',
-      onClick: onCheckAuth ? () => onCheckAuth(auth.checkAuthStatus) : undefined
-    }, 'Check')
+    h('div', { 'data-testid': 'error' }, String(auth.error))
   );
 }
 
 describe('useAuth Hook - X51LABS-162', () => {
+  let authChangeCallback;
+
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default mock implementations
+    authChangeCallback = null;
+
+    // Default: not authenticated
     authApi.checkAuthStatus.mockResolvedValue({
       authenticated: false,
       user: null
@@ -73,46 +82,44 @@ describe('useAuth Hook - X51LABS-162', () => {
       user: { id: 'user123', email: 'test@example.com' }
     });
     authApi.logout.mockResolvedValue({ success: true });
-    authApi.listenAuthStateChanges.mockReturnValue(() => {});
+
+    // Capture the auth-state-change callback so tests can trigger it
+    authApi.listenAuthStateChanges.mockImplementation((callback) => {
+      authChangeCallback = callback;
+      return () => {};
+    });
   });
 
+  /** Helper: render AuthProvider with TestComponent, wait for initial check */
+  async function renderAuth() {
+    let capturedAuth;
+    render(
+      h(AuthProvider, null,
+        h(TestComponent, {
+          onRender: (auth) => { capturedAuth = auth; }
+        })
+      )
+    );
+    // Wait for checkAuthStatus to complete
+    await waitFor(() => {
+      expect(authApi.checkAuthStatus).toHaveBeenCalledTimes(1);
+    });
+    return capturedAuth;
+  }
+
   describe('AC-1: Hook returns correct shape', () => {
-    it('should return object with authenticated, user, loading, error properties', async () => {
-      let capturedAuth;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onRender: (auth) => { capturedAuth = auth; }
-          })
-        )
-      );
+    it('should return object with authenticated, user, error properties', async () => {
+      const capturedAuth = await renderAuth();
 
-      await waitFor(() => {
-        expect(capturedAuth).toBeDefined();
-        expect(capturedAuth.loading).toBe(false);
-      });
-
+      expect(capturedAuth).toBeDefined();
       expect(capturedAuth).toHaveProperty('authenticated');
       expect(capturedAuth).toHaveProperty('user');
-      expect(capturedAuth).toHaveProperty('loading');
       expect(capturedAuth).toHaveProperty('error');
       expect(typeof capturedAuth.authenticated).toBe('boolean');
     });
 
     it('should return login, logout, checkAuthStatus functions', async () => {
-      let capturedAuth;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onRender: (auth) => { capturedAuth = auth; }
-          })
-        )
-      );
-
-      await waitFor(() => {
-        expect(capturedAuth).toBeDefined();
-        expect(capturedAuth.loading).toBe(false);
-      });
+      const capturedAuth = await renderAuth();
 
       expect(typeof capturedAuth.login).toBe('function');
       expect(typeof capturedAuth.logout).toBe('function');
@@ -128,23 +135,17 @@ describe('useAuth Hook - X51LABS-162', () => {
         user: mockUser
       });
 
-      let loginFn;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onLogin: (fn) => { loginFn = fn; }
-          })
-        )
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('false');
-      });
-
+      const capturedAuth = await renderAuth();
       expect(screen.getByTestId('authenticated').textContent).toBe('false');
 
-      // Trigger login
-      await loginFn('test@example.com', 'password123');
+      // Login — handler calls API but doesn't update state directly
+      await capturedAuth.login('test@example.com', 'password123');
+
+      // Simulate background broadcasting auth state change
+      authChangeCallback({
+        authenticated: true,
+        user: mockUser
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('authenticated').textContent).toBe('true');
@@ -158,20 +159,9 @@ describe('useAuth Hook - X51LABS-162', () => {
         error: 'Invalid credentials'
       });
 
-      let loginFn;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onLogin: (fn) => { loginFn = fn; }
-          })
-        )
-      );
+      const capturedAuth = await renderAuth();
 
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('false');
-      });
-
-      await loginFn('wrong@example.com', 'wrongpass');
+      await capturedAuth.login('wrong@example.com', 'wrongpass');
 
       await waitFor(() => {
         expect(screen.getByTestId('error').textContent).toBe('Invalid credentials');
@@ -182,27 +172,27 @@ describe('useAuth Hook - X51LABS-162', () => {
   describe('AC-3: Logout clears context', () => {
     it('should reset authenticated to false and clear user on logout', async () => {
       const mockUser = { id: 'user123', email: 'test@example.com' };
-      
+
+      // Start authenticated
       authApi.checkAuthStatus.mockResolvedValue({
         authenticated: true,
         user: mockUser
       });
 
-      let logoutFn;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onLogout: (fn) => { logoutFn = fn; }
-          })
-        )
-      );
+      const capturedAuth = await renderAuth();
 
       await waitFor(() => {
         expect(screen.getByTestId('authenticated').textContent).toBe('true');
       });
 
-      authApi.logout.mockResolvedValue({ success: true });
-      await logoutFn();
+      // Logout — handler calls API but doesn't update state directly
+      await capturedAuth.logout();
+
+      // Simulate background broadcasting auth state change
+      authChangeCallback({
+        authenticated: false,
+        user: null
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('authenticated').textContent).toBe('false');
@@ -215,14 +205,7 @@ describe('useAuth Hook - X51LABS-162', () => {
         user: { id: 'user123', email: 'test@example.com' }
       });
 
-      let logoutFn;
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onLogout: (fn) => { logoutFn = fn; }
-          })
-        )
-      );
+      const capturedAuth = await renderAuth();
 
       await waitFor(() => {
         expect(screen.getByTestId('authenticated').textContent).toBe('true');
@@ -233,7 +216,7 @@ describe('useAuth Hook - X51LABS-162', () => {
         error: 'Logout failed'
       });
 
-      await logoutFn();
+      await capturedAuth.logout();
 
       await waitFor(() => {
         expect(screen.getByTestId('error').textContent).toBe('Logout failed');
@@ -297,26 +280,12 @@ describe('useAuth Hook - X51LABS-162', () => {
     });
 
     it('should handle auth state changes from background', async () => {
-      let capturedCallback;
-      authApi.listenAuthStateChanges.mockImplementation((callback) => {
-        capturedCallback = callback;
-        return () => {};
-      });
-
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {})
-        )
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('false');
-      });
+      await renderAuth();
 
       expect(screen.getByTestId('authenticated').textContent).toBe('false');
 
-      // Simulate background sending AUTH_STATE_CHANGED
-      capturedCallback({
+      // Simulate background sending auth state change
+      authChangeCallback({
         authenticated: true,
         user: { id: 'user456', email: 'updated@example.com' }
       });
@@ -335,41 +304,14 @@ describe('useAuth Hook - X51LABS-162', () => {
     });
   });
 
-  describe('Loading states', () => {
-    it('should set loading during operations', async () => {
-      let loginFn;
-      let resolveLogin;
-      authApi.login.mockReturnValue(new Promise((resolve) => {
-        resolveLogin = resolve;
-      }));
+  describe('Global loading integration', () => {
+    it('should call setGlobalLoading during login', async () => {
+      const { setGlobalLoading } = await import('../../../src/ui-preact/state/appState.js');
+      const capturedAuth = await renderAuth();
 
-      render(
-        h(AuthProvider, null,
-          h(TestComponent, {
-            onLogin: (fn) => { loginFn = fn; }
-          })
-        )
-      );
+      await capturedAuth.login('test@example.com', 'password');
 
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('false');
-      });
-
-      // Start login
-      loginFn('test@example.com', 'password');
-
-      // Should show loading
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('true');
-      });
-
-      // Resolve login
-      resolveLogin({ authenticated: true, user: { id: '123' } });
-
-      // Loading should be false again
-      await waitFor(() => {
-        expect(screen.getByTestId('loading').textContent).toBe('false');
-      });
+      expect(setGlobalLoading).toHaveBeenCalled();
     });
   });
 });

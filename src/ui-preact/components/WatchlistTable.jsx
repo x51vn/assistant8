@@ -9,6 +9,7 @@
 
 import {h} from 'preact';
 import { formatNumber, formatPercent } from '../utils/formatters.js';
+import { calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 import {
   filteredItems,
   hasFilteredItems,
@@ -27,6 +28,29 @@ import { toggleItemHighlight, updateWatchlistItem } from '../state/watchlistStat
 const formatCurrency = formatNumber;
 
 /**
+ * Format updated_at timestamp to short readable format
+ */
+function formatUpdatedAt(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '-';
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diffDays <= 7) {
+      return `${diffDays}d ago`;
+    }
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  } catch {
+    return '-';
+  }
+}
+
+/**
  * Get color class for ediff value
  */
 function getEdiffColorClass(ediff) {
@@ -39,7 +63,7 @@ function getEdiffColorClass(ediff) {
 /**
  * WatchlistRow - Single watchlist item row
  */
-function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbol }) {
+function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbols }) {
   const handleToggleHighlight = async () => {
     // Optimistic update
     toggleItemHighlight(item.symbol);
@@ -59,13 +83,16 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
 
   const ediffColorClass = getEdiffColorClass(item.ediff);
 
-  // pprofit = (target - entry) / entry
-  const pprofit = (item.target && item.entry)
-    ? (item.target - item.entry) / item.entry
-    : null;
+  // Use DB pprofit if available, else calculate client-side as fallback
+  const pprofit = item.pprofit != null
+    ? Number(item.pprofit)
+    : round4(calcPprofit(item.target, item.entry));
+
+  // Auto-highlight row when potential profit ≥ 10%, or when user starred it
+  const isHighlightedRow = item.highlighted || (pprofit !== null && pprofit >= 0.10);
 
   return (
-    <tr class={item.highlighted ? 'highlighted-row' : ''}>
+    <tr class={isHighlightedRow ? 'highlighted-row' : ''}>
       {/* Symbol with highlight star */}
       <td class="td-symbol">
         {item.highlighted && (
@@ -78,10 +105,10 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
       <td class="td-number">{formatCurrency(item.price)}</td>
 
       {/* Entry */}
-      <td class="td-number">{formatCurrency(item.entry)}</td>
+      <td class="td-number">{item.entry != null ? formatCurrency(item.entry) : '-'}</td>
 
       {/* Target */}
-      <td class="td-number">{formatCurrency(item.target)}</td>
+      <td class="td-number">{item.target != null ? formatCurrency(item.target) : '-'}</td>
 
       {/* StopLoss */}
       <td class="td-number">{formatCurrency(item.stoploss)}</td>
@@ -103,6 +130,11 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
         </div>
       </td>
 
+      {/* Updated At */}
+      <td class="td-date" title={item.updated_at || ''}>
+        {formatUpdatedAt(item.updated_at)}
+      </td>
+
       {/* Actions */}
       <td class="td-actions">
         <button
@@ -117,11 +149,11 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
         <button
           class="btn-icon btn-enrich"
           onClick={() => onEnrich(item)}
-          disabled={enrichingSymbol === item.symbol}
+          disabled={enrichingSymbols?.has?.(item.symbol)}
           title="Đánh giá và cập nhật thông tin"
           type="button"
         >
-          {enrichingSymbol === item.symbol ? (
+          {enrichingSymbols?.has?.(item.symbol) ? (
             <i class="fas fa-spinner fa-spin"></i>
           ) : (
             <i class="fas fa-lightbulb"></i>
@@ -204,7 +236,7 @@ function PaginationControls() {
 /**
  * WatchlistTable - Main table component
  */
-export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbol }) {
+export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbols }) {
   if (!hasFilteredItems.value) {
     return (
       <div class="empty-state">
@@ -229,6 +261,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
               <th class="th-number">PProfit %</th>
               <th class="th-number">EDiff %</th>
               <th class="th-thesis">Luận điểm</th>
+              <th class="th-date">Cập nhật</th>
               <th class="th-actions">Hành động</th>
             </tr>
           </thead>
@@ -240,7 +273,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onEnrich={onEnrich}
-                enrichingSymbol={enrichingSymbol}
+                enrichingSymbols={enrichingSymbols}
               />
             ))}
           </tbody>

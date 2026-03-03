@@ -11,10 +11,14 @@
     "alarms",
     "sidePanel",
     "contextMenus",
-    "activeTab"
+    "activeTab",
+    "notifications"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
+    "https://www.google.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
     "https://iboard-query.ssi.com.vn/*",
     "https://iboard.ssi.com.vn/*",
     "https://bgapidatafeed.vps.com.vn/*",
@@ -26,7 +30,10 @@
     "https://api.coingecko.com/*",
     "https://api.binance.com/*",
     "https://*.atlassian.net/*",
-    "https://api.x51.vn/*"
+    "https://api.x51.vn/*",
+    "https://lite.x51.vn/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "action": {
     "default_title": "ChatGPT Assistant"
@@ -48,14 +55,35 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
-      "all_frames": false,
-      "type": "module"
+      "all_frames": false
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content-gemini.js"],
+      "all_frames": false
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content-claude.js"],
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["prompts/*.md"],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ]
+    },
+    {
+      "resources": ["privacy-policy.html", "terms-of-service.html"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ]
     }
   ]
 }

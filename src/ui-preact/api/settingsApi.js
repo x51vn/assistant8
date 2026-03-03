@@ -22,16 +22,12 @@ import {
  * @throws {Error} if load fails
  */
 export async function loadSettings() {
-  console.log('[SettingsAPI] Loading settings...');
-  
   const response = await chrome.runtime.sendMessage({
     v: 1,
     type: MESSAGE_TYPES.SETTINGS_GET,
     correlationId: generateCorrelationId(),
     timestamp: Date.now()
   });
-  
-  console.log('[SettingsAPI] SETTINGS_GET response:', response);
   
   const loadError = response.error?.message || response.errorMessage;
   if (response.error || response.errorCode || loadError) {
@@ -42,10 +38,12 @@ export async function loadSettings() {
   // Response structure: { config: { interval, ... } }
   const config = response.config || {};
 
-  console.log('[SettingsAPI] Parsed config:', {
-    interval: config.interval
-  });
-
+  // Populate boolean signals (4 fields)
+  autoRun.value = config.autoRun ?? false;
+  evaluatePrevious.value = config.evaluatePrevious ?? false;
+  reviewPrompt.value = config.reviewPrompt ?? false;
+  realtimeEnabled.value = config.realtimeEnabled ?? false;
+  
   // Populate number signal (1 field)
   interval.value = config.interval ?? 5;
 
@@ -54,8 +52,6 @@ export async function loadSettings() {
   atlassianBaseUrl.value = atlassian.baseUrl || '';
   atlassianEmail.value = atlassian.email || '';
   atlassianApiToken.value = atlassian.apiToken || '';
-  
-  console.log('[SettingsAPI] All signals populated successfully');
 }
 
 /**
@@ -65,8 +61,6 @@ export async function loadSettings() {
  * @throws {Error} if save fails
  */
 export async function saveSettings() {
-  console.log('[SettingsAPI] Saving settings...');
-
   // Build config object matching background handler expectations
   const config = {
     // Number settings
@@ -80,8 +74,6 @@ export async function saveSettings() {
     }
   };
 
-  console.log('[SettingsAPI] Sending SETTINGS_UPDATE with config:', config);
-  
   const response = await chrome.runtime.sendMessage({
     v: 1,
     type: MESSAGE_TYPES.SETTINGS_UPDATE,
@@ -90,24 +82,18 @@ export async function saveSettings() {
     data: { config }
   });
   
-  console.log('[SettingsAPI] SETTINGS_UPDATE response:', response);
-  
   const saveError = response.error?.message || response.errorMessage;
   if (response.error || response.errorCode || saveError) {
     throw new Error(saveError || 'Failed to save settings');
   }
-  
-  console.log('[SettingsAPI] Settings saved successfully');
 }
 
 /**
- * Send master prompt immediately to ChatGPT
+ * Send master prompt immediately to the active LLM provider
  * @returns {Promise<void>}
  * @throws {Error} if send fails
  */
 export async function sendPromptNow() {
-  console.log('[SettingsAPI] Sending master prompt now...');
-
   // Get master prompt from allPrompts
   const masterContent = allPrompts.value['prompt.master']?.content || '';
 
@@ -130,14 +116,10 @@ export async function sendPromptNow() {
     }
   });
 
-  console.log('[SettingsAPI] SEND_PROMPT response:', response);
-
   const sendError = response.error?.message || response.errorMessage;
   if (response.type === MESSAGE_TYPES.ERROR || response.errorCode || sendError) {
     throw new Error(sendError || 'Failed to send prompt');
   }
-
-  console.log('[SettingsAPI] Prompt sent successfully');
 }
 
 /**
@@ -146,8 +128,6 @@ export async function sendPromptNow() {
  * @throws {Error} if delete fails
  */
 export async function deleteSettings() {
-  console.log('[SettingsAPI] Deleting all settings from Supabase...');
-
   const response = await chrome.runtime.sendMessage({
     v: 1,
     type: MESSAGE_TYPES.SETTINGS_DELETE,
@@ -155,14 +135,10 @@ export async function deleteSettings() {
     timestamp: Date.now()
   });
 
-  console.log('[SettingsAPI] SETTINGS_DELETE response:', response);
-
   const deleteError = response.error?.message || response.errorMessage;
   if (response.error || response.errorCode || deleteError) {
     throw new Error(deleteError || 'Failed to delete settings');
   }
-
-  console.log('[SettingsAPI] Settings deleted successfully from Supabase');
 }
 
 /**
@@ -171,20 +147,12 @@ export async function deleteSettings() {
  * @returns {Promise<Object>} - All prompts object with keys
  */
 export async function loadAllPrompts() {
-  console.log('[SettingsAPI] Loading all prompts...');
-
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
       type: MESSAGE_TYPES.PROMPTS_GET_ALL,
       correlationId: generateCorrelationId(),
       timestamp: Date.now()
-    });
-
-    console.log('[SettingsAPI] PROMPTS_GET_ALL response:', {
-      success: response.success,
-      promptsCount: response.prompts ? Object.keys(response.prompts).length : 0,
-      isDefaultFallback: response.isDefaultFallback
     });
 
     if (response.error || response.errorCode) {
@@ -205,8 +173,6 @@ export async function loadAllPrompts() {
  * @returns {Promise<Object>} - Save result with success count
  */
 export async function saveAllPrompts(prompts) {
-  console.log('[SettingsAPI] Saving all prompts...');
-
   // Validate prompts
   if (!prompts || typeof prompts !== 'object') {
     throw new Error('Invalid prompts data');
@@ -230,14 +196,6 @@ export async function saveAllPrompts(prompts) {
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
       data: { prompts: promptsToSend }
-    });
-
-    console.log('[SettingsAPI] PROMPTS_UPSERT response:', {
-      success: response.success,
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-      partialSuccess: response.partialSuccess,
-      results: response.results
     });
 
     if (response.error || response.errorCode) {
@@ -269,8 +227,6 @@ export async function saveAllPrompts(prompts) {
  * @returns {Promise<void>}
  */
 export async function initializeAllPrompts() {
-  console.log('[SettingsAPI] Initializing prompts...');
-
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
@@ -286,8 +242,6 @@ export async function initializeAllPrompts() {
       // Don't throw - initialization failure shouldn't block the Settings page
       return;
     }
-
-    console.log('[SettingsAPI] Prompts initialized successfully');
   } catch (error) {
     console.warn('[SettingsAPI] Failed to initialize prompts:', error);
     // Don't throw - initialization failure shouldn't block the UI

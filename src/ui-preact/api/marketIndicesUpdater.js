@@ -32,7 +32,6 @@ export function startIndicesPolling(intervalMs = 45000) {
     return;
   }
 
-  console.log('[marketIndicesUpdater] Starting indices polling...');
   shouldContinuePolling = true;
   clearIndicesError();
 
@@ -56,7 +55,6 @@ export function stopIndicesPolling() {
     clearInterval(pollingInterval);
     pollingInterval = null;
     shouldContinuePolling = false;
-    console.log('[marketIndicesUpdater] Indices polling stopped');
   }
 }
 
@@ -69,8 +67,6 @@ export async function updateIndicesNow() {
   clearIndicesError();
 
   try {
-    console.log('[marketIndicesUpdater] Fetching market indices...');
-
     const result = await fetchMarketIndices();
 
     if (result.error) {
@@ -86,8 +82,6 @@ export async function updateIndicesNow() {
 
     setMarketIndices(result.indices);
     setLastIndicesUpdateTime(Date.now());
-
-    console.log('[marketIndicesUpdater] Indices updated successfully:', result.indices);
   } catch (error) {
     const errorMsg = error.message || 'Failed to fetch market indices';
     setIndicesError(errorMsg);

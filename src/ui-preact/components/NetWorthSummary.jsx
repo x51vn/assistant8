@@ -8,21 +8,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { formatCurrency, formatPercent } from '../utils/formatters.js';
-
-/**
- * Asset type labels and colors
- */
-const ASSET_TYPE_CONFIG = {
-  cash: { label: 'Tiền mặt', color: '#4CAF50', icon: '💵' },
-  savings: { label: 'Tiết kiệm', color: '#2196F3', icon: '🏦' },
-  stocks: { label: 'Cổ phiếu', color: '#9C27B0', icon: '📈' },
-  crypto: { label: 'Crypto', color: '#FF9800', icon: '₿' },
-  gold: { label: 'Vàng', color: '#FFD700', icon: '🥇' },
-  real_estate: { label: 'BĐS', color: '#795548', icon: '🏠' },
-  vehicle: { label: 'Xe cộ', color: '#607D8B', icon: '🚗' },
-  debt: { label: 'Khoản vay', color: '#F44336', icon: '💳', isLiability: true },
-  other: { label: 'Khác', color: '#9E9E9E', icon: '📦' }
-};
+import { ASSET_TYPE_CONFIG } from '../utils/assetTypes.js';
 /**
  * NetWorthSummary component
  * @param {Object} props

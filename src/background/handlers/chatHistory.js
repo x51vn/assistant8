@@ -270,10 +270,12 @@ registerHandler(MESSAGE_TYPES.HISTORY_UPDATE, async (message) => {
           query = query.eq('id', id);
         } else if (chat_id) {
           // Find latest entry by chat_id for this user
-          query = query.eq('chat_id', chat_id);
+          query = query.eq('chat_id', chat_id)
+            .order('timestamp', { ascending: false })
+            .limit(1);
         }
         
-        const result = await query.select().single();
+        const result = await query.select().maybeSingle();
         const { data, error } = result;
         
         if (error) {

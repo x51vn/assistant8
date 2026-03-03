@@ -724,6 +724,44 @@
   color: white;
 }
 
+/* Pause / Resume button */
+.queue-btn-pause {
+  color: var(--warning-text, #d97706);
+  border-color: var(--warning-text, #d97706);
+}
+
+.queue-btn-pause:hover:not(:disabled) {
+  background: var(--warning-text, #d97706);
+  color: white;
+}
+
+.queue-btn-resume {
+  color: var(--success-text, #10b981);
+  border-color: var(--success-text, #10b981);
+}
+
+.queue-btn-resume:hover:not(:disabled) {
+  background: var(--success-text, #10b981);
+  color: white;
+}
+
+/* Cancel All button */
+.queue-btn-cancel-all {
+  color: var(--error-text, #ef4444);
+  border-color: var(--error-text, #ef4444);
+}
+
+.queue-btn-cancel-all:hover:not(:disabled) {
+  background: var(--error-text, #ef4444);
+  color: white;
+}
+
+/* Paused indicator in summary */
+.queue-paused-indicator {
+  color: var(--warning-text, #d97706);
+  font-weight: 700;
+}
+
 /* Empty state */
 .queue-empty {
   display: flex;

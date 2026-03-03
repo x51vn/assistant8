@@ -33,6 +33,8 @@ export function PromptQueueSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [clearing, setClearing] = useState(false);
+  const [pausing, setPausing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const autoRefreshRef = useRef(null);
 
   /** Fetch queue info from background */
@@ -82,6 +84,57 @@ export function PromptQueueSection() {
     }
   }, [fetchQueueInfo]);
 
+  /** Pause or resume the queue */
+  const handleTogglePause = useCallback(async () => {
+    setPausing(true);
+    try {
+      const isPaused = queueInfo?.isPaused;
+      const msgType = isPaused
+        ? MESSAGE_TYPES.PROMPT_QUEUE_RESUME
+        : MESSAGE_TYPES.PROMPT_QUEUE_PAUSE;
+
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: msgType,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now()
+      });
+
+      if (response?.success) {
+        await fetchQueueInfo();
+      } else {
+        setError(response?.errorMessage || 'Lỗi không xác định');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPausing(false);
+    }
+  }, [queueInfo?.isPaused, fetchQueueInfo]);
+
+  /** Cancel all pending (queued) jobs */
+  const handleCancelAll = useCallback(async () => {
+    setCancelling(true);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        v: 1,
+        type: MESSAGE_TYPES.PROMPT_QUEUE_CANCEL_ALL,
+        correlationId: generateCorrelationId(),
+        timestamp: Date.now()
+      });
+
+      if (response?.success) {
+        await fetchQueueInfo();
+      } else {
+        setError(response?.errorMessage || 'Lỗi không xác định');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  }, [fetchQueueInfo]);
+
   // Fetch on mount
   useEffect(() => {
     fetchQueueInfo();
@@ -107,6 +160,8 @@ export function PromptQueueSection() {
   useEffect(() => {
     const handleMessage = (message) => {
       if (message?.type === MESSAGE_TYPES.PROMPT_QUEUE_STATUS ||
+          message?.type === MESSAGE_TYPES.PROMPT_QUEUE_PAUSED ||
+          message?.type === MESSAGE_TYPES.PROMPT_QUEUE_RESUMED ||
           message?.type === 'WATCHLIST_AI_ENRICH_STATUS' ||
           message?.type === 'WATCHLIST_AI_ENRICH_DONE' ||
           message?.type === 'WATCHLIST_AI_ENRICH_CANCELLED') {
@@ -150,6 +205,12 @@ export function PromptQueueSection() {
           <span class="queue-stat-label">Background Jobs</span>
           <span class="queue-stat-value">{queueInfo?.activeCount ?? '—'}</span>
         </div>
+        <div class="queue-stat">
+          <span class="queue-stat-label">Trạng thái</span>
+          <span class={`queue-stat-value ${queueInfo?.isPaused ? 'queue-paused-indicator' : ''}`}>
+            {queueInfo?.isPaused ? '⏸ Tạm dừng' : '▶ Đang chạy'}
+          </span>
+        </div>
       </div>
 
       {/* Actions */}
@@ -163,6 +224,28 @@ export function PromptQueueSection() {
           <i class={loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'}></i>
           {loading ? ' Đang tải...' : ' Làm mới'}
         </button>
+
+        <button
+          type="button"
+          class={`secondary-btn queue-btn ${queueInfo?.isPaused ? 'queue-btn-resume' : 'queue-btn-pause'}`}
+          onClick={handleTogglePause}
+          disabled={pausing}
+        >
+          <i class={pausing ? 'fas fa-spinner fa-spin' : queueInfo?.isPaused ? 'fas fa-play' : 'fas fa-pause'}></i>
+          {pausing ? ' Đang xử lý...' : queueInfo?.isPaused ? ' Tiếp tục' : ' Tạm dừng'}
+        </button>
+
+        {activeJobs.filter(j => j.state === 'queued').length > 0 && (
+          <button
+            type="button"
+            class="secondary-btn queue-btn queue-btn-cancel-all"
+            onClick={handleCancelAll}
+            disabled={cancelling}
+          >
+            <i class={cancelling ? 'fas fa-spinner fa-spin' : 'fas fa-ban'}></i>
+            {cancelling ? ' Đang hủy...' : ` Hủy tất cả (${activeJobs.filter(j => j.state === 'queued').length})`}
+          </button>
+        )}
 
         {terminalJobs.length > 0 && (
           <button

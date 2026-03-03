@@ -17,6 +17,7 @@ import {
   isGenerating,
   waitForStableAssistantResponse
 } from './output.js';
+import { deactivateGuard } from './navigationGuard.js';
 
 const MAX_CAPTURE_PROMPT_CHARS = 50_000;
 const MAX_CAPTURE_RESPONSE_CHARS = 100_000;
@@ -91,6 +92,12 @@ export async function captureAndReportAssistantResponse(params) {
 
   if (!runId || typeof runId !== 'string') return;
 
+  // Record the chatId at the moment we start capturing — this is the session
+  // the extension "owns". We validate at the end that the user hasn't navigated
+  // away to a different session.
+  const initialMeta = getChatMeta();
+  const ownedChatId = initialMeta.chatId;
+
   const startedAt = Date.now();
 
   try {
@@ -108,6 +115,17 @@ export async function captureAndReportAssistantResponse(params) {
 
     const responseText = truncateText(waited.text || latest.text || '', MAX_CAPTURE_RESPONSE_CHARS);
     const promptText = truncateText(prompt || '', MAX_CAPTURE_PROMPT_CHARS);
+
+    // Session guard: if the user navigated to a different chat during the wait,
+    // the response we captured belongs to a different session — do not persist it.
+    if (ownedChatId && meta.chatId && meta.chatId !== ownedChatId) {
+      console.warn('[Content] captureAndReportAssistantResponse: session changed during wait — discarding', {
+        owned: ownedChatId,
+        current: meta.chatId,
+        runId
+      });
+      return;
+    }
 
     const message = {
       v: 1,
@@ -132,5 +150,9 @@ export async function captureAndReportAssistantResponse(params) {
     });
   } catch (e) {
     console.warn('[Content] Auto-capture failed:', e?.message || e);
+  } finally {
+    // Always release the navigation guard when capture finishes
+    // (success, failure, session-mismatch, or timeout)
+    deactivateGuard();
   }
 }

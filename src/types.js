@@ -46,12 +46,6 @@
  */
 
 /**
- * @typedef {Object} WaitForContentScriptOptions
- * @property {number} [maxRetries=10] - Maximum number of retry attempts
- * @property {number} [retryDelay=500] - Delay between retries in milliseconds
- */
-
-/**
  * Standard error codes used throughout the application
  */
 /**
@@ -69,6 +63,7 @@ export const ERROR_CODES = {
   SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
   INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
   OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
+  SESSION_MISMATCH: 'SESSION_MISMATCH',  // getOutput called while user navigated to different session
   TIMEOUT: 'TIMEOUT',
   OPERATION_FAILED: 'OPERATION_FAILED',
   

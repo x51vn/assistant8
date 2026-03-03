@@ -83,6 +83,10 @@ export const MESSAGE_TYPES = {
   SEND_PROMPT: 'SEND_PROMPT',
   ENSURE_CHATGPT_OPEN: 'ENSURE_CHATGPT_OPEN',
   CHATGPT_TAB_READY: 'CHATGPT_TAB_READY',
+  ENSURE_GEMINI_OPEN: 'ENSURE_GEMINI_OPEN',
+  GEMINI_TAB_READY: 'GEMINI_TAB_READY',
+  ENSURE_CLAUDE_OPEN: 'ENSURE_CLAUDE_OPEN',
+  CLAUDE_TAB_READY: 'CLAUDE_TAB_READY',
   
   // Supabase Auth operations
   SUPABASE_AUTH_LOGIN: 'SUPABASE_AUTH_LOGIN',
@@ -91,6 +95,18 @@ export const MESSAGE_TYPES = {
   SUPABASE_AUTH_LOGGED_OUT: 'SUPABASE_AUTH_LOGGED_OUT',
   SUPABASE_AUTH_CHECK: 'SUPABASE_AUTH_CHECK',
   SUPABASE_AUTH_STATUS: 'SUPABASE_AUTH_STATUS',
+  SUPABASE_AUTH_CHANGE_PASSWORD: 'SUPABASE_AUTH_CHANGE_PASSWORD',
+  SUPABASE_AUTH_PASSWORD_CHANGED: 'SUPABASE_AUTH_PASSWORD_CHANGED',
+  SUPABASE_AUTH_RESET_PASSWORD_REQUEST: 'SUPABASE_AUTH_RESET_PASSWORD_REQUEST',
+  SUPABASE_AUTH_RESET_PASSWORD_SENT: 'SUPABASE_AUTH_RESET_PASSWORD_SENT',
+  SUPABASE_AUTH_REGISTER: 'SUPABASE_AUTH_REGISTER',
+  SUPABASE_AUTH_REGISTERED: 'SUPABASE_AUTH_REGISTERED',
+  SUPABASE_AUTH_RESEND_CONFIRMATION: 'SUPABASE_AUTH_RESEND_CONFIRMATION',
+  SUPABASE_AUTH_CONFIRMATION_RESENT: 'SUPABASE_AUTH_CONFIRMATION_RESENT',
+  SUPABASE_AUTH_GOOGLE_LOGIN: 'SUPABASE_AUTH_GOOGLE_LOGIN',
+  SUPABASE_AUTH_GOOGLE_SUCCESS: 'SUPABASE_AUTH_GOOGLE_SUCCESS',
+  ACCOUNT_DELETE_REQUEST: 'ACCOUNT_DELETE_REQUEST',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
   AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',
   AUTH_TOKEN_REFRESHED: 'AUTH_TOKEN_REFRESHED',
   
@@ -143,14 +159,6 @@ export const MESSAGE_TYPES = {
   WRITING_TEMPLATES_UPSERTED: 'WRITING_TEMPLATES_UPSERTED',
   WRITING_TEMPLATES_INIT: 'WRITING_TEMPLATES_INIT',
   WRITING_TEMPLATES_INITIALIZED: 'WRITING_TEMPLATES_INITIALIZED',
-
-  // System Prompts operations (System Prompt Management feature) - DEPRECATED: Use PROMPTS_* instead
-  SYSTEM_PROMPTS_GET: 'SYSTEM_PROMPTS_GET',
-  SYSTEM_PROMPTS_DATA: 'SYSTEM_PROMPTS_DATA',
-  SYSTEM_PROMPTS_UPSERT: 'SYSTEM_PROMPTS_UPSERT',
-  SYSTEM_PROMPTS_UPSERTED: 'SYSTEM_PROMPTS_UPSERTED',
-  SYSTEM_PROMPTS_INIT: 'SYSTEM_PROMPTS_INIT',
-  SYSTEM_PROMPTS_INITIALIZED: 'SYSTEM_PROMPTS_INITIALIZED',
 
   // Unified Prompts operations (ALL prompts: system + writing)
   PROMPTS_GET_ALL: 'PROMPTS_GET_ALL',
@@ -254,13 +262,16 @@ export const MESSAGE_TYPES = {
   XNEEWS_WATCHLIST_DELETED: 'XNEEWS_WATCHLIST_DELETED',
   XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT: 'XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT',
   XNEEWS_WATCHLIST_HIGHLIGHT_TOGGLED: 'XNEEWS_WATCHLIST_HIGHLIGHT_TOGGLED',
+  XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES: 'XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES', // Batch update price+ediff
+  XNEEWS_WATCHLIST_PRICES_SAVED: 'XNEEWS_WATCHLIST_PRICES_SAVED', // Response after batch price save
 
   // Supabase Watchlist Price Updates (formerly X-Neews, migrated XST-744)
   XNEEWS_PRICE_UPDATE: 'XNEEWS_PRICE_UPDATE',           // Request from alarm to handler
   XNEEWS_PRICES_UPDATED: 'XNEEWS_PRICES_UPDATED',      // Broadcast from handler to UI
 
   // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
-  WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment
+  WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment (single symbol)
+  WATCHLIST_AI_ENRICH_BATCH_RUN: 'WATCHLIST_AI_ENRICH_BATCH_RUN', // UI → Background: batch enrichment (max 10 symbols per prompt)
   WATCHLIST_AI_ENRICH_STATUS: 'WATCHLIST_AI_ENRICH_STATUS',     // Background → UI: progress update
   WATCHLIST_AI_ENRICH_CANCEL: 'WATCHLIST_AI_ENRICH_CANCEL',     // UI → Background: cancel running enrichment
   WATCHLIST_AI_ENRICH_CANCELLED: 'WATCHLIST_AI_ENRICH_CANCELLED', // Background → UI: enrichment cancelled
@@ -273,6 +284,121 @@ export const MESSAGE_TYPES = {
   PROMPT_QUEUE_INFO: 'PROMPT_QUEUE_INFO',                       // Background → UI: queue state response
   PROMPT_QUEUE_CLEAR_DONE: 'PROMPT_QUEUE_CLEAR_DONE',           // UI → Background: clear terminal jobs
   PROMPT_QUEUE_CLEARED: 'PROMPT_QUEUE_CLEARED',                 // Background → UI: cleared confirmation
+  PROMPT_QUEUE_PAUSE: 'PROMPT_QUEUE_PAUSE',                     // UI → Background: pause queue (no new jobs start)
+  PROMPT_QUEUE_PAUSED: 'PROMPT_QUEUE_PAUSED',                   // Background → UI: queue paused confirmation
+  PROMPT_QUEUE_RESUME: 'PROMPT_QUEUE_RESUME',                   // UI → Background: resume queue
+  PROMPT_QUEUE_RESUMED: 'PROMPT_QUEUE_RESUMED',                 // Background → UI: queue resumed confirmation
+  PROMPT_QUEUE_CANCEL_ALL: 'PROMPT_QUEUE_CANCEL_ALL',           // UI → Background: cancel all pending jobs
+  PROMPT_QUEUE_ALL_CANCELLED: 'PROMPT_QUEUE_ALL_CANCELLED',     // Background → UI: all pending cancelled confirmation
+
+  // Billing & Subscription (XST-758..XST-763)
+  SUBSCRIPTION_GET: 'SUBSCRIPTION_GET',                         // UI → Background: get current plan + subscription
+  SUBSCRIPTION_DATA: 'SUBSCRIPTION_DATA',                       // Background → UI: subscription + plan info
+  SUBSCRIPTION_CREATE_CHECKOUT: 'SUBSCRIPTION_CREATE_CHECKOUT', // UI → Background: start Stripe Checkout
+  SUBSCRIPTION_CHECKOUT_URL: 'SUBSCRIPTION_CHECKOUT_URL',       // Background → UI: checkout session URL
+  SUBSCRIPTION_CREATE_PORTAL: 'SUBSCRIPTION_CREATE_PORTAL',     // UI → Background: open Stripe Customer Portal
+  SUBSCRIPTION_PORTAL_URL: 'SUBSCRIPTION_PORTAL_URL',           // Background → UI: portal session URL
+  PLANS_GET: 'PLANS_GET',                                       // UI → Background: list available plans
+  PLANS_DATA: 'PLANS_DATA',                                     // Background → UI: plans array.
+
+  // Usage Tracking (XST-760)
+  USAGE_CHECK: 'USAGE_CHECK',                                   // UI/Handler → Background: check if feature allowed
+  USAGE_ALLOWED: 'USAGE_ALLOWED',                               // Background → caller: { allowed, limit, used, remaining }
+  USAGE_INCREMENT: 'USAGE_INCREMENT',                           // Handler → Background: record feature usage
+  USAGE_INCREMENTED: 'USAGE_INCREMENTED',                       // Background → caller: updated count
+  USAGE_GET_STATS: 'USAGE_GET_STATS',                           // UI → Background: get all usage stats
+  USAGE_STATS: 'USAGE_STATS',                                   // Background → UI: all feature usage vs limits
+  USAGE_RESET_DAILY: 'USAGE_RESET_DAILY',                       // Alarm → Background: reset daily counters
+
+  // Compliance — GDPR Data Export (XST-765)
+  DATA_EXPORT_REQUEST: 'DATA_EXPORT_REQUEST',                   // UI → Background: request full user data export (GDPR Art.20)
+  DATA_EXPORT_DATA: 'DATA_EXPORT_DATA',                         // Background → UI: structured JSON export payload
+
+  // Data Import (XST-777)
+  DATA_IMPORT_REQUEST: 'DATA_IMPORT_REQUEST',                   // UI → Background: import JSON or CSV
+  DATA_IMPORT_COMPLETE: 'DATA_IMPORT_COMPLETE',                 // Background → UI: import result summary
+
+  // Price Alerts (XST-776)
+  ALERT_LIST: 'ALERT_LIST',
+  ALERT_DATA: 'ALERT_DATA',
+  ALERT_CREATE: 'ALERT_CREATE',
+  ALERT_CREATED: 'ALERT_CREATED',
+  ALERT_DELETE: 'ALERT_DELETE',
+  ALERT_DELETED: 'ALERT_DELETED',
+  ALERT_TOGGLE: 'ALERT_TOGGLE',
+  ALERT_TOGGLED: 'ALERT_TOGGLED',
+
+  // Enterprise API Keys (XST-778)
+  API_KEY_LIST: 'API_KEY_LIST',
+  API_KEY_DATA: 'API_KEY_DATA',
+  API_KEY_GENERATE: 'API_KEY_GENERATE',
+  API_KEY_GENERATED: 'API_KEY_GENERATED',
+  API_KEY_REVOKE: 'API_KEY_REVOKE',
+  API_KEY_REVOKED: 'API_KEY_REVOKED',
+
+  // Multi-Portfolio (XST-779)
+  PORTFOLIO_LIST_PORTFOLIOS: 'PORTFOLIO_LIST_PORTFOLIOS',
+  PORTFOLIO_PORTFOLIOS_DATA: 'PORTFOLIO_PORTFOLIOS_DATA',
+  PORTFOLIO_CREATE_PORTFOLIO: 'PORTFOLIO_CREATE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_CREATED: 'PORTFOLIO_PORTFOLIO_CREATED',
+  PORTFOLIO_UPDATE_PORTFOLIO: 'PORTFOLIO_UPDATE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_UPDATED: 'PORTFOLIO_PORTFOLIO_UPDATED',
+  PORTFOLIO_DELETE_PORTFOLIO: 'PORTFOLIO_DELETE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_DELETED: 'PORTFOLIO_PORTFOLIO_DELETED',
+  PORTFOLIO_SET_DEFAULT: 'PORTFOLIO_SET_DEFAULT',
+  PORTFOLIO_DEFAULT_SET: 'PORTFOLIO_DEFAULT_SET',
+
+  // Multi-LLM Provider (XST-775)
+  LLM_GET_PROVIDERS: 'LLM_GET_PROVIDERS',
+  LLM_PROVIDERS_DATA: 'LLM_PROVIDERS_DATA',
+  LLM_SEND_PROMPT: 'LLM_SEND_PROMPT',
+  LLM_RESPONSE: 'LLM_RESPONSE',
+  LLM_GET_STATUS: 'LLM_GET_STATUS',
+  LLM_STATUS: 'LLM_STATUS',
+  LLM_SET_PROVIDER: 'LLM_SET_PROVIDER',
+  LLM_PROVIDER_SET: 'LLM_PROVIDER_SET',
+
+  // LLM API Key Management (llmClient)
+  SETTINGS_APIKEY_SET: 'SETTINGS_APIKEY_SET',               // UI → Background: persist API key to Supabase
+  SETTINGS_APIKEY_SET_DONE: 'SETTINGS_APIKEY_SET_DONE',     // Background → UI: key stored
+  SETTINGS_APIKEY_GET: 'SETTINGS_APIKEY_GET',               // UI → Background: read API key
+  SETTINGS_APIKEY_DATA: 'SETTINGS_APIKEY_DATA',             // Background → UI: key payload
+  SETTINGS_APIKEY_DELETE: 'SETTINGS_APIKEY_DELETE',          // UI → Background: remove key
+  SETTINGS_APIKEY_DELETED: 'SETTINGS_APIKEY_DELETED',       // Background → UI: key removed
+  SETTINGS_APIKEY_MIGRATE: 'SETTINGS_APIKEY_MIGRATE',       // UI → Background: migrate local keys → Supabase
+  SETTINGS_APIKEY_MIGRATED: 'SETTINGS_APIKEY_MIGRATED',     // Background → UI: migration complete
+  SETTINGS_APIKEY_HEALTHCHECK: 'SETTINGS_APIKEY_HEALTHCHECK', // UI → Background: test connection
+  SETTINGS_APIKEY_HEALTH_RESULT: 'SETTINGS_APIKEY_HEALTH_RESULT', // Background → UI: health result
+
+  // === Market Daily Assessment ===
+  MARKET_ASSESSMENT_RUN: 'MARKET_ASSESSMENT_RUN',               // UI → Background: trigger assessment
+  MARKET_ASSESSMENT_STATUS: 'MARKET_ASSESSMENT_STATUS',         // Background → UI: progress update
+  MARKET_ASSESSMENT_DONE: 'MARKET_ASSESSMENT_DONE',             // Background → UI: run completed
+  MARKET_ASSESSMENT_FAILED: 'MARKET_ASSESSMENT_FAILED',         // Background → UI: run failed
+  MARKET_ASSESSMENT_GET_HISTORY: 'MARKET_ASSESSMENT_GET_HISTORY', // UI → Background: fetch history
+  MARKET_ASSESSMENT_HISTORY_DATA: 'MARKET_ASSESSMENT_HISTORY_DATA', // Background → UI: history results
+  MARKET_ASSESSMENT_GET_DETAIL: 'MARKET_ASSESSMENT_GET_DETAIL', // UI → Background: single run detail
+  MARKET_ASSESSMENT_DETAIL_DATA: 'MARKET_ASSESSMENT_DETAIL_DATA', // Background → UI: run detail
+  MARKET_ASSESSMENT_DELETE_RUN: 'MARKET_ASSESSMENT_DELETE_RUN',   // UI → Background: delete a run
+  MARKET_ASSESSMENT_RUN_DELETED: 'MARKET_ASSESSMENT_RUN_DELETED', // Background → UI: run deleted
+
+  // === Sectors CRUD ===
+  SECTORS_GET: 'SECTORS_GET',                                   // UI → Background: list sectors
+  SECTORS_DATA: 'SECTORS_DATA',                                 // Background → UI: sectors list
+  SECTORS_UPSERT: 'SECTORS_UPSERT',                             // UI → Background: add/update sector
+  SECTORS_UPSERTED: 'SECTORS_UPSERTED',                         // Background → UI: sector saved
+  SECTORS_DELETE: 'SECTORS_DELETE',                              // UI → Background: delete sector
+  SECTORS_DELETED: 'SECTORS_DELETED',                            // Background → UI: sector deleted
+
+  // === Stock Research Pipeline (XST-781) ===
+  STOCK_RESEARCH_RUN: 'STOCK_RESEARCH_RUN',
+  STOCK_RESEARCH_STATUS: 'STOCK_RESEARCH_STATUS',
+  STOCK_RESEARCH_DONE: 'STOCK_RESEARCH_DONE',
+  STOCK_RESEARCH_FAILED: 'STOCK_RESEARCH_FAILED',
+  STOCK_RESEARCH_GET_HISTORY: 'STOCK_RESEARCH_GET_HISTORY',
+  STOCK_RESEARCH_HISTORY_DATA: 'STOCK_RESEARCH_HISTORY_DATA',
+  SEARCH_GOOGLE_RUN: 'SEARCH_GOOGLE_RUN',
+  SEARCH_GOOGLE_RESULT: 'SEARCH_GOOGLE_RESULT',
 
   // Error
   ERROR: 'ERROR'

@@ -344,7 +344,11 @@ export async function sendWritingJob(jobType, inputs, options = {}) {
       return { success: false, error };
     }
 
-    return { success: true, error: null };
+    // XST-821: Return response text — all providers now return text immediately via LLMProviderFactory
+    const text = response.text || response.payload?.text || null;
+    const chatId = response.chatId || response.payload?.chatId || null;
+    const chatUrl = response.chatUrl || response.payload?.chatUrl || null;
+    return { success: true, text, chatId, chatUrl, error: null };
   } catch (error) {
     console.error('[WritingAPI] Failed to send writing job:', error);
     return {
@@ -391,7 +395,12 @@ async function sendWritingJobWithFallback(jobType, inputs, options, fallbackTemp
     });
 
     const error = extractError(response);
-    return error ? { success: false, error } : { success: true, error: null };
+    if (error) return { success: false, error };
+    // XST-821: Return response text
+    const text = response.text || response.payload?.text || null;
+    const chatId = response.chatId || response.payload?.chatId || null;
+    const chatUrl = response.chatUrl || response.payload?.chatUrl || null;
+    return { success: true, text, chatId, chatUrl, error: null };
   } catch (error) {
     console.error('[WritingAPI] Fallback rendering failed:', error);
     throw error;
@@ -407,54 +416,10 @@ export function clearTemplateCache() {
 }
 
 /**
- * Get ChatGPT output (for polling)
- * @returns {Promise<{output?: string, chatId?: string, chatUrl?: string, error?: {code, message}}>}
- */
-export async function pollWritingOutput() {
-  try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      payload: { wait: false }
-    });
-
-    const error = extractError(response);
-    if (error) {
-      // Not necessarily an error - might just not be ready yet
-      return { output: null, error: null };
-    }
-
-    const output = response?.output || response?.payload?.output;
-    const chatId = response?.chatId || response?.payload?.chatId;
-    const chatUrl = response?.chatUrl || response?.payload?.chatUrl;
-
-    if (response && response.type === MESSAGE_TYPES.CHATGPT_OUTPUT_READY && output) {
-      return {
-        output,
-        chatId,
-        chatUrl,
-        error: null
-      };
-    }
-
-    return { output: null, error: null };
-  } catch (error) {
-    console.error('[WritingAPI] Failed to get ChatGPT output:', error);
-    return {
-      output: null,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: 'Không thể lấy output. Vui lòng kiểm tra mạng.'
-      }
-    };
-  }
-}
-
-/**
- * Open ChatGPT chat by chat_id
- * @param {string} chatId - ChatGPT conversation ID
+ * Open a saved conversation by chatId (ChatGPT) or full URL.
+ * XST-824: Removed ENSURE_CHATGPT_OPEN dependency — open tab directly.
+ * For non-ChatGPT providers chatId is null and an explanatory error is returned.
+ * @param {string} chatId - ChatGPT conversation ID or full URL
  * @returns {Promise<{success: boolean, error?: {code, message}}>}
  */
 export async function openWritingChat(chatId) {
@@ -463,42 +428,27 @@ export async function openWritingChat(chatId) {
       return {
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Chat ID là bắt buộc'
+          code: 'NO_CHAT_ID',
+          message: 'Không có chat ID — provider này không hỗ trợ mở lại conversation'
         }
       };
     }
 
-    // First ensure ChatGPT is open
-    await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.ENSURE_CHATGPT_OPEN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
-
-    // Then navigate to the specific chat
-    const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
-
+    const chatUrl = chatId.startsWith('http') ? chatId : `https://chatgpt.com/c/${chatId}`;
+    const origin = chatId.startsWith('http') ? (new URL(chatId)).origin + '/*' : 'https://chatgpt.com/*';
+    const tabs = await chrome.tabs.query({ url: origin });
     if (tabs.length > 0) {
-      const chatUrl = `https://chatgpt.com/c/${chatId}`;
-      await chrome.tabs.update(tabs[0].id, { url: chatUrl });
-      return { success: true, error: null };
+      await chrome.tabs.update(tabs[0].id, { url: chatUrl, active: true });
     } else {
-      return {
-        success: false,
-        error: {
-          code: 'NO_TAB',
-          message: 'Không tìm thấy tab ChatGPT'
-        }
-      };
+      await chrome.tabs.create({ url: chatUrl, active: true });
     }
+    return { success: true, error: null };
   } catch (error) {
     console.error('[WritingAPI] Failed to open chat:', error);
     return {
       success: false,
       error: {
-        code: 'NETWORK_ERROR',
+        code: 'OPEN_ERROR',
         message: 'Không thể mở chat. Vui lòng thử lại.'
       }
     };
@@ -641,14 +591,15 @@ export async function insertIntoActiveElement(text) {
 }
 
 /**
- * Auto-select topic for English learning using ChatGPT
+ * Auto-select topic for English learning using the active LLM provider.
+ * XST-819: Handle non-ChatGPT providers that return text immediately.
  * @returns {Promise<{topic?: string, error?: string}>}
  */
 export async function autoSelectTopic() {
   try {
     const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
 
-    // Send prompt
+    // Send prompt via SEND_PROMPT (routes to the active provider via XST-816 fix)
     const response = await chrome.runtime.sendMessage({
       v: 1,
       type: MESSAGE_TYPES.SEND_PROMPT,
@@ -668,37 +619,24 @@ export async function autoSelectTopic() {
       return { topic: null, error: error.message };
     }
 
-    // Poll for response (max 20 attempts = 30 seconds)
-    const maxPolls = 20;
-    for (let i = 0; i < maxPolls; i++) {
-      await new Promise(r => setTimeout(r, 1500));
+    // ── XST-819: Non-ChatGPT providers (Gemini, Claude) return text immediately ──
+    // For these providers, SEND_PROMPT handler awaits the full response and
+    // includes it in the response payload — no polling needed.
+    const directText = response.text || response.payload?.text;
+    if (directText) {
+      const firstLine = directText
+        .split('\n')
+        .map(s => s.trim())
+        .find(Boolean) || directText;
 
-      const outputResponse = await chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.CHATGPT_GET_OUTPUT,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
-        payload: { wait: false }
-      });
-
-      const output = outputResponse?.output || outputResponse?.payload?.output;
-
-      if (output) {
-        // Extract first non-empty line and clean it
-        const firstLine = output
-          .split('\n')
-          .map(s => s.trim())
-          .find(Boolean) || output;
-
-        const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
-        return { topic, error: null };
-      }
+      const topic = firstLine.replace(/^['"-]+|['"-]+$/g, '').trim();
+      return { topic, error: null };
     }
 
-    // Timeout
+    // No text returned — LLM send succeeded but no response text
     return {
       topic: null,
-      error: 'ChatGPT did not respond in time. Please try again.'
+      error: 'LLM did not return a response. Please try again.'
     };
   } catch (error) {
     console.error('[WritingAPI] Failed to auto-select topic:', error);

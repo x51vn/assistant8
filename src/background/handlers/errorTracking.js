@@ -249,6 +249,7 @@ registerHandler(MESSAGE_TYPES.ERROR_UPDATE, async (message) => {
     const updateData = {};
     if (title !== undefined) {
       if (!title.trim()) {
+        logger.endOperation(correlationId, 'error', { reason: 'empty_title' });
         return createErrorResponse(
           message,
           ERROR_CODES.INVALID_INPUT,

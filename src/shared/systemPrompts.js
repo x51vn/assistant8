@@ -14,7 +14,8 @@ export const SYSTEM_PROMPT_KEYS = {
   TEA_STOCK: 'prompt.teaStock',
   CONTEXT_MENU: 'prompt.contextMenu',
   ENGLISH: 'prompt.english',
-  WATCHLIST_ENRICH: 'prompt.watchlistEnrich'
+  WATCHLIST_ENRICH: 'prompt.watchlistEnrich',
+  MARKET_ASSESSMENT: 'prompt.marketDailyAssessment'
 };
 
 /**
@@ -239,28 +240,73 @@ Suggest 2-3 related topics to learn next
 
 Format: Use clear sections, bullet points, and bold for emphasis. Keep explanations simple and practical for Vietnamese learners.`,
 
-  [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam.
+  [SYSTEM_PROMPT_KEYS.MARKET_ASSESSMENT]: `Bạn là chuyên gia phân tích thị trường chứng khoán Việt Nam.
 
-Nhiệm vụ:
-- Với từng mã trong danh sách watchlist bên dưới, hãy xác định:
-  - entry (giá vào)
-  - target (giá mục tiêu)
-  - stoploss (giá cắt lỗ)
-  - investment_thesis (luận điểm đầu tư ngắn gọn nhưng có căn cứ)
+Nhiệm vụ: Đánh giá tổng quan thị trường và lựa chọn cổ phiếu tiềm năng.
 
 Ràng buộc output:
 - CHỈ trả về JSON hợp lệ (application/json), KHÔNG markdown, KHÔNG text ngoài JSON.
-- Output là một object có shape:
+- Output PHẢI là object có shape:
+{
+  "as_of_date": "YYYY-MM-DD",
+  "records": [
+    {
+      "symbol": "VCB",
+      "sector_name": "Ngân hàng",
+      "market_regime_state": "ON",
+      "market_regime_score": 72,
+      "market_regime_explanation": "VN-Index trên MA50, thanh khoản cải thiện...",
+      "sector_score": 75,
+      "sector_trend": "UP",
+      "sector_explanation": "Ngành ngân hàng hưởng lợi từ lãi suất giảm...",
+      "symbol_score": 80,
+      "action": "BUY",
+      "symbol_explanation": "VCB - P/E hấp dẫn, tăng trưởng tín dụng tốt..."
+    }
+  ]
+}
+
+Quy tắc BẮT BUỘC:
+- records.length == 10 (chính xác 10 mã)
+- records phải thuộc đúng 2 ngành khác nhau (sector_name)
+- Tất cả symbol không được trùng nhau
+- market_regime_state: "ON" hoặc "OFF"
+- sector_trend: "UP", "NEUTRAL", hoặc "DOWN"
+- action: "BUY", "HOLD", "SELL", hoặc "WATCH"
+- Tất cả score nằm trong [0..100]
+- Mỗi record PHẢI có đủ các trường: market regime (state/score/explanation), sector (score/trend/explanation), symbol (score/action/explanation)
+
+{SECTOR_CONSTRAINT}
+
+Hãy lựa chọn 2 ngành tiềm năng nhất và 5 mã mỗi ngành (tổng 10 mã).
+Ngày đánh giá: {AS_OF_DATE}`,
+
+  [SYSTEM_PROMPT_KEYS.WATCHLIST_ENRICH]: `Bạn là trợ lý phân tích cổ phiếu Việt Nam chuyên nghiệp.
+
+Nhiệm vụ: Phân tích TỪNG mã cổ phiếu trong danh sách bên dưới và xác định:
+  - entry: giá vào hợp lý (dựa trên hỗ trợ kỹ thuật, định giá)
+  - target: giá mục tiêu (dựa trên kháng cự, tiềm năng tăng trưởng)
+  - stoploss: giá cắt lỗ (dựa trên hỗ trợ mạnh, quản lý rủi ro)
+  - investment_thesis: luận điểm đầu tư ngắn gọn nhưng có căn cứ
+
+Ràng buộc output:
+- CHỈ trả về JSON hợp lệ (application/json), KHÔNG markdown, KHÔNG text ngoài JSON.
+- Output PHẢI là một object có shape:
   {
     "as_of": "YYYY-MM-DD",
-    "items": [ ... ]
+    "items": [
+      { "symbol": "MÃ", "entry": 50000, "target": 65000, "stoploss": 45000, "investment_thesis": "..." },
+      ...
+    ]
   }
+- Mảng items PHẢI có đủ tất cả các mã trong input, theo đúng thứ tự.
 
 Quy tắc:
-- symbol phải khớp chính xác.
-- Các giá trị entry/target/stoploss là số (VND), không kèm dấu phẩy, không chuỗi.
-- Nếu bạn không chắc chắn một trường, hãy để null.
-- investment_thesis tối đa 600 ký tự.
+- symbol phải khớp chính xác với input.
+- entry/target/stoploss là số nguyên (VND), không kèm dấu phẩy, không chuỗi.
+- Nếu không chắc chắn một trường, để null.
+- investment_thesis tối đa 600 ký tự, viết tiếng Việt.
+- Mỗi mã PHẢI có đủ 4 trường (entry, target, stoploss, investment_thesis).
 
 Dữ liệu watchlist:
 {WATCHLIST_ITEMS_JSON}
@@ -333,6 +379,15 @@ export function getDefaultSystemPromptMetadata() {
       category: 'System Prompts',
       icon: 'fa-magic',
       description: 'Tạo entry/target/stoploss/thesis cho từng mã trong watchlist. JSON-only.',
+      isSystem: true,
+      required: false
+    },
+    {
+      key: SYSTEM_PROMPT_KEYS.MARKET_ASSESSMENT,
+      title: 'Đánh giá Thị trường',
+      category: 'System Prompts',
+      icon: 'fa-chart-area',
+      description: 'Đánh giá thị trường hằng ngày: regime, ngành và mã tiềm năng. JSON-only.',
       isSystem: true,
       required: false
     }
