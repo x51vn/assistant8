@@ -32,6 +32,12 @@ const MAX_ARRAY_ITEMS = 5;
 
 const MAX_SOURCE_ITEMS = 10;
 
+/** FSD-002: Maximum allowed sourcesUsed URLs */
+const MAX_SOURCES_USED = 5;
+
+/** FSD-002: Default entry price sanity band (8-12% from current price) */
+const ENTRY_SANITY_BAND_PCT = 12;
+
 /**
  * Common LLM recommendation aliases → canonical value.
  * LLMs often output variations of the enum values.
@@ -66,8 +72,11 @@ const RECOMMENDATION_ALIASES = {
  * Parse and validate raw LLM text output against StockAnalysisOutput schema.
  *
  * @param {string} rawText - Raw text response from LLM
- * @param {{ strict?: boolean }} [options] - Validation options
+ * @param {{ strict?: boolean, allowedSourceUrls?: string[], currentPrice?: number, mode?: string }} [options] - Validation options
  * @param {boolean} [options.strict=true] - If true, all required fields must be present
+ * @param {string[]} [options.allowedSourceUrls] - FSD-002: allowed URLs for sourcesUsed grounding
+ * @param {number} [options.currentPrice] - FSD-002: current price for entry sanity check
+ * @param {string} [options.mode='stock-research'] - Pipeline mode
  * @returns {ValidationResult}
  *
  * @typedef {Object} ValidationResult
@@ -78,7 +87,15 @@ const RECOMMENDATION_ALIASES = {
  * @property {boolean} autoCorrections - Whether any auto-corrections were applied
  */
 export function validateStockResearchOutput(rawText, options = {}) {
-  const { strict = true } = options;
+  const {
+    strict = true,
+    allowedSourceUrls = [],
+    currentPrice = null,
+    mode = 'stock-research',
+    // FSD-002: ETS validation only when explicitly enabled or context is provided
+    enableETSValidation = (allowedSourceUrls.length > 0 || currentPrice != null),
+    enableSourcesUsedValidation = (allowedSourceUrls.length > 0),
+  } = options;
   const errors = [];
   const warnings = [];
   let autoCorrections = false;
@@ -230,6 +247,7 @@ export function validateStockResearchOutput(rawText, options = {}) {
   }
 
   // --- sources (optional, array of {url, reason, credibility?}) ---
+  // NOTE: 'sources' is the legacy field; 'sourcesUsed' is the new FSD-002 field
   if (raw.sources !== undefined) {
     const sourcesResult = validateSources(raw.sources);
     if (sourcesResult.items.length > 0) {
@@ -237,6 +255,87 @@ export function validateStockResearchOutput(rawText, options = {}) {
     }
     if (sourcesResult.warnings.length > 0) {
       warnings.push(...sourcesResult.warnings);
+    }
+  }
+
+  // --- sourcesUsed (FSD-002: required in decision_contract_v2) ---
+  if (raw.sourcesUsed !== undefined || raw.sources_used !== undefined) {
+    const rawSourcesUsed = raw.sourcesUsed || raw.sources_used;
+    if (raw.sources_used !== undefined && raw.sourcesUsed === undefined) {
+      warnings.push('sources_used auto-mapped to sourcesUsed');
+      autoCorrections = true;
+    }
+
+    if (Array.isArray(rawSourcesUsed)) {
+      // Filter to valid URL strings, limit to 5
+      let urls = rawSourcesUsed
+        .filter(u => typeof u === 'string' && u.trim().length > 0)
+        .map(u => u.trim())
+        .slice(0, MAX_SOURCES_USED);
+
+      // FSD-002: Validate against allowed source URLs (grounding check)
+      if (enableSourcesUsedValidation && allowedSourceUrls.length > 0 && urls.length > 0) {
+        const allowedSet = new Set(allowedSourceUrls.map(u => u.toLowerCase()));
+        const validUrls = [];
+        const invalidUrls = [];
+
+        for (const url of urls) {
+          if (allowedSet.has(url.toLowerCase())) {
+            validUrls.push(url);
+          } else {
+            invalidUrls.push(url);
+          }
+        }
+
+        if (invalidUrls.length > 0) {
+          if (strict) {
+            errors.push(`sourcesUsed contains ${invalidUrls.length} URL(s) not in input sources: ${invalidUrls.join(', ')}`);
+          } else {
+            // Non-strict: auto-correct by removing invalid URLs
+            warnings.push(`sourcesUsed: removed ${invalidUrls.length} invalid URL(s) not in input sources`);
+            autoCorrections = true;
+          }
+          urls = validUrls;
+        }
+      }
+
+      data.sourcesUsed = urls;
+    } else {
+      warnings.push('sourcesUsed is not an array, ignored');
+    }
+  }
+
+  // --- entryPrice (optional, number >= 0) ---
+  if (raw.entryPrice !== undefined && raw.entryPrice !== null) {
+    const ep = parseNumericField(raw.entryPrice);
+    if (ep !== null && ep >= 0) {
+      data.entryPrice = ep;
+    } else {
+      warnings.push(`entryPrice "${raw.entryPrice}" invalid, ignored`);
+    }
+  } else if (raw.entry_price !== undefined && raw.entry_price !== null) {
+    const ep = parseNumericField(raw.entry_price);
+    if (ep !== null && ep >= 0) {
+      data.entryPrice = ep;
+      autoCorrections = true;
+      warnings.push('entry_price auto-mapped to entryPrice');
+    }
+  }
+
+  // =========================================================
+  // FSD-002: Entry / Target / Stop Logic Validation
+  // Only when explicitly enabled or context (currentPrice/allowedSourceUrls) provided
+  // =========================================================
+  if (enableETSValidation) {
+    const etsErrors = validateEntryTargetStopLogic(data, currentPrice, strict);
+    if (etsErrors.errors.length > 0) {
+      errors.push(...etsErrors.errors);
+    }
+    if (etsErrors.warnings.length > 0) {
+      warnings.push(...etsErrors.warnings);
+    }
+    if (etsErrors.corrected) {
+      autoCorrections = true;
     }
   }
 
@@ -385,4 +484,130 @@ function validateSources(sources) {
   }
 
   return { items, warnings };
+}
+
+// ===== FSD-002: Entry / Target / Stop Logic Validation =====
+
+/**
+ * Validate entry/target/stop logic based on recommendation.
+ *
+ * Rules:
+ * - FR-ETS-01 (BUY): entryPrice, targetPrice, stopLoss all required.
+ *   stopLoss < entryPrice < targetPrice.
+ * - FR-ETS-02 (SELL): entryPrice/targetPrice/stopLoss should all be null.
+ * - FR-ETS-03 (HOLD): if present, must satisfy stopLoss < entryPrice < targetPrice.
+ * - FR-ETS-04 (WATCH): same as HOLD.
+ * - FR-ETS-05 (Current price sanity): entryPrice not too far from currentPrice (BUY).
+ *
+ * @param {Object} data - Parsed output data (mutable: may have fields nulled in non-strict)
+ * @param {number|null} currentPrice - Current market price (from PriceFact)
+ * @param {boolean} strict - Strict mode
+ * @returns {{ errors: string[], warnings: string[], corrected: boolean }}
+ */
+function validateEntryTargetStopLogic(data, currentPrice, strict) {
+  const errors = [];
+  const warnings = [];
+  let corrected = false;
+
+  const rec = data.recommendation;
+  if (!rec) return { errors, warnings, corrected };
+
+  const entry = data.entryPrice;
+  const target = data.targetPrice;
+  const stop = data.stopLoss;
+
+  const hasEntry = entry != null && entry > 0;
+  const hasTarget = target != null && target > 0;
+  const hasStop = stop != null && stop > 0;
+  const hasAll = hasEntry && hasTarget && hasStop;
+
+  switch (rec) {
+    case 'BUY': {
+      // FR-ETS-01: All three required
+      if (!hasAll) {
+        if (strict) {
+          const missing = [];
+          if (!hasEntry) missing.push('entryPrice');
+          if (!hasTarget) missing.push('targetPrice');
+          if (!hasStop) missing.push('stopLoss');
+          errors.push(`BUY recommendation requires ${missing.join(', ')} (all must be > 0)`);
+        } else {
+          warnings.push('BUY recommendation missing some entry/target/stop values');
+        }
+      }
+
+      if (hasAll) {
+        // stopLoss < entryPrice < targetPrice
+        if (stop >= entry) {
+          if (strict) {
+            errors.push(`BUY: stopLoss (${stop}) must be < entryPrice (${entry})`);
+          } else {
+            warnings.push(`BUY: stopLoss (${stop}) >= entryPrice (${entry}), questionable`);
+          }
+        }
+        if (entry >= target) {
+          if (strict) {
+            errors.push(`BUY: entryPrice (${entry}) must be < targetPrice (${target})`);
+          } else {
+            warnings.push(`BUY: entryPrice (${entry}) >= targetPrice (${target}), questionable`);
+          }
+        }
+
+        // FR-ETS-05: Entry price sanity check
+        if (currentPrice && currentPrice > 0 && hasEntry) {
+          const deviation = Math.abs((entry - currentPrice) / currentPrice) * 100;
+          if (deviation > ENTRY_SANITY_BAND_PCT) {
+            warnings.push(
+              `BUY: entryPrice (${entry}) deviates ${deviation.toFixed(1)}% from currentPrice (${currentPrice}), exceeds ${ENTRY_SANITY_BAND_PCT}% band`
+            );
+          }
+        }
+      }
+      break;
+    }
+
+    case 'SELL': {
+      // FR-ETS-02: No entry/target/stop expected
+      if (hasEntry || hasTarget || hasStop) {
+        if (strict) {
+          errors.push('SELL recommendation should NOT include entryPrice/targetPrice/stopLoss');
+        } else {
+          // Auto-correct: null out the fields
+          if (hasEntry) { data.entryPrice = null; corrected = true; }
+          if (hasTarget) { data.targetPrice = null; corrected = true; }
+          if (hasStop) { data.stopLoss = null; corrected = true; }
+          warnings.push('SELL: auto-removed entryPrice/targetPrice/stopLoss (not applicable for SELL)');
+        }
+      }
+      break;
+    }
+
+    case 'HOLD':
+    case 'WATCH': {
+      // FR-ETS-03/04: Optional, but if all three present must satisfy ordering
+      if (hasAll) {
+        if (stop >= entry) {
+          if (strict) {
+            errors.push(`${rec}: stopLoss (${stop}) must be < entryPrice (${entry})`);
+          } else {
+            warnings.push(`${rec}: stopLoss (${stop}) >= entryPrice (${entry}), questionable`);
+          }
+        }
+        if (entry >= target) {
+          if (strict) {
+            errors.push(`${rec}: entryPrice (${entry}) must be < targetPrice (${target})`);
+          } else {
+            warnings.push(`${rec}: entryPrice (${entry}) >= targetPrice (${target}), questionable`);
+          }
+        }
+      }
+      break;
+    }
+
+    default:
+      // Unknown recommendation — skip ETS validation
+      break;
+  }
+
+  return { errors, warnings, corrected };
 }

@@ -38,12 +38,6 @@ export async function loadSettings() {
   // Response structure: { config: { interval, ... } }
   const config = response.config || {};
 
-  // Populate boolean signals (4 fields)
-  autoRun.value = config.autoRun ?? false;
-  evaluatePrevious.value = config.evaluatePrevious ?? false;
-  reviewPrompt.value = config.reviewPrompt ?? false;
-  realtimeEnabled.value = config.realtimeEnabled ?? false;
-  
   // Populate number signal (1 field)
   interval.value = config.interval ?? 5;
 

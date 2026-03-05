@@ -18,6 +18,7 @@ import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { safeBroadcast } from '../shared/safeBroadcast.js';
 import { flushChatHistoryOutbox } from './services/chatHistoryService.js';
 import './handlers/index.js'; // This will register all handlers
 
@@ -327,7 +328,7 @@ async function restoreSession(reason = 'sw_start') {
     });
     
     // Broadcast to UI (if open)
-    chrome.runtime.sendMessage({
+    safeBroadcast({
       v: 1,
       type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
       correlationId: `auth-restore-${reason}-${Date.now()}`,
@@ -338,12 +339,6 @@ async function restoreSession(reason = 'sw_start') {
           id: session.user.id,
           email: session.user.email
         }
-      }
-    }).catch(broadcastError => {
-      if (broadcastError?.message?.includes('Receiving end does not exist')) {
-        logger.debug('UI not open - session will restore when UI loads');
-      } else {
-        logger.warn('Auth broadcast failed', { error: broadcastError?.message });
       }
     });
   } catch (error) {
@@ -368,6 +363,7 @@ async function setupAlarms() {
       'AUTORUN',
       'updateCommodityPrices',
       'watchlistPriceUpdate',
+      'watchlistBgPriceFetch',
       'SESSION_CHECK',
       'promptImprovementPurge'
     ]);
@@ -382,6 +378,11 @@ async function setupAlarms() {
     // ✅ XST-744: Watchlist price updates - runs every 5 minutes (market hours only)
     // Handler checks market hours before fetching (9:00-15:00 VN weekdays)
     chrome.alarms.create('watchlistPriceUpdate', { periodInMinutes: 5 });
+
+    // ✅ FSD-001: Background watchlist price fetch from providers (always-on alerts)
+    // Fetches LIVE prices from VPS/SSI, computes signals, checks alerts
+    // Runs every 5 minutes during market hours (handler checks market hours + feature flag)
+    chrome.alarms.create('watchlistBgPriceFetch', { periodInMinutes: 5 });
 
     // ✅ NEW: Session expiration check - runs every 1 minute
     // Proactively checks if session is about to expire
@@ -400,7 +401,7 @@ async function setupAlarms() {
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
 
-    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, PURGE: daily)');
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, WATCHLIST_BG: 5min, SESSION_CHECK: 1min, PURGE: daily)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }

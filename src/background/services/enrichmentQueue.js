@@ -18,6 +18,7 @@
  */
 
 import { createLogger, generateCorrelationId } from '../../logger.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 
 const logger = createLogger('EnrichmentQueue');
 
@@ -402,14 +403,7 @@ function broadcastStatus(correlationId, status, data = {}) {
     ...data
   };
 
-  // Fire-and-forget broadcast to all extension contexts
-  try {
-    chrome.runtime.sendMessage(message).catch(() => {
-      // No listener — that's fine (UI may be unmounted)
-    });
-  } catch {
-    // Swallow — sendMessage can throw if no receiver
-  }
+  safeBroadcast(message);
 }
 
 /**

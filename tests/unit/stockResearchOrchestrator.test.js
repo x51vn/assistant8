@@ -69,6 +69,7 @@ const VALID_LLM_OUTPUT = JSON.stringify({
   symbol: 'FPT',
   recommendation: 'BUY',
   confidence: 78,
+  entryPrice: 145000,
   targetPrice: 165000,
   stopLoss: 125000,
   timeHorizon: '3-6m',

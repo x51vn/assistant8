@@ -25,6 +25,7 @@ import { getFeatureFlag } from '../../shared/featureFlags.js';
 import { runStockResearch } from '../services/stock/stockResearchOrchestrator.js';
 import { enqueue } from '../services/promptQueue.js';
 import { resolvePresetOptions, DEFAULT_PRESET } from '../../shared/pipelinePresets.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 
 const logger = createLogger('StockResearchHandler');
 
@@ -194,17 +195,11 @@ async function getUserSettingsConfig(userId) {
  * Non-blocking: errors are silently logged.
  */
 function broadcastStatus(correlationId, status) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.STOCK_RESEARCH_STATUS,
-      correlationId,
-      timestamp: Date.now(),
-      ...status,
-    }).catch(() => {
-      // No listeners — safe to ignore
-    });
-  } catch {
-    // chrome.runtime may not be available in test environment
-  }
+  safeBroadcast({
+    v: 1,
+    type: MESSAGE_TYPES.STOCK_RESEARCH_STATUS,
+    correlationId,
+    timestamp: Date.now(),
+    ...status,
+  });
 }

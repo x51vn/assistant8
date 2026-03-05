@@ -18,6 +18,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { supabase } from '../../supabaseConfig.js';
 import { createLogger } from '../../logger.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 
 const logger = createLogger('Handlers/SessionManager');
 
@@ -261,27 +262,19 @@ async function attemptTokenRefresh(correlationId) {
  * Indicates user must login again
  */
 function broadcastSessionExpired(user) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SESSION_EXPIRED,
-      correlationId: `session-expired-${Date.now()}`,
-      timestamp: Date.now(),
-      data: {
-        user: {
-          id: user.id,
-          email: user.email
-        },
-        action: 'LOGIN_REQUIRED'
-      }
-    }).catch(err => {
-      if (!err?.message?.includes('Receiving end does not exist')) {
-        logger.warn('Failed to broadcast session expired', { error: err?.message });
-      }
-    });
-  } catch (error) {
-    logger.warn('Broadcast session expired error', { error: error.message });
-  }
+  safeBroadcast({
+    v: 1,
+    type: MESSAGE_TYPES.SESSION_EXPIRED,
+    correlationId: `session-expired-${Date.now()}`,
+    timestamp: Date.now(),
+    data: {
+      user: {
+        id: user.id,
+        email: user.email
+      },
+      action: 'LOGIN_REQUIRED'
+    }
+  });
 }
 
 logger.info('Session manager handlers registered');

@@ -269,6 +269,11 @@ export const MESSAGE_TYPES = {
   XNEEWS_PRICE_UPDATE: 'XNEEWS_PRICE_UPDATE',           // Request from alarm to handler
   XNEEWS_PRICES_UPDATED: 'XNEEWS_PRICES_UPDATED',      // Broadcast from handler to UI
 
+  // Background Watchlist Price Fetch (FSD-001: always-on alerts)
+  WATCHLIST_BG_PRICE_FETCH: 'WATCHLIST_BG_PRICE_FETCH',         // Alarm → handler: fetch fresh prices from providers
+  WATCHLIST_BG_PRICES_FETCHED: 'WATCHLIST_BG_PRICES_FETCHED',   // Handler → UI: broadcast updated prices
+  WATCHLIST_MANUAL_REFRESH: 'WATCHLIST_MANUAL_REFRESH',         // UI → handler: manual refresh (rate-limited)
+
   // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
   WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment (single symbol)
   WATCHLIST_AI_ENRICH_BATCH_RUN: 'WATCHLIST_AI_ENRICH_BATCH_RUN', // UI → Background: batch enrichment (max 10 symbols per prompt)

@@ -18,6 +18,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
 import { generateCorrelationId } from '../../logger.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { SYSTEM_PROMPT_KEYS } from '../../shared/systemPrompts.js';
@@ -518,19 +519,17 @@ async function processEnrichmentViaOrchestrator(symbol, watchlistItem, userId, s
         enqueue: fn => fn(),
         onProgress: (status) => {
           // Broadcast enrichment progress to UI
-          try {
-            chrome.runtime.sendMessage({
-              v: 1,
-              type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS,
-              correlationId,
-              timestamp: Date.now(),
-              symbol,
-              status: status.status,
-              step: status.step,
-              totalSteps: status.totalSteps,
-              message: status.message,
-            }).catch(() => {});
-          } catch { /* no listeners */ }
+          safeBroadcast({
+            v: 1,
+            type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS,
+            correlationId,
+            timestamp: Date.now(),
+            symbol,
+            status: status.status,
+            step: status.step,
+            totalSteps: status.totalSteps,
+            message: status.message,
+          });
         },
       }
     );
@@ -1063,17 +1062,15 @@ export async function processBatchEnrichmentJob(job) {
  * Uses same message types as single-enrichment for UI compatibility.
  */
 function broadcastBatchSymbolStatus(correlationId, symbol, status, message) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS,
-      correlationId,
-      timestamp: Date.now(),
-      symbol,
-      status,
-      message,
-    }).catch(() => {});
-  } catch { /* no listeners */ }
+  safeBroadcast({
+    v: 1,
+    type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS,
+    correlationId,
+    timestamp: Date.now(),
+    symbol,
+    status,
+    message,
+  });
 }
 
 /**
@@ -1081,17 +1078,15 @@ function broadcastBatchSymbolStatus(correlationId, symbol, status, message) {
  * Reuses WATCHLIST_AI_ENRICH_DONE for backward compat with WatchlistPage.
  */
 function broadcastBatchSymbolDone(correlationId, symbol, item) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_DONE,
-      correlationId,
-      timestamp: Date.now(),
-      symbol,
-      item,
-      status: 'done',
-    }).catch(() => {});
-  } catch { /* no listeners */ }
+  safeBroadcast({
+    v: 1,
+    type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_DONE,
+    correlationId,
+    timestamp: Date.now(),
+    symbol,
+    item,
+    status: 'done',
+  });
 }
 
 // ===== Message Handlers =====

@@ -32,6 +32,7 @@
 
 import PQueue from 'p-queue';
 import { createLogger, generateCorrelationId } from '../../logger.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 
 const logger = createLogger('PromptQueue');
 
@@ -574,13 +575,7 @@ function broadcastJobStatus(jobId, status, jobType, data = {}) {
     ...data
   };
 
-  try {
-    chrome.runtime.sendMessage(message).catch(() => {
-      // No listener — fine (UI may be unmounted)
-    });
-  } catch {
-    // Swallow — sendMessage can throw if no receiver
-  }
+  safeBroadcast(message);
 }
 
 logger.info('PromptQueue service initialized (p-queue, concurrency=1)');
@@ -601,7 +596,5 @@ function broadcastQueuePauseState(paused) {
     timestamp: Date.now(),
     paused
   };
-  try {
-    chrome.runtime.sendMessage(message).catch(() => {});
-  } catch { /* no receiver */ }
+  safeBroadcast(message);
 }

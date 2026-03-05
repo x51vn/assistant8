@@ -30,6 +30,21 @@ export const FEATURE_FLAGS = {
     description: 'Enable Stock Research Pipeline v2 (AI-powered analysis with Google Search)',
     ticket: 'XST-800',
   },
+  watchlist_background_pricing_v1: {
+    default: false,
+    description: 'Enable background watchlist price fetch (always-on alerts even when UI closed)',
+    ticket: 'FSD-001',
+  },
+  decision_contract_v2: {
+    default: false,
+    description: 'Enable strict sourcesUsed validation + entry/stop/target logic rules',
+    ticket: 'FSD-002',
+  },
+  market_snapshot_injection_v1: {
+    default: false,
+    description: 'Inject MarketSnapshotFact into Market Assessment & Stock Research prompts',
+    ticket: 'FSD-003',
+  },
 };
 
 // ===== PUBLIC API =====

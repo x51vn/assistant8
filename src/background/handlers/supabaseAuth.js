@@ -14,6 +14,7 @@ import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 import { ERROR_CODES, ERROR_MESSAGES_VN } from '../../shared/errorCodes.js';
 import { flushChatHistoryOutbox } from '../services/chatHistoryService.js';
 import { invalidatePromptCache } from './contextMenu.js';
@@ -942,7 +943,7 @@ function setupAuthStateListener() {
     
     // Broadcast token refresh events
     if (event === 'TOKEN_REFRESHED' && session) {
-      chrome.runtime.sendMessage({
+      safeBroadcast({
         v: 1,
         type: MESSAGE_TYPES.AUTH_TOKEN_REFRESHED,
         correlationId: `auth-token-refreshed-${Date.now()}`,
@@ -953,14 +954,12 @@ function setupAuthStateListener() {
             email: session.user.email
           }
         }
-      }).catch(err => {
-        logger.warn('Failed to broadcast token refresh', { error: err.message });
       });
     }
     
     // Broadcast sign out events
     if (event === 'SIGNED_OUT') {
-      chrome.runtime.sendMessage({
+      safeBroadcast({
         v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
         correlationId: `auth-signed-out-${Date.now()}`,
@@ -969,14 +968,12 @@ function setupAuthStateListener() {
           user: null,
           authenticated: false
         }
-      }).catch(err => {
-        logger.warn('Failed to broadcast sign out', { error: err.message });
       });
     }
     
     // Broadcast sign in events
     if (event === 'SIGNED_IN' && session) {
-      chrome.runtime.sendMessage({
+      safeBroadcast({
         v: 1,
         type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
         correlationId: `auth-signed-in-${Date.now()}`,
@@ -988,8 +985,6 @@ function setupAuthStateListener() {
           },
           authenticated: true
         }
-      }).catch(err => {
-        logger.warn('Failed to broadcast sign in', { error: err.message });
       });
 
       // Option A: user just signed in -> flush any queued chat_history items.

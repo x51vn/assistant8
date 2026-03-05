@@ -14,6 +14,7 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 import { registerHandler } from '../messageRouter.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
@@ -78,24 +79,14 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
       sampleSymbols: items.slice(0, 3).map(i => i.symbol).join(', ')
     });
 
-    // Broadcast to UI via chrome.runtime.sendMessage
-    // Note: Message sent to ALL listening contexts (tabs with WatchlistPage open)
-    try {
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.XNEEWS_PRICES_UPDATED,
-        correlationId,
-        timestamp: Date.now(),
-        items // Direct property for UI consumption
-      });
-
-      logger.debug('Price update broadcast sent', { correlationId });
-    } catch (broadcastError) {
-      // Expected if no UI is listening - not a critical error
-      logger.debug('No UI listening for price updates (sidepanel may be closed)', {
-        correlationId
-      });
-    }
+    // Broadcast to UI (best-effort, safe if no listener)
+    safeBroadcast({
+      v: 1,
+      type: MESSAGE_TYPES.XNEEWS_PRICES_UPDATED,
+      correlationId,
+      timestamp: Date.now(),
+      items // Direct property for UI consumption
+    });
 
     // XST-776: Check price alerts and fire Chrome notifications
     try {

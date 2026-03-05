@@ -34,6 +34,9 @@ import { getProviderForFeature, classifyLLMError, FEATURE_TYPES } from '../../..
 import { LLMProviderFactory } from '../../../shared/llm/LLMProviderFactory.js';
 // XST-807: Pipeline observability & telemetry
 import { PipelineTracer } from './pipelineTelemetry.js';
+// FSD-003: Market snapshot injection
+import { fetchMarketSnapshot, buildMarketSnapshotPromptSection, fetchPriceFact } from '../marketSnapshotService.js';
+import { getFeatureFlag } from '../../../shared/featureFlags.js';
 
 const logger = createLogger('StockResearchOrchestrator');
 
@@ -199,7 +202,49 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     tracer.startStep('context');
     const stepStart4 = Date.now();
 
-    const llmPrompt = buildAnalysisPrompt(normalizedSymbol, rankedSources, opts);
+    // FSD-003: Fetch MarketSnapshotFact + PriceFact (non-blocking)
+    let marketSnapshot = null;
+    let priceFact = null;
+    let snapshotMissing = false;
+
+    if (getFeatureFlag('market_snapshot_injection_v1', settingsConfig)) {
+      try {
+        const [snap, price] = await Promise.all([
+          fetchMarketSnapshot({ correlationId }),
+          fetchPriceFact(normalizedSymbol, { correlationId }),
+        ]);
+        marketSnapshot = snap;
+        priceFact = price;
+        if (!snap) {
+          snapshotMissing = true;
+          logger.warn('Market snapshot fetch returned null (pipeline continues)', { correlationId });
+        }
+      } catch (snapErr) {
+        snapshotMissing = true;
+        logger.warn('Market snapshot/price fetch failed (pipeline continues)', {
+          correlationId,
+          error: snapErr.message,
+        });
+      }
+    }
+
+    // Build FactsContext for grounding
+    const factsContext = {
+      asOf: new Date().toISOString(),
+      marketSnapshot: marketSnapshot || null,
+      priceSnapshot: priceFact || null,
+      searchSources: rankedSources.map(s => ({
+        title: s.title,
+        url: s.url,
+        snippet: s.snippet,
+        publishedAt: s.publishedAt,
+      })),
+    };
+
+    const llmPrompt = buildAnalysisPrompt(normalizedSymbol, rankedSources, opts, {
+      marketSnapshot,
+      priceFact,
+    });
 
     timing.context_ms = Date.now() - stepStart4;
     tracer.endStep('context', { promptLength: llmPrompt.length });
@@ -256,6 +301,10 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
 
     const validation = validateStockResearchOutput(llmResponse.text, {
       strict: opts.strictValidation,
+      // FSD-002: Pass grounding context for tighter validation
+      allowedSourceUrls: rankedSources.map(s => s.url),
+      currentPrice: priceFact?.price || null,
+      mode: opts.mode || 'stock-research',
     });
 
     if (!validation.valid && opts.strictValidation) {
@@ -310,6 +359,9 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
         sources: rankedSources,
         provider: providerConfig.provider,
         timing,
+        // FSD-003: Market snapshot & facts context provenance
+        marketSnapshot,
+        factsContext,
       });
     } catch (persistError) {
       // Persist failure is non-fatal — log but still return results
@@ -472,9 +524,12 @@ function buildSearchQuery(symbol, opts = {}) {
  * @param {string} symbol
  * @param {Object[]} sources
  * @param {Object} opts
+ * @param {Object} [facts] - FSD-003: facts context
+ * @param {Object} [facts.marketSnapshot] - MarketSnapshotFact
+ * @param {Object} [facts.priceFact] - PriceFact for symbol
  * @returns {string}
  */
-export function buildAnalysisPrompt(symbol, sources, opts = {}) {
+export function buildAnalysisPrompt(symbol, sources, opts = {}, facts = {}) {
   const now = new Date().toISOString().split('T')[0];
 
   let sourceContext = '';
@@ -488,14 +543,32 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
     }
   }
 
-  return `Bạn là chuyên gia phân tích chứng khoán Việt Nam. Hãy phân tích cổ phiếu ${symbol} và trả lời CHÍNH XÁC theo format JSON sau.
+  // FSD-003: Market snapshot facts section
+  let factsSection = '';
+  if (facts.marketSnapshot) {
+    factsSection += buildMarketSnapshotPromptSection(facts.marketSnapshot);
+  }
+  if (facts.priceFact) {
+    factsSection += `\n## Giá hiện tại (PriceFact):\n`;
+    factsSection += `- **${facts.priceFact.symbol}**: ${facts.priceFact.price.toLocaleString('vi-VN')} VND (nguồn: ${facts.priceFact.source}, ${facts.priceFact.asOf})\n`;
+  }
 
+  // FSD-002: sourcesUsed requirement in output
+  const sourcesUsedNote = sources.length > 0
+    ? `6. Trong "sourcesUsed", CHỈ liệt kê URL từ danh sách nguồn tham khảo ở trên (tối đa 5 URLs)`
+    : '6. Nếu không có nguồn tham khảo, để "sourcesUsed" là mảng rỗng []';
+
+  return `Bạn là chuyên gia phân tích chứng khoán Việt Nam. Hãy phân tích cổ phiếu ${symbol} và trả lời CHÍNH XÁC theo format JSON sau.
+${factsSection}
 ## Yêu cầu:
 1. Phân tích dựa trên dữ liệu mới nhất (ngày ${now})
 2. Đưa ra khuyến nghị rõ ràng: BUY, HOLD, SELL, hoặc WATCH
 3. Đánh giá độ tin cậy từ 0-100
 4. Liệt kê luận điểm đầu tư (thesis) và rủi ro (risks) bằng tiếng Việt
-5. Nếu có, đưa ra giá vào (entryPrice), giá mục tiêu (targetPrice) và cắt lỗ (stopLoss) tính bằng VND
+5. Nếu recommendation là BUY: entryPrice, targetPrice, stopLoss BẮT BUỘC. stopLoss < entryPrice < targetPrice
+   Nếu recommendation là SELL: KHÔNG đưa entryPrice/targetPrice/stopLoss (để null)
+   Nếu recommendation là HOLD/WATCH: có thể đưa hoặc không
+${sourcesUsedNote}
 
 ## Format JSON bắt buộc (CHỈ trả lời JSON, không thêm text):
 \`\`\`json
@@ -510,7 +583,7 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
   "thesis": ["luận điểm 1", "luận điểm 2"],
   "risks": ["rủi ro 1", "rủi ro 2"],
   "catalysts": ["catalyst 1"],
-  "sources": [{"url": "...", "reason": "...", "credibility": "high|medium|low"}]
+  "sourcesUsed": ["https://url-from-sources-above"]
 }
 \`\`\`${sourceContext}
 
@@ -617,16 +690,30 @@ async function updateRunStatus(runId, status, extras = {}) {
 /**
  * Persist analysis output and sources to Supabase.
  */
-async function persistResults(runId, symbol, userId, { output, sources, provider, timing }) {
-  // 1. Update run with output
+async function persistResults(runId, symbol, userId, { output, sources, provider, timing, marketSnapshot, factsContext }) {
+  // 1. Update run with output + facts provenance (FSD-003)
+  const runUpdate = {
+    status: 'done',
+    output,
+    provider,
+    finished_at: new Date().toISOString(),
+  };
+
+  // FSD-003: Store market snapshot & facts context for provenance
+  if (marketSnapshot) {
+    runUpdate.market_snapshot = marketSnapshot;
+  }
+  if (factsContext) {
+    runUpdate.facts_context = factsContext;
+  }
+  // FSD-002: Store validated sourcesUsed
+  if (output?.sourcesUsed && Array.isArray(output.sourcesUsed)) {
+    runUpdate.sources_used = output.sourcesUsed;
+  }
+
   const { error: runError } = await supabase
     .from('stock_research_runs')
-    .update({
-      status: 'done',
-      output,
-      provider,
-      finished_at: new Date().toISOString(),
-    })
+    .update(runUpdate)
     .eq('id', runId);
 
   if (runError) {

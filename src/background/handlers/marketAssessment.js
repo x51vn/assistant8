@@ -30,6 +30,9 @@ import {
   validateMarketAssessmentOutput,
   buildCorrectivePrompt
 } from '../../shared/validators/marketAssessmentOutputValidator.js';
+import { fetchMarketSnapshot, buildMarketSnapshotPromptSection } from '../services/marketSnapshotService.js';
+import { getFeatureFlag } from '../../shared/featureFlags.js';
+import { safeBroadcast } from '../../shared/safeBroadcast.js';
 
 const logger = createLogger('MarketAssessmentHandler');
 
@@ -37,15 +40,13 @@ const logger = createLogger('MarketAssessmentHandler');
 // Helper: broadcast status to UI
 // ============================================================
 function broadcastStatus(correlationId, payload) {
-  try {
-    chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.MARKET_ASSESSMENT_STATUS,
-      correlationId,
-      timestamp: Date.now(),
-      ...payload
-    }).catch(() => {});
-  } catch { /* UI may not be listening */ }
+  safeBroadcast({
+    v: 1,
+    type: MESSAGE_TYPES.MARKET_ASSESSMENT_STATUS,
+    correlationId,
+    timestamp: Date.now(),
+    ...payload
+  });
 }
 
 // ============================================================
@@ -111,11 +112,48 @@ registerHandler(MESSAGE_TYPES.MARKET_ASSESSMENT_RUN, async (message) => {
       message: 'Đang chuẩn bị prompt...'
     });
 
-    // Step 2: Fetch sectors + prompt template
+    // Step 2: Fetch sectors + prompt template + market snapshot (FSD-003)
     const activeSectors = await getActiveSectors(userId);
     const classificationMode = activeSectors.length > 0 ? 'CONSTRAINED' : 'AUTO';
     const template = await getPromptTemplate(userId);
-    const prompt = buildPrompt(template, { asOfDate, activeSectors });
+
+    // FSD-003: Fetch MarketSnapshotFact (non-blocking)
+    let marketSnapshot = null;
+    let snapshotMissing = false;
+
+    // Get user settings to check feature flag
+    let settingsConfig = {};
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('config')
+        .eq('user_id', userId)
+        .maybeSingle();
+      settingsConfig = settingsData?.config || {};
+    } catch { /* default empty */ }
+
+    if (getFeatureFlag('market_snapshot_injection_v1', settingsConfig)) {
+      try {
+        marketSnapshot = await fetchMarketSnapshot({ correlationId });
+        if (!marketSnapshot) {
+          snapshotMissing = true;
+          logger.warn('Market snapshot fetch returned null (pipeline continues)', { correlationId });
+        }
+      } catch (snapErr) {
+        snapshotMissing = true;
+        logger.warn('Market snapshot fetch failed (pipeline continues)', {
+          correlationId,
+          error: snapErr.message,
+        });
+      }
+    }
+
+    // Build prompt with optional snapshot facts injection
+    let prompt = buildPrompt(template, { asOfDate, activeSectors });
+    if (marketSnapshot) {
+      const snapshotSection = buildMarketSnapshotPromptSection(marketSnapshot);
+      prompt = prompt + '\n' + snapshotSection;
+    }
 
     logger.info('Assessment run starting', {
       correlationId, runId, classificationMode,
@@ -230,7 +268,10 @@ registerHandler(MESSAGE_TYPES.MARKET_ASSESSMENT_RUN, async (message) => {
       symbol_explanation: rec.symbol_explanation,
       classification_mode: classificationMode,
       provider: providerName,
-      raw_record: rec.raw_record
+      raw_record: rec.raw_record,
+      // FSD-003: Market snapshot provenance
+      market_snapshot: marketSnapshot || null,
+      snapshot_missing: snapshotMissing,
     }));
 
     await supabaseWithRetry(async () => {

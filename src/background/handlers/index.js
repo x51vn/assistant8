@@ -55,6 +55,7 @@ import './settingsApiKeys.js'; // llmClient: LLM API key management (set/get/mig
 import './sectors.js'; // Market Assessment: Sectors CRUD
 import './marketAssessment.js'; // Market Assessment: Daily assessment pipeline
 import './promptImprovement.js'; // Prompt Improvement Loop: runs, lessons, evaluator, injection
+import './watchlistBgPriceFetch.js'; // FSD-001: Background watchlist price fetch (always-on alerts)
 
 logger.info('All message handlers registered');
 

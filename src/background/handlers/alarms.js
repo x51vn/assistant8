@@ -144,6 +144,44 @@ export async function handleAlarm(alarm) {
       return;
     }
 
+    // FSD-001: WATCHLIST_BG_PRICE_FETCH alarm — fetch live prices from providers (always-on alerts)
+    if (alarm.name === 'watchlistBgPriceFetch') {
+      logger.info('WATCHLIST_BG_PRICE_FETCH alarm triggered', { correlationId });
+
+      try {
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.WATCHLIST_BG_PRICE_FETCH,
+          correlationId,
+          timestamp: Date.now()
+        }, { id: 'alarm' });
+
+        if (!response) {
+          logger.warn('No response from watchlist bg price fetch handler', { correlationId });
+        } else if (response.errorCode) {
+          logger.error('Watchlist bg price fetch failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else if (response.skipped) {
+          logger.debug('Watchlist bg price fetch skipped', {
+            correlationId,
+            reason: response.reason
+          });
+        } else {
+          logger.info('Watchlist bg price fetch completed', {
+            correlationId,
+            updated: response.updated,
+            failed: response.failed,
+            latencyMs: response.latencyMs
+          });
+        }
+      } catch (error) {
+        logger.error('WATCHLIST_BG_PRICE_FETCH alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
     // ✅ SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
     // Calls internal function directly - NO chrome.runtime.sendMessage()
     // Guaranteed to execute even if UI closed/SW restarted
