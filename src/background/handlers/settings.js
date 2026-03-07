@@ -14,6 +14,34 @@ import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js'
 const logger = createLogger('Settings');
 
 /**
+ * Deep-merge two config objects: nested objects are merged recursively,
+ * arrays and primitives from `patch` overwrite `base`.
+ * @param {Object} base - Existing config from DB
+ * @param {Object} patch - Incoming partial config
+ * @returns {Object} Merged config
+ */
+function deepMergeConfig(base, patch) {
+  const result = { ...base };
+  for (const key of Object.keys(patch)) {
+    const bVal = base[key];
+    const pVal = patch[key];
+    if (
+      pVal !== null &&
+      typeof pVal === 'object' &&
+      !Array.isArray(pVal) &&
+      bVal !== null &&
+      typeof bVal === 'object' &&
+      !Array.isArray(bVal)
+    ) {
+      result[key] = deepMergeConfig(bVal, pVal);
+    } else {
+      result[key] = pVal;
+    }
+  }
+  return result;
+}
+
+/**
  * SETTINGS_GET - Get user settings with normalized structure
  * Normalizes legacy format (config.prompt) → (config.prompts.master)
  */
@@ -140,7 +168,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
           .eq('user_id', userId)
           .maybeSingle();
 
-        const mergedConfig = { ...(existing?.config || {}), ...config };
+        const mergedConfig = deepMergeConfig(existing?.config || {}, config);
 
         const { data, error } = await supabase
           .from('settings')

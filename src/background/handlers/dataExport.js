@@ -22,6 +22,44 @@ import { createLogger } from '../../logger.js';
 const logger = createLogger('DataExportHandler');
 
 // ============================================================================
+// SECRET SANITIZER
+// ============================================================================
+
+/**
+ * Remove all secrets/credentials from settings config before export.
+ * Uses an explicit deny-list approach on known secret paths.
+ * @param {Object} config - Raw settings.config JSONB
+ * @returns {Object} Safe config with secrets removed
+ */
+function sanitizeSettingsForExport(config) {
+  if (!config || typeof config !== 'object') return {};
+
+  // Deep clone to avoid mutating the original
+  const safe = JSON.parse(JSON.stringify(config));
+
+  // 1. Remove top-level legacy token field
+  delete safe.atlassianApiToken;
+
+  // 2. Remove nested atlassian credentials
+  if (safe.atlassian && typeof safe.atlassian === 'object') {
+    delete safe.atlassian.apiToken;
+    delete safe.atlassian.password;
+  }
+
+  // 3. Remove ALL stored API keys (api_keys.<provider>.apiKey)
+  if (safe.api_keys && typeof safe.api_keys === 'object') {
+    for (const provider of Object.keys(safe.api_keys)) {
+      if (safe.api_keys[provider] && typeof safe.api_keys[provider] === 'object') {
+        delete safe.api_keys[provider].apiKey;
+        // Keep updatedAt so user knows a key existed
+      }
+    }
+  }
+
+  return safe;
+}
+
+// ============================================================================
 // SAFE FETCH HELPER
 // ============================================================================
 
@@ -110,9 +148,8 @@ registerHandler(MESSAGE_TYPES.DATA_EXPORT_REQUEST, async (message) => {
       }, { operationName: 'export.settings', correlationId });
 
       if (settingsRows?.config) {
-        // Strip any potential secrets from settings config
-        const { atlassianApiToken: _token, ...safeConfig } = settingsRows.config;
-        settingsConfig = safeConfig;
+        // Strip ALL secrets from settings config (allowlist approach)
+        settingsConfig = sanitizeSettingsForExport(settingsRows.config);
       }
     } catch (err) {
       logger.warn('Export: failed to fetch settings', { errorMessage: err?.message });

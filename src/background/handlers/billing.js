@@ -27,6 +27,7 @@ const logger = createLogger('BillingHandler');
 // FALLBACK PLANS (used when billing tables are not yet deployed)
 // ============================================================================
 
+// ⚠️ MUST stay in sync with DB seed in 013_create_billing_tables.sql
 const FREE_PLAN_FALLBACK = {
   id: 'free',
   name: 'Miễn phí',
@@ -34,21 +35,21 @@ const FREE_PLAN_FALLBACK = {
   price_yearly: 0,
   currency: 'USD',
   limits: {
-    portfolio_stocks: 50,
-    watchlist_items: 20,
-    ai_enrichment_monthly: 10,
-    writing_prompts_monthly: 20,
-    context_menu_monthly: 20,
-    asset_types: 5,
-    chat_history_days: 90,
-    custom_prompts: 5,
+    portfolio_stocks: 5,
+    watchlist_items: 10,
+    ai_enrichment_monthly: 5,
+    writing_prompts_monthly: 10,
+    context_menu_monthly: 10,
+    asset_types: 3,
+    chat_history_days: 30,
+    custom_prompts: 3,
   },
   features: {
     market_indices: true,
     commodity_prices: true,
     jira_integration: false,
     confluence_upload: false,
-    data_export: true,
+    data_export: false,
     priority_support: false,
     team_workspace: false,
   },

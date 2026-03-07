@@ -137,17 +137,17 @@ export async function checkUsage(feature) {
       data: { feature }
     });
 
-    // Fail open: if check fails, allow usage
     return {
-      allowed: response.allowed ?? true,
-      limit: response.limit ?? -1,
+      allowed: response.allowed ?? false,
+      limit: response.limit ?? 0,
       used: response.used ?? 0,
-      remaining: response.remaining ?? -1,
+      remaining: response.remaining ?? 0,
       upgradeMessage: response.upgradeMessage
     };
   } catch (error) {
     console.error('[BillingAPI] checkUsage failed:', error);
-    return { allowed: true, limit: -1, used: 0, remaining: -1 };
+    // Fail closed: deny usage when we cannot verify entitlement
+    return { allowed: false, limit: 0, used: 0, remaining: 0 };
   }
 }
 

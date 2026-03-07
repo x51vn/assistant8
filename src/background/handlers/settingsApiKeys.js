@@ -165,9 +165,15 @@ async function logAuditEvent(userId, action, meta, correlationId) {
       .from('runs')
       .insert({
         user_id: userId,
+        run_id: `apikey_${action}_${Date.now()}`,
         status: 'completed',
-        type: `apikey_${action}`,
-        metadata: { ...meta, correlationId, timestamp: new Date().toISOString() },
+        metadata: {
+          action: `apikey_${action}`,
+          ...meta,
+          correlationId,
+          timestamp: new Date().toISOString(),
+        },
+        timestamp: Date.now(),
       });
   } catch (err) {
     logger.warn('Audit log failed (non-blocking)', { action, error: err.message });
