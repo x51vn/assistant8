@@ -1,18 +1,17 @@
 /**
- * @fileoverview Stock Research Orchestrator — Core Pipeline
- * Ticket: XST-796 — Implement stockResearchOrchestrator
+ * @fileoverview Stock Research Orchestrator — Agentic Pipeline
+ * Ticket: XST-796, Agentic Web Research
  *
- * 7-step pipeline:
- * 1. Input Validation  → validate symbol, merge options
- * 2. Search            → Google Search (currently via Edge Function — see @todo)
- * 3. Filter & Rank     → score and filter sources
- * 4. Context Builder   → build LLM prompt with sources
- * 5. LLM Evaluation    → send to AI provider
- * 6. Output Validation → validate JSON output against schema
- * 7. Persist           → save to Supabase tables
+ * Agentic pipeline:
+ *  1. Validate input
+ *  2. Agent Loop (Planner → Retriever → Evidence Processor → Critic)
+ *  3. Build evidence-based prompt (NO SERP snippets)
+ *  4. LLM Final Synthesis (via LLMProviderFactory)
+ *  5. Validate output
+ *  6. Persist
  *
- * @done XST-812 — Step 2 now uses googleSearchWebService.js (Web/DOM automation
- *                  on google.com tabs). No API key needed.
+ * Key principle: Google Search is DISCOVERY ONLY.
+ * Evidence for LLM comes from fetched page content, not SERP snippets.
  *
  * Architecture:
  * - Stateless: no in-memory state (MV3-safe)
@@ -34,13 +33,15 @@ import { getProviderForFeature, classifyLLMError, FEATURE_TYPES } from '../../..
 import { LLMProviderFactory } from '../../../shared/llm/LLMProviderFactory.js';
 // XST-807: Pipeline observability & telemetry
 import { PipelineTracer } from './pipelineTelemetry.js';
+// Agentic Web Research: Bounded agent loop
+import { runAgentLoop } from './agentLoop.js';
 
 const logger = createLogger('StockResearchOrchestrator');
 
 // ===== CONSTANTS =====
 
 const SYMBOL_REGEX = /^[A-Z0-9]{1,10}$/;
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 const MAX_LLM_RETRIES = 2;
 
 /** Default pipeline options, merged with user overrides */
@@ -49,29 +50,57 @@ const DEFAULT_OPTIONS = {
   maxSources: 8,
   recencyWindowDays: 14,
   strictValidation: true,
-  timeoutMs: 60_000,
+  timeoutMs: 120_000,
+  openValidUrls: true,
+  removeSerpFromContext: true,
+  pageOpenStrategy: 'sequential',
+  searchProvider: 'google_dom',
+  agentLoop: {
+    enabled: true,
+    maxRounds: 2,
+    maxCriticPasses: 1,
+  },
 };
 
 /** Vietnamese progress messages per step */
 const STEP_MESSAGES = {
   1: (symbol) => `Đang kiểm tra dữ liệu đầu vào cho ${symbol}...`,
-  2: (symbol) => `Đang tìm kiếm thông tin ${symbol}...`,
-  3: (symbol) => `Đang phân tích và xếp hạng nguồn tin ${symbol}...`,
-  4: (symbol) => `Đang xây dựng ngữ cảnh phân tích ${symbol}...`,
-  5: (symbol) => `Đang phân tích ${symbol} bằng AI...`,
-  6: (symbol) => `Đang kiểm tra kết quả phân tích ${symbol}...`,
-  7: (symbol) => `Đang lưu kết quả phân tích ${symbol}...`,
+  2: (symbol) => `Đang tìm kiếm và thu thập dữ liệu ${symbol}...`,
+  3: (symbol) => `Đang xây dựng ngữ cảnh phân tích ${symbol}...`,
+  4: (symbol) => `Đang phân tích ${symbol} bằng AI...`,
+  5: (symbol) => `Đang kiểm tra kết quả phân tích ${symbol}...`,
+  6: (symbol) => `Đang lưu kết quả phân tích ${symbol}...`,
 };
 
 const STEP_STATUS = {
   1: 'validating',
-  2: 'retrieving',
+  2: 'discovering',
   3: 'ranking',
-  4: 'ranking',
-  5: 'evaluating',
-  6: 'validating_output',
-  7: 'persisting',
+  4: 'evaluating',
+  5: 'validating_output',
+  6: 'persisting',
 };
+
+function logNonFatalPersistenceError({
+  operation,
+  table,
+  error,
+  runId,
+  correlationId = null,
+  feature = 'stock_research',
+}) {
+  logger.warn('Non-fatal persistence failure', {
+    feature,
+    severity: 'warning',
+    operation,
+    table,
+    runId,
+    correlationId,
+    metric: 'persistence_non_fatal_total',
+    errorCode: error?.code || null,
+    errorMessage: error?.message || String(error),
+  });
+}
 
 // ===== PUBLIC API =====
 
@@ -112,7 +141,7 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     mode: options.mode || 'stock-research',
   });
 
-  logger.info('Pipeline started', { symbol, runId, correlationId, userId });
+  logger.info('Pipeline started (agentic)', { symbol, runId, correlationId, userId });
 
   // Helper: emit progress
   const emitProgress = (step) => {
@@ -130,6 +159,7 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
 
   let sources = [];
   let llmOutput = null;
+  let agentResult = null;
 
   try {
     // =============================================
@@ -149,73 +179,95 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     await createRunRecord(runId, normalizedSymbol, userId, opts);
 
     // =============================================
-    // Step 2: Google Search (optional)
+    // Step 2: Agent Loop (Search → Open → Extract → Classify → Critic)
     // =============================================
     emitProgress(2);
-    tracer.startStep('search', { searchEnabled: opts.searchEnabled });
+    tracer.startStep('agent_loop', { searchEnabled: opts.searchEnabled });
     const stepStart2 = Date.now();
 
     if (opts.searchEnabled) {
-      try {
-        const query = buildSearchQuery(normalizedSymbol, opts);
-        sources = await searchGoogleWeb(query, {
-          maxResults: opts.maxSources,
-          recencyWindowDays: opts.recencyWindowDays,
-          timeoutMs: Math.min(opts.timeoutMs / 3, 15_000),
-          trustedDomains: opts.trustedDomains,
+      const agentLoopEnabled = opts.agentLoop?.enabled !== false;
+
+      if (agentLoopEnabled) {
+        // Agentic flow: bounded loop with planner/critic
+        agentResult = await runAgentLoop(normalizedSymbol, opts, {
+          settingsConfig,
+          microtaskOptions: deps.microtaskOptions || {},
+          onProgress: (status) => {
+            if (typeof onProgress === 'function') {
+              onProgress({
+                runId,
+                symbol: normalizedSymbol,
+                status: status.status,
+                step: 2,
+                totalSteps: TOTAL_STEPS,
+                message: status.message,
+              });
+            }
+          },
+        });
+
+        sources = agentResult.discoveredSources || [];
+        logger.info('Agent loop completed', {
+          symbol: normalizedSymbol,
+          evidenceCount: agentResult.evidencePack.length,
+          rounds: agentResult.roundsExecuted,
+          urlsOpened: agentResult.urlsOpened,
+          criticDecision: agentResult.criticDecision,
           correlationId,
         });
-        logger.info('Search completed', { symbol: normalizedSymbol, sourceCount: sources.length, correlationId });
-      } catch (searchError) {
-        // Search failure is non-fatal — continue without sources
-        logger.warn('Search failed, continuing without sources', {
-          error: searchError.message,
-          correlationId,
-        });
-        sources = [];
+      } else {
+        // Legacy flow: search-only (no page opening)
+        try {
+          const query = buildSearchQuery(normalizedSymbol, opts);
+          sources = await searchGoogleWeb(query, {
+            maxResults: opts.maxSources,
+            recencyWindowDays: opts.recencyWindowDays,
+            timeoutMs: Math.min(opts.timeoutMs / 3, 15_000),
+            trustedDomains: opts.trustedDomains,
+            correlationId,
+          });
+        } catch (searchError) {
+          logger.warn('Search failed, continuing without sources', {
+            error: searchError.message,
+            correlationId,
+          });
+          sources = [];
+        }
       }
     }
 
-    timing.search_ms = Date.now() - stepStart2;
-    tracer.endStep('search', { sourceCount: sources.length });
+    timing.agent_loop_ms = Date.now() - stepStart2;
+    tracer.endStep('agent_loop', {
+      sourceCount: sources.length,
+      evidenceCount: agentResult?.evidencePack?.length || 0,
+      urlsOpened: agentResult?.urlsOpened || 0,
+    });
 
     // =============================================
-    // Step 3: Filter & Rank sources
+    // Step 3: Build LLM context/prompt
     // =============================================
     emitProgress(3);
-    tracer.startStep('rank');
+    tracer.startStep('context');
     const stepStart3 = Date.now();
 
-    // Sources are already ranked by googleSearchService, just limit
-    const rankedSources = sources.slice(0, opts.maxSources);
+    const evidencePack = agentResult?.evidencePack || [];
+    const llmPrompt = buildAnalysisPrompt(normalizedSymbol, evidencePack, sources, opts);
 
-    timing.rank_ms = Date.now() - stepStart3;
-    tracer.endStep('rank', { rankedCount: rankedSources.length });
+    timing.context_ms = Date.now() - stepStart3;
+    tracer.endStep('context', { promptLength: llmPrompt.length, evidenceCount: evidencePack.length });
 
     // =============================================
-    // Step 4: Build LLM context/prompt
+    // Step 4: LLM Final Synthesis (with retries)
     // =============================================
     emitProgress(4);
-    tracer.startStep('context');
-    const stepStart4 = Date.now();
-
-    const llmPrompt = buildAnalysisPrompt(normalizedSymbol, rankedSources, opts);
-
-    timing.context_ms = Date.now() - stepStart4;
-    tracer.endStep('context', { promptLength: llmPrompt.length });
-
-    // =============================================
-    // Step 5: LLM Evaluation (with retries)
-    // =============================================
-    emitProgress(5);
     tracer.startStep('analyze');
-    const stepStart5 = Date.now();
+    const stepStart4 = Date.now();
 
     const providerConfig = getProviderForFeature(FEATURE_TYPES.STOCK_RESEARCH, settingsConfig);
     const provider = LLMProviderFactory.create(providerConfig, { enqueue });
 
     let llmResponse;
-    let lastError;
 
     for (let attempt = 0; attempt <= MAX_LLM_RETRIES; attempt++) {
       try {
@@ -225,7 +277,6 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
         });
         break; // Success
       } catch (err) {
-        lastError = err;
         const classified = classifyLLMError(err);
         if (!classified.retryable || attempt === MAX_LLM_RETRIES) {
           throw err;
@@ -235,7 +286,6 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
           error: err.message,
           correlationId,
         });
-        // Brief delay before retry
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
@@ -244,29 +294,27 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       throw new Error('LLM returned empty response');
     }
 
-    timing.analyze_ms = Date.now() - stepStart5;
+    timing.analyze_ms = Date.now() - stepStart4;
     tracer.endStep('analyze', { responseLength: llmResponse.text?.length || 0 });
 
     // =============================================
-    // Step 6: Validate LLM Output
+    // Step 5: Validate LLM Output
     // =============================================
-    emitProgress(6);
+    emitProgress(5);
     tracer.startStep('validate_output');
-    const stepStart6 = Date.now();
+    const stepStart5 = Date.now();
 
     const validation = validateStockResearchOutput(llmResponse.text, {
       strict: opts.strictValidation,
     });
 
     if (!validation.valid && opts.strictValidation) {
-      // Log validation failures for debugging
       logger.warn('Output validation failed', {
         errors: validation.errors,
         warnings: validation.warnings,
         correlationId,
       });
 
-      // Try one more time with a corrective prompt
       const retryResult = await retryWithCorrection(
         provider, llmPrompt, validation.errors, { runId, enqueue }
       );
@@ -274,7 +322,6 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       if (retryResult) {
         llmOutput = retryResult;
       } else {
-        // Use partial data if available
         if (validation.data) {
           llmOutput = validation.data;
           logger.info('Using partial validation data', { correlationId });
@@ -294,33 +341,42 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       logger.info('Validation warnings', { warnings: validation.warnings, correlationId });
     }
 
-    timing.validate_output_ms = Date.now() - stepStart6;
+    timing.validate_output_ms = Date.now() - stepStart5;
     tracer.endStep('validate_output');
 
     // =============================================
-    // Step 7: Persist to Supabase
+    // Step 6: Persist to Supabase
     // =============================================
-    emitProgress(7);
+    emitProgress(6);
     tracer.startStep('persist');
-    const stepStart7 = Date.now();
+    const stepStart6 = Date.now();
 
     try {
       await persistResults(runId, normalizedSymbol, userId, {
         output: llmOutput,
-        sources: rankedSources,
+        sources: sources.slice(0, opts.maxSources),
+        evidencePack,
         provider: providerConfig.provider,
         timing,
+        agentMetadata: agentResult ? {
+          roundsExecuted: agentResult.roundsExecuted,
+          urlsOpened: agentResult.urlsOpened,
+          criticDecision: agentResult.criticDecision,
+          insufficientEvidence: agentResult.insufficientEvidence,
+          queriesUsed: agentResult.queriesUsed,
+        } : null,
       });
     } catch (persistError) {
-      // Persist failure is non-fatal — log but still return results
-      logger.error('Failed to persist results', {
-        error: persistError.message,
+      logNonFatalPersistenceError({
+        operation: 'persistResults',
+        table: 'stock_research_runs|stock_research_sources|stock_research_insights',
+        error: persistError,
         runId,
         correlationId,
       });
     }
 
-    timing.persist_ms = Date.now() - stepStart7;
+    timing.persist_ms = Date.now() - stepStart6;
     tracer.endStep('persist');
 
     // =============================================
@@ -328,33 +384,51 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
     // =============================================
     timing.total_ms = Date.now() - startTime;
 
-    // XST-807: Complete tracer with result metadata
     tracer.complete({
-      sourceCount: rankedSources.length,
+      sourceCount: sources.length,
+      evidenceCount: evidencePack.length,
       confidence: llmOutput?.confidence,
       recommendation: llmOutput?.recommendation,
     });
+
+    // Build final sources from the evidence pack (fetched pages), not raw SERP
+    const finalSources = evidencePack.length > 0
+      ? evidencePack.map((e, idx) => ({
+          title: e.title,
+          url: e.url,
+          snippet: e.summary || '',
+          sourceType: e.category || 'news',
+          score: e.relevance === 'high' ? 1.0 : e.relevance === 'medium' ? 0.7 : 0.4,
+          credibility: e.relevance === 'high' ? 'high' : 'medium',
+          sourceStage: e.sourceStage || 'fetched',
+        }))
+      : sources.slice(0, opts.maxSources).map(s => ({
+          title: s.title,
+          url: s.url,
+          snippet: s.snippet,
+          sourceType: s.sourceType,
+          publishedAt: s.publishedAt,
+          score: s.score,
+          credibility: s.credibility,
+        }));
 
     const result = {
       success: true,
       runId,
       symbol: normalizedSymbol,
       output: llmOutput,
-      sources: rankedSources.map(s => ({
-        title: s.title,
-        url: s.url,
-        snippet: s.snippet,
-        sourceType: s.sourceType,
-        publishedAt: s.publishedAt,
-        score: s.score,
-        credibility: s.credibility,
-      })),
+      sources: finalSources,
       metadata: {
         provider: providerConfig.provider,
         searchEnabled: opts.searchEnabled,
-        sourceCount: rankedSources.length,
+        searchProvider: opts.searchProvider || 'google_dom',
+        sourceCount: finalSources.length,
+        openedUrlCount: agentResult?.urlsOpened || 0,
+        fetchedPageCount: evidencePack.length,
+        searchRounds: agentResult?.roundsExecuted || 1,
+        criticDecision: agentResult?.criticDecision || null,
+        insufficientEvidence: agentResult?.insufficientEvidence || false,
         timing,
-        // XST-807: Include telemetry report
         telemetry: tracer.getReport(),
       },
     };
@@ -364,10 +438,10 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       runId,
       totalMs: timing.total_ms,
       recommendation: llmOutput?.recommendation,
+      evidenceCount: evidencePack.length,
       correlationId,
     });
 
-    // Update run status to done — include full timing from tracer
     await updateRunStatus(runId, 'done', { timing: tracer.getTimingData() }).catch(err =>
       logger.error('Failed to update run status', { error: err.message, runId })
     );
@@ -382,9 +456,8 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
 
     const classified = classifyLLMError(error);
     const errorCode = error.errorCode || classified.errorCode;
-    const failedStep = error.failedStep || STEP_STATUS[5];
+    const failedStep = error.failedStep || STEP_STATUS[4];
 
-    // XST-807: Record failure in tracer
     tracer.fail(failedStep, errorCode, error.message);
 
     logger.error('Pipeline failed', {
@@ -396,7 +469,6 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
       correlationId,
     });
 
-    // Update run status to failed — include timing from tracer
     await updateRunStatus(runId, 'failed', {
       error_code: errorCode,
       error_message: error.message,
@@ -419,7 +491,6 @@ export async function runStockResearch(symbol, options = {}, userId, deps = {}) 
         searchEnabled: options.searchEnabled ?? DEFAULT_OPTIONS.searchEnabled,
         sourceCount: sources.length,
         timing,
-        // XST-807: Include telemetry report on failure too
         telemetry: tracer.getReport(),
       },
     };
@@ -468,22 +539,51 @@ function buildSearchQuery(symbol, opts = {}) {
 }
 
 /**
- * Build the LLM analysis prompt with search context.
+ * Build the LLM analysis prompt with evidence from fetched pages.
+ * SERP snippets are NOT included in the prompt — only fetched page content.
+ *
  * @param {string} symbol
- * @param {Object[]} sources
+ * @param {Object[]} evidencePack - Processed evidence items from agent loop
+ * @param {Object[]} discoveredSources - Raw SERP sources (metadata only, for reference)
  * @param {Object} opts
  * @returns {string}
  */
-export function buildAnalysisPrompt(symbol, sources, opts = {}) {
+export function buildAnalysisPrompt(symbol, evidencePack, discoveredSources, opts = {}) {
   const now = new Date().toISOString().split('T')[0];
 
-  let sourceContext = '';
-  if (sources.length > 0) {
-    sourceContext = '\n\n## Nguồn tham khảo:\n';
-    for (const src of sources) {
-      sourceContext += `- **${src.title || 'Untitled'}** (${src.url})\n`;
+  let evidenceContext = '';
+  if (evidencePack.length > 0) {
+    evidenceContext = '\n\n## Dữ liệu đã thu thập và xác minh:\n';
+    for (let i = 0; i < evidencePack.length; i++) {
+      const ev = evidencePack[i];
+      evidenceContext += `\n### Nguồn ${i + 1}: ${ev.title || 'Untitled'}\n`;
+      evidenceContext += `URL: ${ev.url}\n`;
+      if (ev.relevance) evidenceContext += `Mức liên quan: ${ev.relevance}\n`;
+      if (ev.summary) {
+        evidenceContext += `Tóm tắt: ${ev.summary}\n`;
+      }
+      if (ev.facts?.length > 0) {
+        evidenceContext += `Sự kiện chính: ${ev.facts.join('; ')}\n`;
+      }
+      if (ev.numbers?.length > 0) {
+        evidenceContext += `Số liệu: ${ev.numbers.join('; ')}\n`;
+      }
+      if (ev.risks?.length > 0) {
+        evidenceContext += `Rủi ro: ${ev.risks.join('; ')}\n`;
+      }
+      // Include a portion of the actual content for full context
+      if (ev.content) {
+        const contentExcerpt = ev.content.substring(0, 3000);
+        evidenceContext += `\nNội dung:\n${contentExcerpt}\n`;
+      }
+    }
+  } else if (discoveredSources.length > 0 && !(opts.removeSerpFromContext ?? true)) {
+    // Legacy fallback: use SERP snippets if no evidence and not explicitly removed
+    evidenceContext = '\n\n## Nguồn tham khảo:\n';
+    for (const src of discoveredSources) {
+      evidenceContext += `- **${src.title || 'Untitled'}** (${src.url})\n`;
       if (src.snippet) {
-        sourceContext += `  ${src.snippet}\n`;
+        evidenceContext += `  ${src.snippet}\n`;
       }
     }
   }
@@ -496,6 +596,8 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
 3. Đánh giá độ tin cậy từ 0-100
 4. Liệt kê luận điểm đầu tư (thesis) và rủi ro (risks) bằng tiếng Việt
 5. Nếu có, đưa ra giá vào (entryPrice), giá mục tiêu (targetPrice) và cắt lỗ (stopLoss) tính bằng VND
+6. Mỗi luận điểm phải gắn với nguồn cụ thể (URL) đã cung cấp
+7. Không được bịa số liệu chưa có trong dữ liệu thu thập
 
 ## Format JSON bắt buộc (CHỈ trả lời JSON, không thêm text):
 \`\`\`json
@@ -512,7 +614,7 @@ export function buildAnalysisPrompt(symbol, sources, opts = {}) {
   "catalysts": ["catalyst 1"],
   "sources": [{"url": "...", "reason": "...", "credibility": "high|medium|low"}]
 }
-\`\`\`${sourceContext}
+\`\`\`${evidenceContext}
 
 CHỈ trả lời bằng JSON object, không thêm bất kỳ text nào khác.`;
 }
@@ -577,11 +679,21 @@ async function createRunRecord(runId, symbol, userId, opts) {
       });
 
     if (error) {
-      logger.warn('Failed to create run record', { error: error.message, runId });
+      logNonFatalPersistenceError({
+        operation: 'insert',
+        table: 'stock_research_runs',
+        error,
+        runId,
+      });
     }
   } catch (err) {
     // Non-fatal — don't block pipeline for DB issues
-    logger.warn('Exception creating run record', { error: err.message, runId });
+    logNonFatalPersistenceError({
+      operation: 'insert',
+      table: 'stock_research_runs',
+      error: err,
+      runId,
+    });
   }
 }
 
@@ -610,48 +722,88 @@ async function updateRunStatus(runId, status, extras = {}) {
     .eq('id', runId);
 
   if (error) {
-    logger.warn('Failed to update run status', { error: error.message, runId, status });
+    logNonFatalPersistenceError({
+      operation: 'update_status',
+      table: 'stock_research_runs',
+      error,
+      runId,
+    });
   }
 }
 
 /**
  * Persist analysis output and sources to Supabase.
  */
-async function persistResults(runId, symbol, userId, { output, sources, provider, timing }) {
-  // 1. Update run with output
+async function persistResults(runId, symbol, userId, { output, sources, evidencePack, provider, timing, agentMetadata }) {
+  // 1. Update run with output + agent metadata
+  const runUpdate = {
+    status: 'done',
+    output,
+    provider,
+    finished_at: new Date().toISOString(),
+  };
+
+  if (agentMetadata) {
+    runUpdate.options = {
+      ...(runUpdate.options || {}),
+      agent: agentMetadata,
+    };
+  }
+
   const { error: runError } = await supabase
     .from('stock_research_runs')
-    .update({
-      status: 'done',
-      output,
-      provider,
-      finished_at: new Date().toISOString(),
-    })
+    .update(runUpdate)
     .eq('id', runId);
 
   if (runError) {
     throw new Error(`Run update failed: ${runError.message}`);
   }
 
-  // 2. Insert sources
-  if (sources.length > 0) {
-    const sourceRecords = sources.map((src, index) => ({
-      run_id: runId,
-      url: src.url,
-      title: src.title || '',
-      snippet: src.snippet || '',
-      source_type: src.sourceType || 'news',
-      published_at: src.publishedAt || null,
-      credibility_score: src.score || 0,
-      rank: index + 1,
-    }));
+  // 2. Insert sources (prefer evidence pack over raw SERP)
+  const sourceRecords = [];
 
+  if (evidencePack && evidencePack.length > 0) {
+    for (let index = 0; index < evidencePack.length; index++) {
+      const ev = evidencePack[index];
+      sourceRecords.push({
+        run_id: runId,
+        url: ev.url,
+        title: ev.title || '',
+        snippet: ev.summary || '',
+        source_type: ev.category || 'news',
+        published_at: null,
+        credibility_score: ev.relevance === 'high' ? 1.0 : ev.relevance === 'medium' ? 0.7 : 0.4,
+        rank: index + 1,
+      });
+    }
+  } else if (sources.length > 0) {
+    for (let index = 0; index < sources.length; index++) {
+      const src = sources[index];
+      sourceRecords.push({
+        run_id: runId,
+        url: src.url,
+        title: src.title || '',
+        snippet: src.snippet || '',
+        source_type: src.sourceType || 'news',
+        published_at: src.publishedAt || null,
+        credibility_score: src.score || 0,
+        rank: index + 1,
+      });
+    }
+  }
+
+  if (sourceRecords.length > 0) {
     const { error: srcError } = await supabase
       .from('stock_research_sources')
       .insert(sourceRecords);
 
     if (srcError) {
-      logger.warn('Failed to insert sources', { error: srcError.message, runId });
+      logNonFatalPersistenceError({
+        operation: 'insert',
+        table: 'stock_research_sources',
+        error: srcError,
+        runId,
+      });
     }
   }
 
@@ -710,7 +862,12 @@ async function persistResults(runId, symbol, userId, { output, sources, provider
         .insert(insights);
 
       if (insightError) {
-        logger.warn('Failed to insert insights', { error: insightError.message, runId });
+        logNonFatalPersistenceError({
+          operation: 'insert',
+          table: 'stock_research_insights',
+          error: insightError,
+          runId,
+        });
       }
     }
   }

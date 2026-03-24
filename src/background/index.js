@@ -27,7 +27,6 @@ import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
 import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
 import * as sessionManagerModule from './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling
-// ❌ REMOVED: import './handlers/telemetry.js'; (dead code - no telemetry events called)
 
 const logger = createLogger('Background');
 

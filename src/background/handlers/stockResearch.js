@@ -61,6 +61,25 @@ registerHandler(MESSAGE_TYPES.STOCK_RESEARCH_RUN, async (message) => {
       ...options,
     });
 
+    // Merge seed sites from settings if present
+    if (settingsConfig?.stock_research?.seedSites) {
+      resolvedOptions.seedSites = settingsConfig.stock_research.seedSites;
+    }
+
+    // Merge microtasks & agentLoop from settings if present
+    if (settingsConfig?.stock_research?.microtasks) {
+      resolvedOptions.microtasks = {
+        ...(resolvedOptions.microtasks || {}),
+        ...settingsConfig.stock_research.microtasks,
+      };
+    }
+    if (settingsConfig?.stock_research?.agentLoop) {
+      resolvedOptions.agentLoop = {
+        ...(resolvedOptions.agentLoop || {}),
+        ...settingsConfig.stock_research.agentLoop,
+      };
+    }
+
     // Broadcast initial status
     broadcastStatus(correlationId, {
       runId: correlationId,

@@ -1,7 +1,7 @@
 /**
  * @fileoverview Unit tests for stockResearchOrchestrator
  * Ticket: XST-796
- * Tests the 7-step pipeline with mocked dependencies.
+ * Tests the 6-step agentic pipeline with mocked dependencies.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -60,6 +60,12 @@ vi.mock('../../src/shared/llm/LLMProviderFactory.js', () => ({
   },
 }));
 
+// Mock agentLoop
+const mockRunAgentLoop = vi.fn();
+vi.mock('../../src/background/services/stock/agentLoop.js', () => ({
+  runAgentLoop: (...args) => mockRunAgentLoop(...args),
+}));
+
 // Import after mocks
 import { runStockResearch, buildAnalysisPrompt } from '../../src/background/services/stock/stockResearchOrchestrator.js';
 
@@ -96,6 +102,29 @@ describe('runStockResearch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchGoogle.mockResolvedValue(MOCK_SEARCH_SOURCES);
+    mockRunAgentLoop.mockResolvedValue({
+      success: true,
+      evidencePack: [{
+        url: 'https://cafef.vn/fpt-bao-lai.html',
+        title: 'FPT báo lãi kỷ lục',
+        content: 'FPT ghi nhận lợi nhuận kỷ lục...',
+        summary: 'FPT đạt lợi nhuận kỷ lục',
+        relevance: 'high',
+        category: 'company_specific',
+        facts: ['Lãi kỷ lục'],
+        numbers: [],
+        risks: [],
+        sourceStage: 'summarized',
+        discoveryMethod: 'google_search',
+      }],
+      queriesUsed: ['FPT cổ phiếu phân tích'],
+      roundsExecuted: 1,
+      urlsOpened: 2,
+      criticDecision: 'accept',
+      insufficientEvidence: false,
+      timing: { round1_ms: 100, total_ms: 100 },
+      discoveredSources: MOCK_SEARCH_SOURCES,
+    });
     mockSendPrompt.mockResolvedValue({ text: VALID_LLM_OUTPUT, usage: { inputTokens: 0, outputTokens: 0 } });
     mockInsert.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({
@@ -134,17 +163,17 @@ describe('runStockResearch', () => {
 
     await runStockResearch('FPT', {}, 'user-123', { onProgress });
 
-    expect(progressSteps.length).toBeGreaterThanOrEqual(7);
+    expect(progressSteps.length).toBeGreaterThanOrEqual(6);
     expect(progressSteps[0].step).toBe(1);
     expect(progressSteps[0].status).toBe('validating');
-    expect(progressSteps[progressSteps.length - 1].step).toBe(7);
+    expect(progressSteps[progressSteps.length - 1].step).toBe(6);
   });
 
   it('includes timing metadata', async () => {
     const result = await runStockResearch('FPT', {}, 'user-123');
 
     expect(result.metadata.timing).toBeDefined();
-    expect(result.metadata.timing.search_ms).toBeGreaterThanOrEqual(0);
+    expect(result.metadata.timing.agent_loop_ms).toBeGreaterThanOrEqual(0);
     expect(result.metadata.timing.analyze_ms).toBeGreaterThanOrEqual(0);
     expect(result.metadata.timing.total_ms).toBeGreaterThanOrEqual(0);
   });
@@ -157,7 +186,7 @@ describe('runStockResearch', () => {
     const result = await runStockResearch('FPT', { searchEnabled: false }, 'user-123');
 
     expect(result.success).toBe(true);
-    expect(mockSearchGoogle).not.toHaveBeenCalled();
+    expect(mockRunAgentLoop).not.toHaveBeenCalled();
     expect(result.sources).toHaveLength(0);
     expect(result.metadata.searchEnabled).toBe(false);
   });
@@ -166,8 +195,18 @@ describe('runStockResearch', () => {
   // Search failure (non-fatal)
   // ============================================================================
 
-  it('continues pipeline when search fails', async () => {
-    mockSearchGoogle.mockRejectedValue(new Error('Search proxy down'));
+  it('continues pipeline when agent loop fails', async () => {
+    mockRunAgentLoop.mockResolvedValue({
+      success: false,
+      evidencePack: [],
+      queriesUsed: [],
+      roundsExecuted: 1,
+      urlsOpened: 0,
+      criticDecision: 'retry_exhausted',
+      insufficientEvidence: true,
+      timing: { total_ms: 100 },
+      discoveredSources: [],
+    });
 
     const result = await runStockResearch('FPT', {}, 'user-123');
 
@@ -299,7 +338,7 @@ describe('runStockResearch', () => {
 
 describe('buildAnalysisPrompt', () => {
   it('builds prompt with symbol', () => {
-    const prompt = buildAnalysisPrompt('FPT', []);
+    const prompt = buildAnalysisPrompt('FPT', [], []);
     expect(prompt).toContain('FPT');
     expect(prompt).toContain('BUY');
     expect(prompt).toContain('HOLD');
@@ -308,18 +347,28 @@ describe('buildAnalysisPrompt', () => {
     expect(prompt).toContain('JSON');
   });
 
-  it('includes source context when sources provided', () => {
-    const sources = [
-      { title: 'FPT News', url: 'https://cafef.vn/fpt.html', snippet: 'Test snippet' },
+  it('includes evidence context when evidence pack provided', () => {
+    const evidencePack = [
+      { title: 'FPT News', url: 'https://cafef.vn/fpt.html', summary: 'FPT grew 25%', relevance: 'high', facts: ['Revenue up'], numbers: ['25%'], risks: [], content: 'Full article text...' },
     ];
-    const prompt = buildAnalysisPrompt('FPT', sources);
-    expect(prompt).toContain('Nguồn tham khảo');
+    const prompt = buildAnalysisPrompt('FPT', evidencePack, []);
+    expect(prompt).toContain('Dữ liệu đã thu thập');
     expect(prompt).toContain('FPT News');
-    expect(prompt).toContain('cafef.vn');
+    expect(prompt).toContain('FPT grew 25%');
+  });
+
+  it('falls back to SERP snippets when no evidence and removeSerpFromContext=false', () => {
+    const discoveredSources = [
+      { title: 'FPT SERP', url: 'https://cafef.vn/fpt.html', snippet: 'Test snippet' },
+    ];
+    const prompt = buildAnalysisPrompt('FPT', [], discoveredSources, { removeSerpFromContext: false });
+    expect(prompt).toContain('Nguồn tham khảo');
+    expect(prompt).toContain('FPT SERP');
   });
 
   it('omits source section when no sources', () => {
-    const prompt = buildAnalysisPrompt('VCB', []);
+    const prompt = buildAnalysisPrompt('VCB', [], []);
     expect(prompt).not.toContain('Nguồn tham khảo');
+    expect(prompt).not.toContain('Dữ liệu đã thu thập');
   });
 });

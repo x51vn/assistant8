@@ -7,6 +7,10 @@
  */
 
 import { generateCorrelationId } from '../logger.js';
+import { SYSTEM_DOMAIN_VERSION, SYSTEM_MESSAGE_TYPES } from './messages/domains/systemMessages.js';
+import { AUTH_DOMAIN_VERSION, AUTH_MESSAGE_TYPES } from './messages/domains/authMessages.js';
+import { SETTINGS_DOMAIN_VERSION, SETTINGS_MESSAGE_TYPES } from './messages/domains/settingsMessages.js';
+import { STOCK_RESEARCH_DOMAIN_VERSION, STOCK_RESEARCH_MESSAGE_TYPES } from './messages/domains/stockResearchMessages.js';
 
 /**
  * Base message structure - all messages must extend this
@@ -21,12 +25,22 @@ import { generateCorrelationId } from '../logger.js';
  * Message version - increment when schema changes
  */
 export const MESSAGE_VERSION = 1;
+export const MESSAGE_DOMAIN_VERSIONS = {
+  system: SYSTEM_DOMAIN_VERSION,
+  auth: AUTH_DOMAIN_VERSION,
+  settings: SETTINGS_DOMAIN_VERSION,
+  stockResearch: STOCK_RESEARCH_DOMAIN_VERSION,
+};
 
 /**
  * Message types - Centralized definition
  * Naming convention: DOMAIN_VERB or VERB_DOMAIN
  */
 export const MESSAGE_TYPES = {
+  ...SYSTEM_MESSAGE_TYPES,
+  ...AUTH_MESSAGE_TYPES,
+  ...SETTINGS_MESSAGE_TYPES,
+  ...STOCK_RESEARCH_MESSAGE_TYPES,
   // Health check
   PING: 'PING',
   PONG: 'PONG',
@@ -242,14 +256,6 @@ export const MESSAGE_TYPES = {
   MIGRATION_AVAILABLE: 'MIGRATION_AVAILABLE',
   MIGRATE_LOCAL_TO_SUPABASE: 'MIGRATE_LOCAL_TO_SUPABASE',
   MIGRATION_COMPLETE: 'MIGRATION_COMPLETE',
-
-  // Supabase Authentication operations (formerly X-Neews auth, migrated XST-738, XST-739)
-  XNEEWS_AUTH_REGISTER: 'XNEEWS_AUTH_REGISTER',
-  XNEEWS_AUTH_LOGIN: 'XNEEWS_AUTH_LOGIN',
-  XNEEWS_AUTH_REFRESH: 'XNEEWS_AUTH_REFRESH',
-  XNEEWS_AUTH_SUCCESS: 'XNEEWS_AUTH_SUCCESS',
-  XNEEWS_AUTH_LOGOUT: 'XNEEWS_AUTH_LOGOUT',
-  XNEEWS_AUTH_LOGGED_OUT: 'XNEEWS_AUTH_LOGGED_OUT',
 
   // Supabase Watchlist operations (formerly X-Neews, migrated XST-738, XST-741)
   XNEEWS_WATCHLIST_GET: 'XNEEWS_WATCHLIST_GET',
@@ -524,6 +530,21 @@ export function isValidMessage(message) {
   }
   
   return true;
+}
+
+/**
+ * Return the domain version for known message types.
+ * Used by gateway/handlers for lightweight contract observability.
+ * @param {string} type
+ * @returns {string|null}
+ */
+export function getMessageDomainVersion(type) {
+  if (!type || typeof type !== 'string') return null;
+  if (Object.values(SYSTEM_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.system;
+  if (Object.values(AUTH_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.auth;
+  if (Object.values(SETTINGS_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.settings;
+  if (Object.values(STOCK_RESEARCH_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.stockResearch;
+  return null;
 }
 
 /**

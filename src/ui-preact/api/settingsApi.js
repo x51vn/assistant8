@@ -6,10 +6,14 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
 import { clearTemplateCache } from './writingApi.js';
+import { sendRuntimeMessage, assertNoRuntimeError } from './runtimeGateway.js';
 import {
   allPrompts,
+  autoRun,
+  evaluatePrevious,
+  reviewPrompt,
+  realtimeEnabled,
   interval,
   atlassianBaseUrl,
   atlassianEmail,
@@ -22,17 +26,8 @@ import {
  * @throws {Error} if load fails
  */
 export async function loadSettings() {
-  const response = await chrome.runtime.sendMessage({
-    v: 1,
-    type: MESSAGE_TYPES.SETTINGS_GET,
-    correlationId: generateCorrelationId(),
-    timestamp: Date.now()
-  });
-  
-  const loadError = response.error?.message || response.errorMessage;
-  if (response.error || response.errorCode || loadError) {
-    throw new Error(loadError || 'Failed to load settings');
-  }
+  const response = await sendRuntimeMessage(MESSAGE_TYPES.SETTINGS_GET);
+  assertNoRuntimeError(response, 'Failed to load settings');
   
   // ⚠️ CRITICAL: createResponse spreads payload directly (not nested in .data)
   // Response structure: { config: { interval, ... } }
@@ -74,18 +69,10 @@ export async function saveSettings() {
     }
   };
 
-  const response = await chrome.runtime.sendMessage({
-    v: 1,
-    type: MESSAGE_TYPES.SETTINGS_UPDATE,
-    correlationId: generateCorrelationId(),
-    timestamp: Date.now(),
+  const response = await sendRuntimeMessage(MESSAGE_TYPES.SETTINGS_UPDATE, {
     data: { config }
   });
-  
-  const saveError = response.error?.message || response.errorMessage;
-  if (response.error || response.errorCode || saveError) {
-    throw new Error(saveError || 'Failed to save settings');
-  }
+  assertNoRuntimeError(response, 'Failed to save settings');
 }
 
 /**
@@ -102,11 +89,7 @@ export async function sendPromptNow() {
     throw new Error('Master prompt cannot be empty');
   }
 
-  const response = await chrome.runtime.sendMessage({
-    v: 1,
-    type: MESSAGE_TYPES.SEND_PROMPT,
-    correlationId: generateCorrelationId(),
-    timestamp: Date.now(),
+  const response = await sendRuntimeMessage(MESSAGE_TYPES.SEND_PROMPT, {
     payload: {
       prompt: masterContent,
       options: {
@@ -115,11 +98,7 @@ export async function sendPromptNow() {
       }
     }
   });
-
-  const sendError = response.error?.message || response.errorMessage;
-  if (response.type === MESSAGE_TYPES.ERROR || response.errorCode || sendError) {
-    throw new Error(sendError || 'Failed to send prompt');
-  }
+  assertNoRuntimeError(response, 'Failed to send prompt');
 }
 
 /**
@@ -128,17 +107,8 @@ export async function sendPromptNow() {
  * @throws {Error} if delete fails
  */
 export async function deleteSettings() {
-  const response = await chrome.runtime.sendMessage({
-    v: 1,
-    type: MESSAGE_TYPES.SETTINGS_DELETE,
-    correlationId: generateCorrelationId(),
-    timestamp: Date.now()
-  });
-
-  const deleteError = response.error?.message || response.errorMessage;
-  if (response.error || response.errorCode || deleteError) {
-    throw new Error(deleteError || 'Failed to delete settings');
-  }
+  const response = await sendRuntimeMessage(MESSAGE_TYPES.SETTINGS_DELETE);
+  assertNoRuntimeError(response, 'Failed to delete settings');
 }
 
 /**
@@ -148,16 +118,8 @@ export async function deleteSettings() {
  */
 export async function loadAllPrompts() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PROMPTS_GET_ALL,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
-
-    if (response.error || response.errorCode) {
-      throw new Error(response.error?.message || response.errorMessage || 'Failed to load prompts');
-    }
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_GET_ALL);
+    assertNoRuntimeError(response, 'Failed to load prompts');
 
     return response.prompts || {};
   } catch (error) {
@@ -190,17 +152,10 @@ export async function saveAllPrompts(prompts) {
       promptsToSend[key] = prompt;
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PROMPTS_UPSERT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_UPSERT, {
       data: { prompts: promptsToSend }
     });
-
-    if (response.error || response.errorCode) {
-      throw new Error(response.error?.message || response.errorMessage || 'Failed to save prompts');
-    }
+    assertNoRuntimeError(response, 'Failed to save prompts');
 
     // Check for partial failure
     if (response.partialSuccess) {
@@ -228,16 +183,11 @@ export async function saveAllPrompts(prompts) {
  */
 export async function initializeAllPrompts() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PROMPTS_INIT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_INIT);
 
     console.log('[SettingsAPI] PROMPTS_INIT response:', response);
 
-    if (response.error || response.errorCode) {
+    if (response?.type === MESSAGE_TYPES.ERROR || response?.errorCode || response?.error?.message || response?.errorMessage) {
       console.warn('[SettingsAPI] Failed to initialize prompts:', response.error?.message || response.errorMessage);
       // Don't throw - initialization failure shouldn't block the Settings page
       return;

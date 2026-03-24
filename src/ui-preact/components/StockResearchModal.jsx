@@ -18,8 +18,8 @@ import { h } from 'preact';
 import { signal } from '@preact/signals';
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { isTeaStockModalOpen } from '../state/portfolioState.js';
-import { generateCorrelationId } from '../../logger.js';
-import { MESSAGE_TYPES, MESSAGE_VERSION, createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 import {
   validateOverrideField,
   validateOverrides,
@@ -128,7 +128,7 @@ export default function StockResearchModal() {
       return;
     }
 
-    const cid = generateCorrelationId();
+    const cid = createMessage(MESSAGE_TYPES.STOCK_RESEARCH_RUN).correlationId;
     setCorrelationId(cid);
     setIsRunning(true);
     setError(null);
@@ -157,11 +157,8 @@ export default function StockResearchModal() {
         runOptions.provider = overrides.provider;
       }
 
-      const response = await chrome.runtime.sendMessage({
-        v: MESSAGE_VERSION,
-        type: MESSAGE_TYPES.STOCK_RESEARCH_RUN,
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.STOCK_RESEARCH_RUN, {
         correlationId: cid,
-        timestamp: Date.now(),
         data: {
           symbol: trimmed,
           mode: 'stock-research',
@@ -187,12 +184,10 @@ export default function StockResearchModal() {
   const handleLoadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const response = await chrome.runtime.sendMessage(
-        createMessage(MESSAGE_TYPES.STOCK_RESEARCH_GET_HISTORY, {
-          limit: 20,
-          offset: 0,
-        })
-      );
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.STOCK_RESEARCH_GET_HISTORY, {
+        limit: 20,
+        offset: 0,
+      });
 
       if (response?.success) {
         setHistoryItems(response.items || []);

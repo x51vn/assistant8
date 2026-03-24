@@ -30,6 +30,10 @@ export const PIPELINE_PRESETS = {
       recencyWindowDays: 7,
       strictValidation: true,
       trustedDomains: 'cafef.vn, vietstock.vn, vneconomy.vn',
+      openValidUrls: true,
+      removeSerpFromContext: true,
+      agentLoop: { enabled: true, maxRounds: 1, maxCriticPasses: 0 },
+      microtasks: { useLlmClient: true, summarization: true, textClassification: true },
     },
   },
   balanced: {
@@ -41,6 +45,10 @@ export const PIPELINE_PRESETS = {
       recencyWindowDays: 14,
       strictValidation: true,
       trustedDomains: 'cafef.vn, vietstock.vn, vneconomy.vn, fireant.vn, simplize.vn, tinnhanhchungkhoan.vn',
+      openValidUrls: true,
+      removeSerpFromContext: true,
+      agentLoop: { enabled: true, maxRounds: 2, maxCriticPasses: 1 },
+      microtasks: { useLlmClient: true, summarization: true, textClassification: true, keywordExtraction: true },
     },
   },
   aggressive: {
@@ -52,6 +60,10 @@ export const PIPELINE_PRESETS = {
       recencyWindowDays: 30,
       strictValidation: false,
       trustedDomains: '',
+      openValidUrls: true,
+      removeSerpFromContext: true,
+      agentLoop: { enabled: true, maxRounds: 2, maxCriticPasses: 1 },
+      microtasks: { useLlmClient: true, summarization: true, textClassification: true, keywordExtraction: true, navigationDetection: true, domClassification: true },
     },
   },
 };

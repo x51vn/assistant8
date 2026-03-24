@@ -10,30 +10,16 @@
 
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
+import { getNavigationPages } from '../config/navigationConfig.js';
 
 export function Navigation({ currentPage, onPageChange }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  const pages = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'fas fa-tachometer-alt' },
-    { id: 'portfolio', label: 'Portfolio', icon: 'fas fa-chart-pie' },
-    { id: 'market', label: 'Thị trường', icon: 'fas fa-chart-area' },
-    { id: 'watchlist', label: 'Watchlist', icon: 'fas fa-list-check' },
-    { id: 'assets', label: 'Tài sản', icon: 'fas fa-wallet' },
-    { id: 'history', label: 'History', icon: 'fas fa-history' },
-    { id: 'alerts', label: 'Alerts', icon: 'fas fa-bell' },
-    { id: 'writing', label: 'Writing', icon: 'fas fa-pen-fancy' },
-    { id: 'errors', label: 'Errors', icon: 'fas fa-exclamation-triangle' },
-    { id: 'jira', label: 'Jira', icon: 'fab fa-jira' },
-    { id: 'prompts', label: 'Prompts', icon: 'fas fa-scroll' },
-    { id: 'improvement', label: 'Đánh giá', icon: 'fas fa-star-half-alt' },
-    { id: 'jobs', label: 'Jobs', icon: 'fas fa-tasks' },
-    { id: 'settings', label: 'Settings', icon: 'fas fa-cog' }
-  ];
+  const pages = getNavigationPages();
 
-  // Split pages: primary tabs and hidden tabs
-  const primaryPages = pages.slice(0, 5); // First 5 visible (dashboard, portfolio, market, watchlist, assets)
-  const hiddenPages = pages.slice(5); // Rest in dropdown
+  // Split pages by explicit config field
+  const primaryPages = pages.filter((page) => page.primary);
+  const hiddenPages = pages.filter((page) => !page.primary);
 
   const handlePageChange = (pageId) => {
     onPageChange(pageId);

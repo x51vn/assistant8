@@ -32,6 +32,15 @@ const DEFAULTS = {
   searchEnabled: true,
   ...getPresetConfig(DEFAULT_PRESET),
   pipelineMode: DEFAULT_PRESET,
+  openValidUrls: true,
+  seedSites: [
+    { domain: 'vietstock.vn', enabled: true, mode: 'google_site_search' },
+    { domain: 'cafef.vn', enabled: true, mode: 'google_site_search' },
+    { domain: 'ssi.com.vn', enabled: false, mode: 'google_site_search' },
+  ],
+  agentLoopEnabled: true,
+  agentMaxRounds: 2,
+  microtasksEnabled: true,
 };
 
 /** Pipeline mode presets for UI rendering */
@@ -53,6 +62,11 @@ export function StockResearchSection() {
   const [strictValidation, setStrictValidation] = useState(DEFAULTS.strictValidation);
   const [trustedDomains, setTrustedDomains] = useState(DEFAULTS.trustedDomains);
   const [recencyWindowDays, setRecencyWindowDays] = useState(DEFAULTS.recencyWindowDays);
+  const [openValidUrls, setOpenValidUrls] = useState(DEFAULTS.openValidUrls);
+  const [seedSites, setSeedSites] = useState(DEFAULTS.seedSites);
+  const [agentLoopEnabled, setAgentLoopEnabled] = useState(DEFAULTS.agentLoopEnabled);
+  const [agentMaxRounds, setAgentMaxRounds] = useState(DEFAULTS.agentMaxRounds);
+  const [microtasksEnabled, setMicrotasksEnabled] = useState(DEFAULTS.microtasksEnabled);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -71,6 +85,11 @@ export function StockResearchSection() {
         setStrictValidation(sr.strictValidation ?? DEFAULTS.strictValidation);
         setTrustedDomains(sr.trustedDomains ?? DEFAULTS.trustedDomains);
         setRecencyWindowDays(sr.recencyWindowDays ?? DEFAULTS.recencyWindowDays);
+        setOpenValidUrls(sr.openValidUrls ?? DEFAULTS.openValidUrls);
+        if (Array.isArray(sr.seedSites)) setSeedSites(sr.seedSites);
+        setAgentLoopEnabled(sr.agentLoop?.enabled ?? DEFAULTS.agentLoopEnabled);
+        setAgentMaxRounds(sr.agentLoop?.maxRounds ?? DEFAULTS.agentMaxRounds);
+        setMicrotasksEnabled(sr.microtasks?.useLlmClient ?? DEFAULTS.microtasksEnabled);
 
         // Detect actual mode: if params match a preset, use that; otherwise 'custom'
         const detected = detectPresetMode({
@@ -167,6 +186,20 @@ export function StockResearchSection() {
         strictValidation,
         trustedDomains: trustedDomains.trim(),
         recencyWindowDays: Number(recencyWindowDays),
+        openValidUrls,
+        removeSerpFromContext: true,
+        seedSites,
+        microtasks: {
+          useLlmClient: microtasksEnabled,
+          summarization: true,
+          textClassification: true,
+          keywordExtraction: true,
+        },
+        agentLoop: {
+          enabled: agentLoopEnabled,
+          maxRounds: Number(agentMaxRounds),
+          maxCriticPasses: 1,
+        },
       };
 
       // Send update — merge into existing config
@@ -371,6 +404,126 @@ export function StockResearchSection() {
             <p class="field-hint">
               Chỉ lấy tin tức trong khoảng thời gian này (1-90 ngày, mặc định 14).
             </p>
+          </div>
+
+          {/* --- Agentic Research Settings --- */}
+          <h4 style="margin-top:16px;margin-bottom:8px;">Agentic Research</h4>
+
+          {/* Open Valid URLs */}
+          <div class="form-group">
+            <label class="toggle-label">
+              <input
+                type="checkbox"
+                checked={openValidUrls}
+                onChange={(e) => setOpenValidUrls(e.target.checked)}
+              />
+              <span class="toggle-text">
+                Mở URL hợp lệ để đọc nội dung
+              </span>
+            </label>
+            <p class="field-hint">
+              Sau khi tìm kiếm, tự động mở các trang kết quả để lấy nội dung đầy đủ thay vì chỉ dùng snippet.
+            </p>
+          </div>
+
+          {/* Agent Loop */}
+          <div class="form-group">
+            <label class="toggle-label">
+              <input
+                type="checkbox"
+                checked={agentLoopEnabled}
+                onChange={(e) => setAgentLoopEnabled(e.target.checked)}
+              />
+              <span class="toggle-text">
+                Agent Loop (Planner → Retriever → Critic)
+              </span>
+            </label>
+            <p class="field-hint">
+              Vòng lặp agent giới hạn: tự kiểm tra bằng chứng, tìm kiếm thêm nếu thiếu.
+            </p>
+          </div>
+
+          {agentLoopEnabled && (
+            <div class="form-group" style="margin-left:24px;">
+              <label>Số vòng tối đa</label>
+              <input
+                class="form-input"
+                type="number"
+                min="1"
+                max="3"
+                value={agentMaxRounds}
+                onInput={(e) => setAgentMaxRounds(e.target.value)}
+              />
+              <p class="field-hint">Số vòng lặp tối đa (1-3, mặc định 2).</p>
+            </div>
+          )}
+
+          {/* Microtasks */}
+          <div class="form-group">
+            <label class="toggle-label">
+              <input
+                type="checkbox"
+                checked={microtasksEnabled}
+                onChange={(e) => setMicrotasksEnabled(e.target.checked)}
+              />
+              <span class="toggle-text">
+                AI Micro-tasks (tóm tắt, phân loại, trích xuất)
+              </span>
+            </label>
+            <p class="field-hint">
+              Dùng LLM API (litellm) cho các tác vụ nhỏ: tóm tắt bài viết, phân loại mức liên quan.
+              Nếu không có API key, sẽ dùng heuristic.
+            </p>
+          </div>
+
+          {/* Seed Sites */}
+          <div class="form-group">
+            <label>Seed Sites (nguồn bổ sung)</label>
+            <p class="field-hint" style="margin-bottom:8px;">
+              Danh sách website luôn được kiểm tra khi phân tích. Bật/tắt từng site.
+            </p>
+            {seedSites.map((site, idx) => (
+              <div key={idx} style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <label class="toggle-label" style="flex:1;margin:0;">
+                  <input
+                    type="checkbox"
+                    checked={site.enabled}
+                    onChange={(e) => {
+                      const updated = [...seedSites];
+                      updated[idx] = { ...updated[idx], enabled: e.target.checked };
+                      setSeedSites(updated);
+                    }}
+                  />
+                  <span class="toggle-text">{site.domain}</span>
+                </label>
+                <select
+                  class="form-input"
+                  style="width:auto;min-width:140px;"
+                  value={site.mode}
+                  onChange={(e) => {
+                    const updated = [...seedSites];
+                    updated[idx] = { ...updated[idx], mode: e.target.value };
+                    setSeedSites(updated);
+                  }}
+                >
+                  <option value="google_site_search">Google site:</option>
+                  <option value="direct_open">Direct open</option>
+                </select>
+              </div>
+            ))}
+            <button
+              type="button"
+              class="btn btn-sm"
+              style="margin-top:4px;"
+              onClick={() => {
+                const domain = prompt('Nhập domain (vd: fireant.vn):');
+                if (domain && domain.trim()) {
+                  setSeedSites([...seedSites, { domain: domain.trim(), enabled: true, mode: 'google_site_search' }]);
+                }
+              }}
+            >
+              + Thêm site
+            </button>
           </div>
         </div>
       )}
