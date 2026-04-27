@@ -24,6 +24,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const EXTENSION_ENTRYPOINT = 'sidepanel-preact.html'
+
 interface RequestBody {
   planId: string
   interval: 'monthly' | 'yearly'
@@ -132,9 +134,9 @@ Deno.serve(async (req) => {
 
     // Default success/cancel URLs point back to extension
     const defaultSuccessUrl = successUrl ||
-      `chrome-extension://${extensionId}/index.html?checkout=success`
+      `chrome-extension://${extensionId}/${EXTENSION_ENTRYPOINT}?checkout=success`
     const defaultCancelUrl = cancelUrl ||
-      `chrome-extension://${extensionId}/index.html?checkout=cancel`
+      `chrome-extension://${extensionId}/${EXTENSION_ENTRYPOINT}?checkout=cancel`
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

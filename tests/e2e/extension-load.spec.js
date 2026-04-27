@@ -4,8 +4,10 @@
  */
 
 import { test, expect, chromium } from '@playwright/test';
+import { access, readFile } from 'node:fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { launchExtensionContext } from './extensionTestUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,29 +15,14 @@ const __dirname = path.dirname(__filename);
 test.describe('Extension Load Tests', () => {
   let context;
   let extensionId;
+  let extensionPath;
 
   test.beforeAll(async () => {
-    const extensionPath = path.join(__dirname, '../../src/extension');
-    const userDataDir = path.join(__dirname, '../../test-user-data-e2e');
-
-    context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-        '--disable-blink-features=AutomationControlled'
-      ]
-    });
-
-    // Get extension ID from background pages
-    const backgroundPages = context.backgroundPages();
-    if (backgroundPages.length > 0) {
-      const url = backgroundPages[0].url();
-      const match = url.match(/chrome-extension:\/\/([a-z]+)\//);
-      if (match) {
-        extensionId = match[1];
-      }
-    }
+    ({ context, extensionId, extensionPath } = await launchExtensionContext(
+      __dirname,
+      'test-user-data-e2e',
+      ['--disable-blink-features=AutomationControlled']
+    ));
   });
 
   test.afterAll(async () => {
@@ -50,11 +37,10 @@ test.describe('Extension Load Tests', () => {
   });
 
   test('should have background service worker', async () => {
-    const backgroundPages = context.backgroundPages();
-    expect(backgroundPages.length).toBeGreaterThan(0);
-    
-    const bgPage = backgroundPages[0];
-    expect(bgPage.url()).toContain('chrome-extension://');
+    const serviceWorkers = context.serviceWorkers();
+    expect(serviceWorkers.length).toBeGreaterThan(0);
+
+    expect(serviceWorkers[0].url()).toContain('chrome-extension://');
   });
 
   test('should have manifest.json accessible', async () => {
@@ -73,49 +59,32 @@ test.describe('Extension Load Tests', () => {
     }
   });
 
-  test('should have sidepanel.html accessible', async () => {
+  test('should have sidepanel-preact.html accessible', async () => {
     expect(extensionId).toBeTruthy();
     
     const page = await context.newPage();
-    const sidepanelUrl = `chrome-extension://${extensionId}/sidepanel.html`;
+    const sidepanelUrl = `chrome-extension://${extensionId}/sidepanel-preact.html`;
     
     try {
       await page.goto(sidepanelUrl);
       
-      // Check for main UI elements
       const title = await page.title();
       expect(title).toBeTruthy();
-      
-      // Check tabs exist
-      const tabs = await page.locator('.tab').count();
-      expect(tabs).toBeGreaterThan(0);
-      
-      console.log(`✅ Sidepanel loaded with ${tabs} tabs`);
+
+      await expect(page.locator('#app')).toBeVisible();
+
+      console.log('✅ Sidepanel loaded');
     } finally {
       await page.close();
     }
   });
 
-  test('should have popup.html accessible', async () => {
-    expect(extensionId).toBeTruthy();
-    
-    const page = await context.newPage();
-    const popupUrl = `chrome-extension://${extensionId}/popup.html`;
-    
-    try {
-      await page.goto(popupUrl);
-      
-      // Check for popup content
-      const content = await page.content();
-      expect(content).toBeTruthy();
-      
-      // Should have some buttons/links
-      const buttons = await page.locator('button, a').count();
-      expect(buttons).toBeGreaterThan(0);
-      
-      console.log(`✅ Popup loaded with ${buttons} interactive elements`);
-    } finally {
-      await page.close();
-    }
+  test('should keep manifest entrypoints aligned with built files', async () => {
+    const manifest = JSON.parse(await readFile(path.join(extensionPath, 'manifest.json'), 'utf8'));
+
+    expect(manifest.side_panel?.default_path).toBe('sidepanel-preact.html');
+
+    await access(path.join(extensionPath, manifest.side_panel.default_path));
+    await access(path.join(extensionPath, manifest.background.service_worker));
   });
 });

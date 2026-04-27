@@ -26,7 +26,6 @@ export const portfolioItems = signal([]);
 export const loading = signal(false);
 export const error = signal(null);
 export const searchQuery = signal('');
-export const sortBy = signal('symbol'); // 'symbol', 'pl', 'quantity'
 
 // ===== MODAL STATE SIGNALS =====
 export const isAddModalOpen = signal(false);
@@ -85,33 +84,6 @@ export const totalPLPercent = computed(() => {
   const entry = entryValue.value;
   if (entry === 0) return 0;
   return (totalPL.value / entry) * 100;
-});
-
-/**
- * Sorted and filtered portfolio items
- * - Regular stocks first (A-Z by symbol)
- * - CASH always at the end
- * - Filtered by search query (symbol contains search)
- */
-export const filteredPortfolioItems = computed(() => {
-  const items = portfolioItems.value;
-  const query = searchQuery.value.toLowerCase().trim();
-  
-  // Filter by search query
-  let filtered = items;
-  if (query) {
-    filtered = items.filter(item => 
-      (item.symbol || '').toLowerCase().includes(query)
-    );
-  }
-  
-  // Sort: regular stocks first (A-Z), CASH last
-  const regular = filtered.filter(item => item.symbol !== 'CASH').sort((a, b) => 
-    (a.symbol || '').localeCompare(b.symbol || '')
-  );
-  const cash = filtered.filter(item => item.symbol === 'CASH');
-  
-  return [...regular, ...cash];
 });
 
 // ===== HELPER FUNCTIONS (Mutations) =====
@@ -179,14 +151,6 @@ export function setError(errorMsg) {
  */
 export function clearError() {
   error.value = null;
-}
-
-/**
- * Update last price update time
- * @param {string} timestamp - ISO timestamp
- */
-export function setLastUpdateTime(timestamp) {
-  lastUpdateTime.value = timestamp;
 }
 
 /**

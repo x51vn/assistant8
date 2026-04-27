@@ -1,6 +1,6 @@
 /**
  * System Prompts Configuration
- * Defines 6 system prompt keys and their defaults
+ * Defines 8 system prompt keys and their defaults
  * These are stored in public.prompts table with stable keys for easy retrieval
  */
 

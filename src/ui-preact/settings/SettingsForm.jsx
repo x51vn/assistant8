@@ -38,18 +38,23 @@ export function SettingsForm({ onSave }) {
   const [atlassianTestResult, setAtlassianTestResult] = useState(null);
   const [atlassianTesting, setAtlassianTesting] = useState(false);
 
-  // Initialize and load all prompts (12 total: 6 system + 6 writing templates) on mount
+  // Initialize and load all prompts on mount, reusing bootstrap state when present.
   useEffect(() => {
     async function initializeData() {
       try {
-        // Initialize all prompts in the background (create defaults)
-        await initializeAllPrompts();
+        const bootstrappedPrompts = allPrompts.value || {};
+        if (Object.keys(bootstrappedPrompts).length > 0) {
+          setLocalAllPrompts(structuredClone(bootstrappedPrompts));
+        } else {
+          // Initialize all prompts in the background (create defaults)
+          await initializeAllPrompts();
 
-        // Then load all prompts
-        const prompts = await loadAllPrompts();
-        // ✅ FIXED: Initialize BOTH signals and local state from loaded data
-        allPrompts.value = prompts;
-        setLocalAllPrompts(structuredClone(prompts));
+          // Then load all prompts, using cache when available
+          const prompts = await loadAllPrompts({ preferCache: true });
+          // ✅ FIXED: Initialize BOTH signals and local state from loaded data
+          allPrompts.value = prompts;
+          setLocalAllPrompts(structuredClone(prompts));
+        }
 
         // Initialize other local state from signals
         setLocalInterval(interval.value);

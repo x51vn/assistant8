@@ -16,7 +16,7 @@ vi.mock('../../src/ui-preact/state/settingsState.js', () => ({
   atlassianApiToken: { value: '' },
 }));
 
-import { loadSettings, saveSettings } from '../../src/ui-preact/api/settingsApi.js';
+import { loadAllPrompts, loadSettings, saveSettings } from '../../src/ui-preact/api/settingsApi.js';
 import { MESSAGE_TYPES } from '../../src/shared/messageSchema.js';
 
 describe('settingsApi request contract', () => {
@@ -47,5 +47,14 @@ describe('settingsApi request contract', () => {
     expect(sent.data).toBeDefined();
     expect(sent.data.config).toBeDefined();
   });
-});
 
+  it('loadAllPrompts forwards cache options to PROMPTS_GET_ALL', async () => {
+    chrome.runtime.sendMessage.mockResolvedValueOnce({ success: true, prompts: {} });
+
+    await loadAllPrompts({ preferCache: true, forceRefresh: true });
+    const sent = chrome.runtime.sendMessage.mock.calls[0][0];
+
+    expect(sent.type).toBe(MESSAGE_TYPES.PROMPTS_GET_ALL);
+    expect(sent.data).toEqual({ preferCache: true, forceRefresh: true });
+  });
+});

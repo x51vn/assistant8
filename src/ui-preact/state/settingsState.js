@@ -16,8 +16,8 @@ export const atlassianBaseUrl = signal('');
 export const atlassianEmail = signal('');
 export const atlassianApiToken = signal('');
 
-// ===== UNIFIED PROMPTS SIGNALS (ALL 12 PROMPTS) =====
-// All prompts state: 6 system prompts + 6 writing templates
+// ===== UNIFIED PROMPTS SIGNALS =====
+// All prompts state: system prompts + writing templates
 // Keys: prompt.master, prompt.portfolio, prompt.stockEval, prompt.teaStock,
 //       prompt.contextMenu, prompt.english, writing.email, writing.social, etc.
 export const allPrompts = signal({});
@@ -134,7 +134,7 @@ export const isFormValid = computed(() => {
 });
 
 /**
- * Build default prompt map (12 prompts)
+ * Build default prompt map from the unified prompt registry.
  * @returns {Object} - Prompt map keyed by prompt key
  */
 export function buildDefaultPrompts() {

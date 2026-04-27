@@ -5,7 +5,6 @@
  */
 
 import { h } from 'preact';
-import { useEffect } from 'preact/hooks';
 import { Navigation } from './Navigation.jsx';
 import { PortfolioPage } from '../pages/PortfolioPage.jsx';
 import WatchlistPage from '../pages/WatchlistPage.jsx';
@@ -27,11 +26,13 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
 import { currentPage, setCurrentPage } from '../state/navigationState.js';
 import { useContextMenuListener } from '../hooks/useContextMenuListener.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { usePromptsBootstrap } from '../hooks/usePromptsBootstrap.js';
 
 export function MainApp() {
   // Listen for context menu → side panel messages
   useContextMenuListener();
   const { user } = useAuth();
+  usePromptsBootstrap(user);
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
   const { showOnboarding, handleDone, handleSkip } = useOnboardingGate(!!user);
   // Subscribe to navigation state using effect

@@ -1,7 +1,7 @@
 /**
  * PromptsPage.jsx — Standalone prompt management page
  *
- * Displays all 12 prompts (7 system + 6 writing templates) in an
+ * Displays unified prompts in an
  * accordion UI, with independent load/save lifecycle decoupled from
  * the Settings form.
  *
@@ -28,12 +28,15 @@ export function PromptsPage() {
   const [error, setError] = useState(null);
 
   // ── Load prompts on mount ──
-  const loadPrompts = useCallback(async () => {
+  const loadPrompts = useCallback(async (options = {}) => {
     setLoading(true);
     setError(null);
     try {
       await initializeAllPrompts();
-      const loaded = await loadAllPrompts();
+      const loaded = await loadAllPrompts({
+        preferCache: !options.forceRefresh,
+        forceRefresh: options.forceRefresh === true
+      });
       setPrompts(loaded);
       // Keep the global signal in sync so other features can read prompts
       allPrompts.value = loaded;
@@ -79,7 +82,7 @@ export function PromptsPage() {
         <div className="header-actions">
           <button
             className="btn-icon"
-            onClick={loadPrompts}
+            onClick={() => loadPrompts({ forceRefresh: true })}
             title="Tải lại"
             disabled={loading}
           >

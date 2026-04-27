@@ -19,6 +19,7 @@ import { flushChatHistoryOutbox } from '../services/chatHistoryService.js';
 import { invalidatePromptCache } from './contextMenu.js';
 
 const logger = createLogger('Handlers/SupabaseAuth');
+const AUTH_REDIRECT_BASE_URL = chrome.runtime.getURL('sidepanel-preact.html');
 
 /**
  * Handle SUPABASE_AUTH_LOGIN
@@ -459,7 +460,7 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_RESET_PASSWORD_REQUEST, async (messa
       await supabaseWithRetry(
         async () => {
           const result = await supabase.auth.resetPasswordForEmail(email.trim(), {
-            redirectTo: `${chrome.runtime.getURL('settings.html')}#reset-password`
+            redirectTo: `${AUTH_REDIRECT_BASE_URL}#reset-password`
           });
           if (result.error) throw result.error;
           return result;
@@ -558,7 +559,7 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_REGISTER, async (message) => {
             data: {
               full_name: name?.trim() || '',
             },
-            emailRedirectTo: `${chrome.runtime.getURL('settings.html')}#email-confirmed`
+            emailRedirectTo: `${AUTH_REDIRECT_BASE_URL}#email-confirmed`
           }
         });
         if (authResult.error) throw authResult.error;
@@ -640,7 +641,7 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_RESEND_CONFIRMATION, async (message)
           type: 'signup',
           email: email.trim(),
           options: {
-            emailRedirectTo: `${chrome.runtime.getURL('settings.html')}#email-confirmed`
+            emailRedirectTo: `${AUTH_REDIRECT_BASE_URL}#email-confirmed`
           }
         });
         if (result.error) throw result.error;

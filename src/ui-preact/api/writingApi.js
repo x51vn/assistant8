@@ -143,28 +143,18 @@ Make it engaging and practical for English learners.`;
   }
 };
 
-// Cache for writing templates (fetched once per session)
-let cachedTemplates = null;
-let templatesCacheTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
 /**
  * Fetch writing templates from background handler
  * @returns {Promise<Object>} - Templates object with keys as template keys
  */
 async function fetchWritingTemplates() {
-  // Return cached if still fresh
-  if (cachedTemplates && Date.now() - templatesCacheTime < CACHE_DURATION) {
-    return cachedTemplates;
-  }
-
   try {
     const response = await chrome.runtime.sendMessage({
       v: 1,
       type: MESSAGE_TYPES.PROMPTS_GET_BY_TYPE,
       correlationId: generateCorrelationId(),
       timestamp: Date.now(),
-      data: { promptType: 'writing' }
+      data: { promptType: 'writing', preferCache: true }
     });
 
     if (response?.error || response?.errorCode) {
@@ -172,8 +162,6 @@ async function fetchWritingTemplates() {
     }
 
     if (response && response.prompts) {
-      cachedTemplates = response.prompts;
-      templatesCacheTime = Date.now();
       return response.prompts;
     }
   } catch (error) {
@@ -408,11 +396,12 @@ async function sendWritingJobWithFallback(jobType, inputs, options, fallbackTemp
 }
 
 /**
- * Clear template cache (useful when user updates templates in Settings)
+ * Clear template cache.
+ * Kept as a safe no-op for existing callers; writing templates are loaded
+ * through the background prompt cache now.
  */
 export function clearTemplateCache() {
-  cachedTemplates = null;
-  templatesCacheTime = 0;
+  // No local template cache to clear.
 }
 
 /**

@@ -86,7 +86,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
         }
       };
       delete config.prompt; // Remove legacy field from response
-      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master');
+      logger.debug('Normalized legacy config.prompt → config.prompts.master');
     }
     
     return createResponse(message, MESSAGE_TYPES.SETTINGS_DATA, {
@@ -155,10 +155,10 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
         }
       };
       delete config.prompt; // Remove legacy field before saving
-      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master on save');
+      logger.debug('Normalized legacy config.prompt → config.prompts.master on save');
     }
     
-    const data = await supabaseWithRetry(
+    const savedData = await supabaseWithRetry(
       async () => {
         // ✅ MERGE: Fetch existing config first and deep-merge to avoid wiping unrelated fields
         // (e.g. saving llm_provider must NOT wipe onboarding_completed or consent_* fields)
@@ -170,34 +170,34 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
 
         const mergedConfig = deepMergeConfig(existing?.config || {}, config);
 
-        const { data, error } = await supabase
+        const { data: upserted, error } = await supabase
           .from('settings')
           .upsert(
             {
               user_id: userId,
               config: mergedConfig
             },
-            { 
+            {
               onConflict: 'user_id',
               ignoreDuplicates: false
             }
           )
           .select()
           .single();
-        
+
         if (error) throw error;
-        return data;
+        return upserted;
       },
       {
         operationName: 'updateSettings',
         correlationId
       }
     );
-    
+
     logger.endOperation(correlationId, 'success');
     // ✅ Return normalized config
     return createResponse(message, MESSAGE_TYPES.SETTINGS_UPDATED, {
-      config: data.config || {}
+      config: savedData.config || {}
     });
     
   } catch (error) {

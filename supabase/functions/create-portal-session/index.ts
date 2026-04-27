@@ -24,6 +24,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const EXTENSION_ENTRYPOINT = 'sidepanel-preact.html'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -83,7 +85,7 @@ Deno.serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
 
     const defaultReturnUrl = returnUrl ||
-      `chrome-extension://${extensionId}/index.html`
+      `chrome-extension://${extensionId}/${EXTENSION_ENTRYPOINT}`
 
     const session = await stripe.billingPortal.sessions.create({
       customer: sub.stripe_customer_id,

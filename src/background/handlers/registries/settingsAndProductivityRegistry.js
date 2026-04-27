@@ -4,7 +4,6 @@
 
 import '../settings.js';
 import '../prompts.js';
-import '../english.js';
 import '../chatHistory.js';
 import '../errorTracking.js';
 import '../atlassian.js';

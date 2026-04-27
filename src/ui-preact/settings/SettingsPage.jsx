@@ -142,7 +142,7 @@ export function SettingsPage() {
       // Save basic settings
       await saveSettings();
 
-      // Save all prompts (12 total: 6 system + 6 writing templates)
+      // Save all unified prompts
       if (Object.keys(allPrompts.value).length > 0) {
         try {
           await saveAllPrompts(allPrompts.value);

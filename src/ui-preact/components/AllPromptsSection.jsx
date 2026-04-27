@@ -1,6 +1,6 @@
 /**
- * AllPromptsSection - Unified prompt management for ALL 12 prompts
- * Displays 6 system prompts + 6 writing templates in collapsed/expandable cards
+ * AllPromptsSection - Unified prompt management
+ * Displays system prompts + writing templates in collapsed/expandable cards
  * Replaces both PromptsList (system) and WritingTemplatesSection (writing)
  *
  * ✅ FIXED: Now accepts local prompts state instead of using signals
@@ -103,6 +103,12 @@ const PROMPT_META = {
     icon: '📋',
     color: '#795548',
     description: 'Document outline generation'
+  },
+  'writing.english_learning': {
+    name: 'English Learning',
+    icon: '🎓',
+    color: '#2e7d32',
+    description: 'English learning exercise template'
   }
 };
 
@@ -416,7 +422,7 @@ export default function AllPromptsSection({ prompts = {}, onPromptsChange = () =
 
         <div class="section-note">
           <small>
-            ✏️ Writing Templates: Use these for email drafting, social media, summarization, rewriting, translation, and outline generation.
+            ✏️ Writing Templates: Use these for email drafting, social media, summarization, rewriting, translation, outline generation, and English exercises.
           </small>
         </div>
       </div>

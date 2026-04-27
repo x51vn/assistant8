@@ -1,6 +1,6 @@
 /**
  * Unified Prompts Handler
- * Manages ALL prompts (12 total): 6 system prompts + 6 writing templates
+ * Manages unified prompts: 8 system prompts + 7 writing templates + custom prompts
  * All stored in public.prompts table with prompt_type and is_system metadata
  */
 
@@ -11,6 +11,7 @@ import { createLogger } from '../../logger.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js';
+import { invalidatePromptCache } from './contextMenu.js';
 import {
   getAllPromptMetadata,
   getAllDefaultPrompts,
@@ -19,12 +20,199 @@ import {
   getPromptType,
   PROMPT_TYPE
 } from '../../shared/allPrompts.js';
+import {
+  filterPromptsByType,
+  readPromptCache,
+  removePromptCache,
+  writePromptCache
+} from '../services/promptCacheService.js';
 
 const logger = createLogger('Prompts');
+const STALE_REFRESH_TIMEOUT_MS = 5000;
+
+function buildDefaultPromptMap(promptType = null) {
+  const defaults = {};
+  const allMetadata = getAllPromptMetadata();
+  const allDefaults = getAllDefaultPrompts();
+  const metadata = promptType
+    ? allMetadata.filter(meta => meta.prompt_type === promptType)
+    : allMetadata;
+
+  for (const meta of metadata) {
+    defaults[meta.key] = {
+      key: meta.key,
+      title: meta.title,
+      content: allDefaults[meta.key],
+      tags: meta.tags || [],
+      promptType: meta.prompt_type,
+      isSystem: meta.is_system,
+      isDefault: true
+    };
+  }
+
+  return defaults;
+}
+
+function buildPromptMapFromRows(prompts) {
+  const result = {};
+  const allMetadata = getAllPromptMetadata();
+  const allDefaults = getAllDefaultPrompts();
+
+  for (const meta of allMetadata) {
+    const dbPrompt = prompts.find(p => p.key === meta.key);
+
+    if (dbPrompt) {
+      result[meta.key] = {
+        id: dbPrompt.id,
+        key: dbPrompt.key,
+        title: dbPrompt.title,
+        content: dbPrompt.content,
+        tags: dbPrompt.tags || [],
+        promptType: dbPrompt.prompt_type,
+        isSystem: dbPrompt.is_system,
+        updatedAt: dbPrompt.updated_at,
+        isCustom: false
+      };
+    } else {
+      result[meta.key] = {
+        key: meta.key,
+        title: meta.title,
+        content: allDefaults[meta.key],
+        tags: meta.tags || [],
+        promptType: meta.prompt_type,
+        isSystem: meta.is_system,
+        isDefault: true
+      };
+    }
+  }
+
+  const customPrompts = prompts.filter(p => !allMetadata.find(meta => meta.key === p.key));
+  for (const custom of customPrompts) {
+    result[custom.key] = {
+      id: custom.id,
+      key: custom.key,
+      title: custom.title,
+      content: custom.content,
+      tags: custom.tags || [],
+      promptType: custom.prompt_type || PROMPT_TYPE.CUSTOM,
+      isSystem: false,
+      updatedAt: custom.updated_at,
+      isCustom: true
+    };
+  }
+
+  return result;
+}
+
+function buildPromptMapForTypeFromRows(prompts, promptType) {
+  const result = {};
+  const allMetadata = getAllPromptMetadata().filter(meta => meta.prompt_type === promptType);
+  const allDefaults = getAllDefaultPrompts();
+
+  for (const meta of allMetadata) {
+    const dbPrompt = prompts.find(p => p.key === meta.key);
+
+    if (dbPrompt) {
+      result[meta.key] = {
+        id: dbPrompt.id,
+        key: dbPrompt.key,
+        title: dbPrompt.title,
+        content: dbPrompt.content,
+        tags: dbPrompt.tags || [],
+        promptType: dbPrompt.prompt_type,
+        isSystem: dbPrompt.is_system,
+        updatedAt: dbPrompt.updated_at
+      };
+    } else {
+      result[meta.key] = {
+        key: meta.key,
+        title: meta.title,
+        content: allDefaults[meta.key],
+        tags: meta.tags || [],
+        promptType: meta.prompt_type,
+        isSystem: meta.is_system,
+        isDefault: true
+      };
+    }
+  }
+
+  return result;
+}
+
+async function fetchAllPromptRows(userId, correlationId) {
+  return await supabaseWithRetry(
+    async () => {
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      operationName: 'getAllPrompts',
+      correlationId
+    }
+  );
+}
+
+async function fetchPromptRowsByType(userId, promptType, correlationId) {
+  return await supabaseWithRetry(
+    async () => {
+      const keys = promptType === PROMPT_TYPE.SYSTEM ? getSystemPromptKeys() : getWritingTemplateKeys();
+
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
+        .eq('user_id', userId)
+        .in('key', keys);
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      operationName: `getPromptsByType_${promptType}`,
+      correlationId
+    }
+  );
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Prompt refresh timed out')), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function cacheResponseMetadata(cache, overrides = {}) {
+  return {
+    hit: cache?.hit === true,
+    stale: cache?.stale === true,
+    cachedAt: cache?.cachedAt,
+    source: cache?.hit ? 'chrome.storage.local' : overrides.source,
+    ...overrides
+  };
+}
+
+function normalizeSubmittedPrompts(prompts) {
+  const normalized = {};
+  for (const [key, prompt] of Object.entries(prompts || {})) {
+    normalized[key] = {
+      ...prompt,
+      key,
+      promptType: prompt.promptType || prompt.prompt_type || getPromptType(key),
+      isSystem: prompt.isSystem ?? prompt.is_system ?? getPromptType(key) !== PROMPT_TYPE.CUSTOM
+    };
+  }
+  return normalized;
+}
 
 /**
  * Initialize default prompts for a user
- * Creates all 12 prompts if missing, idempotent (safe to run multiple times)
+ * Creates all default prompts if missing, idempotent (safe to run multiple times)
  */
 async function initializeDefaultPrompts(userId, promptType = null) {
   const allMetadata = getAllPromptMetadata();
@@ -91,125 +279,106 @@ async function initializeDefaultPrompts(userId, promptType = null) {
 }
 
 /**
- * PROMPTS_GET_ALL - Fetch ALL prompts for current user (12 default + any custom)
+ * PROMPTS_GET_ALL - Fetch ALL prompts for current user (default + any custom)
  * Returns prompts from DB, or defaults if not found
  */
 registerHandler(MESSAGE_TYPES.PROMPTS_GET_ALL, async (message) => {
   const correlationId = logger.startOperation('getAllPrompts', message.correlationId);
 
+  let userId;
   try {
-    const userId = await requireAuth(message);
-
-    // Fetch all prompts (system + writing + custom)
-    const prompts = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('prompts')
-          .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
-          .eq('user_id', userId);
-
-        if (error) throw error;
-        return data || [];
-      },
-      {
-        operationName: 'getAllPrompts',
-        correlationId
-      }
-    );
-
-    // Build result: merge DB prompts with defaults
-    const result = {};
-    const allMetadata = getAllPromptMetadata();
-    const allDefaults = getAllDefaultPrompts();
-
-    for (const meta of allMetadata) {
-      const dbPrompt = prompts.find(p => p.key === meta.key);
-
-      if (dbPrompt) {
-        result[meta.key] = {
-          id: dbPrompt.id,
-          key: dbPrompt.key,
-          title: dbPrompt.title,
-          content: dbPrompt.content,
-          tags: dbPrompt.tags || [],
-          promptType: dbPrompt.prompt_type,
-          isSystem: dbPrompt.is_system,
-          updatedAt: dbPrompt.updated_at,
-          isCustom: false
-        };
-      } else {
-        // Return default content as fallback
-        result[meta.key] = {
-          key: meta.key,
-          title: meta.title,
-          content: allDefaults[meta.key],
-          tags: meta.tags || [],
-          promptType: meta.prompt_type,
-          isSystem: meta.is_system,
-          isDefault: true
-        };
-      }
-    }
-
-    // Add any custom prompts (not in default metadata)
-    const customPrompts = prompts.filter(p => !allMetadata.find(meta => meta.key === p.key));
-    for (const custom of customPrompts) {
-      result[custom.key] = {
-        id: custom.id,
-        key: custom.key,
-        title: custom.title,
-        content: custom.content,
-        tags: custom.tags || [],
-        promptType: custom.prompt_type || PROMPT_TYPE.CUSTOM,
-        isSystem: false,
-        updatedAt: custom.updated_at,
-        isCustom: true
-      };
-    }
-
-    logger.endOperation(correlationId, 'success', { count: Object.keys(result).length });
-
-    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
-      success: true,
-      prompts: result
-    });
+    userId = await requireAuth(message);
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });
 
-    // Special case: if auth fails, still return defaults (offline fallback)
-    // requireAuth() throws error with errorCode at top level, not nested
     const authErrorCode = error?.errorCode;
     const isAuthError = authErrorCode === ERROR_CODES.AUTH_REQUIRED ||
       authErrorCode === ERROR_CODES.AUTH_EXPIRED ||
       authErrorCode === ERROR_CODES.AUTH_INVALID ||
       authErrorCode === ERROR_CODES.AUTH_ERROR;
 
-    if (isAuthError) {
-      logger.info('Auth unavailable, returning default prompts');
-      const defaults = {};
-      const allMetadata = getAllPromptMetadata();
-      const allDefaults = getAllDefaultPrompts();
+    if (!isAuthError) {
+      return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
+    }
 
-      for (const meta of allMetadata) {
-        defaults[meta.key] = {
-          key: meta.key,
-          title: meta.title,
-          content: allDefaults[meta.key],
-          tags: meta.tags || [],
-          promptType: meta.prompt_type,
-          isSystem: meta.is_system,
-          isDefault: true
-        };
-      }
+    logger.info('Auth unavailable, returning default prompts');
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: buildDefaultPromptMap(),
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults' }
+    });
+  }
+
+  const { preferCache = false, forceRefresh = false } = message.data || {};
+  let cache = null;
+
+  if (preferCache && !forceRefresh) {
+    cache = await readPromptCache(userId);
+    if (cache.hit && !cache.stale) {
+      logger.endOperation(correlationId, 'success', {
+        count: Object.keys(cache.prompts).length,
+        source: 'cache'
+      });
 
       return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
         success: true,
-        prompts: defaults,
-        isDefaultFallback: true
+        prompts: cache.prompts,
+        cache: cacheResponseMetadata(cache)
       });
     }
 
-    return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
+    if (cache.hit && cache.stale) {
+      try {
+        const rows = await withTimeout(fetchAllPromptRows(userId, correlationId), STALE_REFRESH_TIMEOUT_MS);
+        const result = buildPromptMapFromRows(rows);
+        await writePromptCache(userId, result, { source: 'supabase' });
+        logger.endOperation(correlationId, 'success', { count: Object.keys(result).length, source: 'supabase' });
+
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+          success: true,
+          prompts: result,
+          cache: { hit: false, refreshed: true, source: 'supabase' }
+        });
+      } catch (error) {
+        logger.warn('Failed to refresh stale prompt cache, using stale cache', {
+          errorMessage: error?.message || String(error)
+        });
+        logger.endOperation(correlationId, 'success', {
+          count: Object.keys(cache.prompts).length,
+          source: 'stale-cache'
+        });
+
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+          success: true,
+          prompts: cache.prompts,
+          cache: cacheResponseMetadata(cache, { stale: true, fallback: true })
+        });
+      }
+    }
+  }
+
+  try {
+    const rows = await fetchAllPromptRows(userId, correlationId);
+    const result = buildPromptMapFromRows(rows);
+    await writePromptCache(userId, result, { source: 'supabase' });
+
+    logger.endOperation(correlationId, 'success', { count: Object.keys(result).length });
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: result,
+      cache: { hit: false, source: 'supabase' }
+    });
+  } catch (error) {
+    logger.endOperation(correlationId, 'error', { error: error.message });
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: buildDefaultPromptMap(),
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults', errorMessage: error.message }
+    });
   }
 });
 
@@ -218,7 +387,7 @@ registerHandler(MESSAGE_TYPES.PROMPTS_GET_ALL, async (message) => {
  */
 registerHandler(MESSAGE_TYPES.PROMPTS_GET_BY_TYPE, async (message) => {
   const correlationId = logger.startOperation('getPromptsByType', message.correlationId);
-  const { promptType } = message.data || {};
+  const { promptType, preferCache = true, forceRefresh = false } = message.data || {};
 
   if (!promptType || ![PROMPT_TYPE.SYSTEM, PROMPT_TYPE.WRITING].includes(promptType)) {
     return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Invalid or missing promptType', correlationId);
@@ -227,69 +396,45 @@ registerHandler(MESSAGE_TYPES.PROMPTS_GET_BY_TYPE, async (message) => {
   try {
     const userId = await requireAuth(message);
 
-    // Fetch prompts by type
-    const prompts = await supabaseWithRetry(
-      async () => {
-        const keys = promptType === PROMPT_TYPE.SYSTEM ? getSystemPromptKeys() : getWritingTemplateKeys();
+    if (preferCache && !forceRefresh) {
+      const cache = await readPromptCache(userId);
+      if (cache.hit && !cache.stale) {
+        const cachedByType = filterPromptsByType(cache.prompts, promptType);
+        logger.endOperation(correlationId, 'success', {
+          count: Object.keys(cachedByType).length,
+          type: promptType,
+          source: 'cache'
+        });
 
-        const { data, error } = await supabase
-          .from('prompts')
-          .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
-          .eq('user_id', userId)
-          .in('key', keys);
-
-        if (error) throw error;
-        return data || [];
-      },
-      {
-        operationName: `getPromptsByType_${promptType}`,
-        correlationId
-      }
-    );
-
-    // Build result
-    const result = {};
-    const allMetadata = getAllPromptMetadata().filter(meta => meta.prompt_type === promptType);
-    const allDefaults = getAllDefaultPrompts();
-
-    for (const meta of allMetadata) {
-      const dbPrompt = prompts.find(p => p.key === meta.key);
-
-      if (dbPrompt) {
-        result[meta.key] = {
-          id: dbPrompt.id,
-          key: dbPrompt.key,
-          title: dbPrompt.title,
-          content: dbPrompt.content,
-          tags: dbPrompt.tags || [],
-          promptType: dbPrompt.prompt_type,
-          isSystem: dbPrompt.is_system,
-          updatedAt: dbPrompt.updated_at
-        };
-      } else {
-        // Fallback to default
-        result[meta.key] = {
-          key: meta.key,
-          title: meta.title,
-          content: allDefaults[meta.key],
-          tags: meta.tags || [],
-          promptType: meta.prompt_type,
-          isSystem: meta.is_system,
-          isDefault: true
-        };
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
+          success: true,
+          prompts: cachedByType,
+          promptType,
+          cache: cacheResponseMetadata(cache)
+        });
       }
     }
+
+    const prompts = await fetchPromptRowsByType(userId, promptType, correlationId);
+    const result = buildPromptMapForTypeFromRows(prompts, promptType);
 
     logger.endOperation(correlationId, 'success', { count: Object.keys(result).length, type: promptType });
 
     return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
       success: true,
       prompts: result,
-      promptType
+      promptType,
+      cache: { hit: false, source: 'supabase' }
     });
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });
-    return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
+      success: true,
+      prompts: buildDefaultPromptMap(promptType),
+      promptType,
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults', errorMessage: error.message }
+    });
   }
 });
 
@@ -417,6 +562,14 @@ registerHandler(MESSAGE_TYPES.PROMPTS_UPSERT, async (message) => {
       failureCount,
       total: promptKeys.length
     });
+
+    if (failureCount === 0) {
+      await writePromptCache(userId, normalizeSubmittedPrompts(prompts), { source: 'upsert' });
+      invalidatePromptCache();
+    } else if (successCount > 0) {
+      await removePromptCache(userId);
+      invalidatePromptCache();
+    }
 
     return createResponse(message, MESSAGE_TYPES.PROMPTS_UPSERTED, {
       success: failureCount === 0,

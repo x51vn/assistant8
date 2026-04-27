@@ -26,7 +26,7 @@ import './handlers/index.js'; // This will register all handlers
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
 import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
-import * as sessionManagerModule from './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling
+import './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling — registers SESSION_CHECK handler
 
 const logger = createLogger('Background');
 

@@ -28,7 +28,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
-import { ERROR_CODES } from '../../types.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 import { LLMProviderFactory, SUPPORTED_PROVIDERS } from '../../shared/llm/LLMProviderFactory.js';
 import { enqueue } from '../services/promptQueue.js';
 import { persistPromptSafe } from './_persistPromptHelper.js';
@@ -229,7 +229,7 @@ async function handleUnifiedSendPrompt(message, { source, responseType }) {
 // LLM_GET_PROVIDERS
 // List available providers with plan information.
 // ============================================================
-registerHandler('LLM_GET_PROVIDERS', async (message) => {
+registerHandler(MESSAGE_TYPES.LLM_GET_PROVIDERS, async (message) => {
   try {
     const userId = await requireAuth(message);
     const planId = await getUserPlan(userId);
@@ -241,14 +241,14 @@ registerHandler('LLM_GET_PROVIDERS', async (message) => {
       active: p.id === config.provider,
     }));
 
-    return createResponse(message, 'LLM_PROVIDERS_DATA', {
+    return createResponse(message, MESSAGE_TYPES.LLM_PROVIDERS_DATA, {
       success: true,
       providers,
       activeProvider: config.provider,
       planId,
     });
   } catch (err) {
-    return createErrorResponse(message, 'LLM_GET_PROVIDERS_ERROR', err?.message || 'Lấy danh sách LLM thất bại');
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, err?.message || 'Lấy danh sách LLM thất bại');
   }
 });
 
@@ -271,7 +271,7 @@ registerHandler(MESSAGE_TYPES.LLM_SEND_PROMPT, async (message) => {
 // Check connection status of a specific or the active LLM provider.
 // Accepts optional { provider } to check a provider before saving.
 // ============================================================
-registerHandler('LLM_GET_STATUS', async (message) => {
+registerHandler(MESSAGE_TYPES.LLM_GET_STATUS, async (message) => {
   try {
     const userId = await requireAuth(message);
 
@@ -288,14 +288,14 @@ registerHandler('LLM_GET_STATUS', async (message) => {
     const status = await provider.getStatus();
     const capabilities = provider.getCapabilities();
 
-    return createResponse(message, 'LLM_STATUS', {
+    return createResponse(message, MESSAGE_TYPES.LLM_STATUS, {
       success: true,
       provider: config.provider,
       status,
       capabilities,
     });
   } catch (err) {
-    return createErrorResponse(message, 'LLM_STATUS_ERROR', err?.message || 'Kiểm tra trạng thái LLM thất bại');
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, err?.message || 'Kiểm tra trạng thái LLM thất bại');
   }
 });
 
@@ -303,13 +303,13 @@ registerHandler('LLM_GET_STATUS', async (message) => {
 // LLM_SET_PROVIDER
 // Update the active LLM provider in Supabase settings.
 // ============================================================
-registerHandler('LLM_SET_PROVIDER', async (message) => {
+registerHandler(MESSAGE_TYPES.LLM_SET_PROVIDER, async (message) => {
   const correlationId = message.correlationId;
   const { provider } = message;
 
   const validProviders = SUPPORTED_PROVIDERS.map(p => p.id);
   if (!validProviders.includes(provider)) {
-    return createErrorResponse(message, 'VALIDATION_ERROR', `Provider không hợp lệ: ${provider}`);
+    return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, `Provider không hợp lệ: ${provider}`);
   }
 
   try {
@@ -335,9 +335,9 @@ registerHandler('LLM_SET_PROVIDER', async (message) => {
     }, { operationName: 'setLLMProvider', correlationId });
 
     logger.info('LLM provider updated', { provider, correlationId });
-    return createResponse(message, 'LLM_PROVIDER_SET', { success: true, provider });
+    return createResponse(message, MESSAGE_TYPES.LLM_PROVIDER_SET, { success: true, provider });
   } catch (err) {
     logger.error('LLM_SET_PROVIDER failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'LLM_SET_ERROR', err?.message || 'Cập nhật LLM provider thất bại');
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, err?.message || 'Cập nhật LLM provider thất bại');
   }
 });

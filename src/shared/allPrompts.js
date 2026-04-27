@@ -1,17 +1,20 @@
 /**
  * ALL PROMPTS - Unified prompt management
- * Contains 12 prompts: 6 system prompts + 6 writing templates
+ * Contains unified prompt registry metadata.
+ * Current registry: 8 system prompts + 7 writing templates.
  * All stored in public.prompts table with different prompt_type values
  */
 
 import { DEFAULT_SYSTEM_PROMPTS, getDefaultSystemPromptMetadata } from './systemPrompts.js';
-import { DEFAULT_WRITING_TEMPLATES, getDefaultTemplateMetadata } from './writingTemplates.js';
+import { DEFAULT_WRITING_TEMPLATES, getDefaultTemplateMetadata, WRITING_TEMPLATE_KEYS } from './writingTemplates.js';
+
+export const PROMPT_REGISTRY_VERSION = 1;
 
 /**
- * All prompt keys (12 total)
+ * All prompt keys in the editable UI registry.
  */
 export const ALL_PROMPT_KEYS = {
-  // System prompts (7)
+  // System prompts (8)
   MASTER: 'prompt.master',
   PORTFOLIO: 'prompt.portfolio',
   STOCK_EVAL: 'prompt.stockEval',
@@ -21,13 +24,14 @@ export const ALL_PROMPT_KEYS = {
   WATCHLIST_ENRICH: 'prompt.watchlistEnrich',
   MARKET_ASSESSMENT: 'prompt.marketDailyAssessment',
 
-  // Writing templates (6)
+  // Writing templates (7)
   EMAIL: 'writing.email',
   SOCIAL: 'writing.social',
   SUMMARIZE: 'writing.summarize',
   REWRITE: 'writing.rewrite',
   TRANSLATE: 'writing.translate',
-  OUTLINE: 'writing.outline'
+  OUTLINE: 'writing.outline',
+  ENGLISH_LEARNING: WRITING_TEMPLATE_KEYS.ENGLISH_LEARNING
 };
 
 /**
@@ -51,7 +55,7 @@ export function getPromptType(key) {
 }
 
 /**
- * Get all default prompt content (12 prompts)
+ * Get all default prompt content.
  * @returns {Object} - Map of key -> content
  */
 export function getAllDefaultPrompts() {
@@ -62,7 +66,7 @@ export function getAllDefaultPrompts() {
 }
 
 /**
- * Get all prompt metadata (12 prompts)
+ * Get all prompt metadata.
  * @returns {Array} - Array of metadata objects with prompt_type and is_system
  */
 export function getAllPromptMetadata() {
@@ -88,7 +92,7 @@ export function getAllPromptMetadata() {
 }
 
 /**
- * Get system prompt keys only (6)
+ * Get system prompt keys only (8)
  * @returns {Array} - Array of system prompt keys
  */
 export function getSystemPromptKeys() {
@@ -105,7 +109,7 @@ export function getSystemPromptKeys() {
 }
 
 /**
- * Get writing template keys only (6)
+ * Get writing template keys only (7)
  * @returns {Array} - Array of writing template keys
  */
 export function getWritingTemplateKeys() {
@@ -115,7 +119,8 @@ export function getWritingTemplateKeys() {
     ALL_PROMPT_KEYS.SUMMARIZE,
     ALL_PROMPT_KEYS.REWRITE,
     ALL_PROMPT_KEYS.TRANSLATE,
-    ALL_PROMPT_KEYS.OUTLINE
+    ALL_PROMPT_KEYS.OUTLINE,
+    ALL_PROMPT_KEYS.ENGLISH_LEARNING
   ];
 }
 

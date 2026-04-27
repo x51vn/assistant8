@@ -11,7 +11,7 @@ export const currentPage = signal('dashboard');
 
 /**
  * Change current page
- * @param {string} pageId - Page identifier (portfolio, history, errors, english, settings)
+ * @param {string} pageId - Page identifier (dashboard, portfolio, market, watchlist, assets, history, alerts, writing, errors, jira, prompts, improvement, jobs, settings)
  */
 export function setCurrentPage(pageId) {
   currentPage.value = pageId;

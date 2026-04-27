@@ -10,10 +10,6 @@ import { clearTemplateCache } from './writingApi.js';
 import { sendRuntimeMessage, assertNoRuntimeError } from './runtimeGateway.js';
 import {
   allPrompts,
-  autoRun,
-  evaluatePrevious,
-  reviewPrompt,
-  realtimeEnabled,
   interval,
   atlassianBaseUrl,
   atlassianEmail,
@@ -33,12 +29,6 @@ export async function loadSettings() {
   // Response structure: { config: { interval, ... } }
   const config = response.config || {};
 
-  // Populate boolean signals (4 fields)
-  autoRun.value = config.autoRun ?? false;
-  evaluatePrevious.value = config.evaluatePrevious ?? false;
-  reviewPrompt.value = config.reviewPrompt ?? false;
-  realtimeEnabled.value = config.realtimeEnabled ?? false;
-  
   // Populate number signal (1 field)
   interval.value = config.interval ?? 5;
 
@@ -112,13 +102,22 @@ export async function deleteSettings() {
 }
 
 /**
- * Load all prompts from background/Supabase (12 total: 6 system + 6 writing templates)
+ * Load all prompts from background/Supabase/cache.
  * Returns prompts from DB or defaults if unavailable
+ * @param {Object} [options]
+ * @param {boolean} [options.preferCache=false]
+ * @param {boolean} [options.forceRefresh=false]
  * @returns {Promise<Object>} - All prompts object with keys
  */
-export async function loadAllPrompts() {
+export async function loadAllPrompts(options = {}) {
   try {
-    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_GET_ALL);
+    const data = {};
+    if (options.preferCache !== undefined) data.preferCache = Boolean(options.preferCache);
+    if (options.forceRefresh !== undefined) data.forceRefresh = Boolean(options.forceRefresh);
+
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_GET_ALL, {
+      ...(Object.keys(data).length > 0 ? { data } : {})
+    });
     assertNoRuntimeError(response, 'Failed to load prompts');
 
     return response.prompts || {};
@@ -129,7 +128,7 @@ export async function loadAllPrompts() {
 }
 
 /**
- * Save all prompts to background/Supabase (12 total: 6 system + 6 writing templates)
+ * Save all prompts to background/Supabase.
  * Upserts all prompts in bulk
  * @param {Object} prompts - All prompts object with keys and content
  * @returns {Promise<Object>} - Save result with success count
