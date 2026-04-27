@@ -12,6 +12,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { fetchStockPricesBatch } from '../utils/ssiPriceFetcher.js';
+import { PortfolioMapper } from '../../shared/mappers/portfolioMapper.js';
 
 const logger = createLogger('Handlers/Portfolio');
 
@@ -83,7 +84,7 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_GET, async (message) => {
     
     return createResponse(message, MESSAGE_TYPES.PORTFOLIO_DATA, {
       success: true,
-      items
+      items: PortfolioMapper.fromEntityList(items)
     });
     
   } catch (error) {
@@ -164,7 +165,7 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_ADD, async (message) => {
     
     return createResponse(message, MESSAGE_TYPES.PORTFOLIO_ADDED, {
       success: true,
-      item
+      item: PortfolioMapper.toResponseItem(PortfolioMapper.fromEntity(item))
     });
     
   } catch (error) {
@@ -263,7 +264,7 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     
     return createResponse(message, MESSAGE_TYPES.PORTFOLIO_UPDATED, {
       success: true,
-      item
+      item: PortfolioMapper.toResponseItem(PortfolioMapper.fromEntity(item))
     });
     
   } catch (error) {

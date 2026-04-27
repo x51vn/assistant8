@@ -185,10 +185,10 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       throw new Error('Ping fallback exhausted all retries');
     };
     
-    // OPTIMIZATION 4: Race strategy
+    // OPTIMIZATION 4: First-success strategy
     // - If registry is fast (100-500ms), use that
-    // - If registry fails, fallback to ping (triggered after 500ms)
-    // - Return whichever succeeds first
+    // - If registry misses, ping fallback can still succeed
+    // - Only fail when BOTH strategies fail
     
     // Start ping fallback after 500ms
     const pingFallback = (async () => {
@@ -196,9 +196,9 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       return await tryPingUntilReady();
     })();
     
-    // Try registry first, race against ping fallback
+    // Try both strategies and resolve on first success
     try {
-      const result = await Promise.race([
+      const result = await Promise.any([
         checkRegistryUntilReady(),
         pingFallback
       ]);
@@ -211,16 +211,21 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       
       return result;
     } catch (error) {
-      // Both registry and ping failed
+      // Both registry and ping failed (AggregateError from Promise.any)
       const elapsed = Date.now() - startTime;
+      const aggregateErrors = Array.isArray(error?.errors) ? error.errors : [];
+      const rootCause = aggregateErrors.length > 0
+        ? aggregateErrors.map(e => e?.message || String(e)).join(' | ')
+        : (error?.message || 'Unknown strategy failure');
+
       logger.warn('waitForTabReady: All strategies exhausted', {
         tabId,
         elapsed,
-        error: error.message
+        error: rootCause
       });
       
       throw new Error(
-        `Timeout after ${Math.min(elapsed, timeoutMs)}ms: ${error.message}`
+        `Timeout after ${Math.min(elapsed, timeoutMs)}ms: ${rootCause}`
       );
     }
   } catch (error) {

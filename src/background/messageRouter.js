@@ -13,6 +13,7 @@
 import { createLogger } from '../logger.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse as createMsgError } from '../shared/messageSchema.js';
 import { ERROR_CODES } from '../types.js';
+import { validateHeader, validateRequest } from '../shared/contracts/ValidatorEngine.js';
 
 const logger = createLogger('MessageRouter');
 
@@ -63,7 +64,36 @@ export async function route(message, sender) {
     correlationId,
     from: sender.tab ? `tab:${sender.tab.id}` : 'extension'
   });
-  
+
+  // ── Layer 2: Ingress validation ──────────────────────────────────────────
+  // 2a: Header validation (always strict — required for routing/tracing)
+  const headerResult = validateHeader(message);
+  if (!headerResult.valid) {
+    logger.warn('Ingress header validation failed', { type, correlationId, errors: headerResult.errors });
+    return createMsgError(
+      message,
+      ERROR_CODES.INVALID_INPUT,
+      `Invalid message header: ${headerResult.errors.join('; ')}`
+    );
+  }
+
+  // 2b: Payload validation against registered contract
+  const payloadResult = validateRequest(type, message.data);
+  if (!payloadResult.valid) {
+    if (payloadResult.mode === 'strict') {
+      logger.warn('Ingress payload validation failed (strict)', { type, correlationId, errors: payloadResult.errors });
+      return createMsgError(
+        message,
+        ERROR_CODES.INVALID_INPUT,
+        `Validation failed: ${payloadResult.errors.join('; ')}`
+      );
+    } else {
+      // warn-only: log but allow through
+      logger.warn('Ingress payload contract mismatch (warn-only)', { type, correlationId, errors: payloadResult.errors });
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // Check if handler exists
   const handler = handlers.get(type);
   
