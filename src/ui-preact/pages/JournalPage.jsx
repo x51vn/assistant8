@@ -56,7 +56,7 @@ function fmtAdherence(n) {
   return `${(Number(n) * 100).toFixed(0)}%`;
 }
 
-function statusBadge(status) {
+function statusBadge(status, pnlPct = null) {
   const map = {
     planned: { cls: 'badge-planned', label: 'Kế hoạch' },
     open:    { cls: 'badge-open',    label: 'Đang mở' },
@@ -64,7 +64,10 @@ function statusBadge(status) {
     reviewed:{ cls: 'badge-reviewed',label: 'Đã review' },
   };
   const b = map[status] || { cls: '', label: status };
-  return <span class={`status-badge ${b.cls}`}>{b.label}</span>;
+  const extra = status === 'closed'
+    ? (pnlPct != null && Number(pnlPct) < 0 ? 'badge-closed-negative' : 'badge-closed-positive')
+    : '';
+  return <span class={`status-badge ${b.cls} ${extra}`.trim()}>{b.label}</span>;
 }
 
 function pnlClass(pnlPct) {
@@ -258,7 +261,7 @@ export function JournalPage() {
                 <tr key={entry.id}>
                   <td><strong>{entry.symbol}</strong></td>
                   <td><span class="text-muted">{entry.setup || '—'}</span></td>
-                  <td>{statusBadge(entry.status)}</td>
+                  <td>{statusBadge(entry.status, entry.pnl_pct)}</td>
                   <td>{fmtNum(entry.planned_entry)}</td>
                   <td>{fmtNum(entry.actual_entry)}</td>
                   <td>{fmtNum(entry.exit_price)}</td>
