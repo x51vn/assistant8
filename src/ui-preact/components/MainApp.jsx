@@ -5,6 +5,7 @@
  */
 
 import { h } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { Navigation } from './Navigation.jsx';
 import { PortfolioPage } from '../pages/PortfolioPage.jsx';
 import WatchlistPage from '../pages/WatchlistPage.jsx';
@@ -20,6 +21,7 @@ import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { PromptsPage } from '../pages/PromptsPage.jsx';
 import { MarketPage } from '../pages/MarketPage.jsx';
 import { PromptImprovementPage } from '../pages/PromptImprovementPage.jsx';
+import { JournalPage } from '../pages/JournalPage.jsx';
 import { OnboardingWizard, useOnboardingGate } from './OnboardingWizard.jsx';
 import { ShortcutsHelp } from './ShortcutsHelp.jsx';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
@@ -27,6 +29,8 @@ import { currentPage, setCurrentPage } from '../state/navigationState.js';
 import { useContextMenuListener } from '../hooks/useContextMenuListener.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { usePromptsBootstrap } from '../hooks/usePromptsBootstrap.js';
+import { openNewEntryModal } from '../state/journalState.js';
+import { getJournalPrefill } from '../api/journalApi.js';
 
 export function MainApp() {
   // Listen for context menu → side panel messages
@@ -35,8 +39,24 @@ export function MainApp() {
   usePromptsBootstrap(user);
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
   const { showOnboarding, handleDone, handleSkip } = useOnboardingGate(!!user);
-  // Subscribe to navigation state using effect
   const page = currentPage;
+
+  // Listen for navigate CustomEvent from child pages
+  useEffect(() => {
+    async function handleNavigate(e) {
+      const { page: targetPage, prefill } = e.detail || {};
+      if (!targetPage) return;
+      setCurrentPage(targetPage);
+
+      // If navigating to journal with prefill data, load it
+      if (targetPage === 'journal' && prefill) {
+        const { prefill: data } = await getJournalPrefill(prefill.symbol, prefill.watchlist_id || null);
+        openNewEntryModal(data);
+      }
+    }
+    window.addEventListener('navigate', handleNavigate);
+    return () => window.removeEventListener('navigate', handleNavigate);
+  }, []);
 
   const renderPage = () => {
     switch (page.value) {
@@ -52,6 +72,8 @@ export function MainApp() {
         return <WatchlistPage />;
       case 'assets':
         return <AssetsPage />;
+      case 'journal':
+        return <JournalPage />;
       case 'history':
         return <HistoryPage />;
       case 'errors':

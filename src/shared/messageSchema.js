@@ -428,6 +428,34 @@ export const MESSAGE_TYPES = {
   PROMPT_IMPROVEMENT_PURGE: 'PROMPT_IMPROVEMENT_PURGE',       // UI/Alarm → Background: purge expired
   PROMPT_IMPROVEMENT_PURGED: 'PROMPT_IMPROVEMENT_PURGED',     // Background → UI: purge result
 
+  // === Trading Journal (trading-journal-mvp) ===
+  // Journal CRUD requests
+  JOURNAL_CREATE: 'JOURNAL_CREATE',                           // UI → Background: create new journal entry
+  JOURNAL_GET_ALL: 'JOURNAL_GET_ALL',                         // UI → Background: fetch entries (optional filters)
+  JOURNAL_UPDATE: 'JOURNAL_UPDATE',                           // UI → Background: update entry / advance status
+  JOURNAL_DELETE: 'JOURNAL_DELETE',                           // UI → Background: delete entry
+  JOURNAL_GET_PREFILL: 'JOURNAL_GET_PREFILL',                 // UI → Background: get pre-fill data from watchlist+market
+  JOURNAL_GET_METRICS: 'JOURNAL_GET_METRICS',                 // UI → Background: compute aggregate stats
+  JOURNAL_GET_SUMMARY: 'JOURNAL_GET_SUMMARY',                 // UI → Background: lightweight summary for Dashboard
+
+  // Journal CRUD responses
+  JOURNAL_CREATED: 'JOURNAL_CREATED',                         // Background → UI: entry created
+  JOURNAL_LIST: 'JOURNAL_LIST',                               // Background → UI: entries list
+  JOURNAL_UPDATED: 'JOURNAL_UPDATED',                         // Background → UI: entry updated
+  JOURNAL_DELETED: 'JOURNAL_DELETED',                         // Background → UI: entry deleted
+  JOURNAL_PREFILL: 'JOURNAL_PREFILL',                         // Background → UI: pre-fill data payload
+  JOURNAL_METRICS: 'JOURNAL_METRICS',                         // Background → UI: metrics payload
+  JOURNAL_SUMMARY: 'JOURNAL_SUMMARY',                         // Background → UI: summary payload
+
+  // Checklist template requests
+  CHECKLIST_TEMPLATES_GET: 'CHECKLIST_TEMPLATES_GET',         // UI → Background: fetch templates (returns defaults if empty)
+  CHECKLIST_TEMPLATE_CREATE: 'CHECKLIST_TEMPLATE_CREATE',     // UI → Background: add new rule
+  CHECKLIST_TEMPLATE_UPDATE: 'CHECKLIST_TEMPLATE_UPDATE',     // UI → Background: update rule label/active/order
+  CHECKLIST_TEMPLATE_DELETE: 'CHECKLIST_TEMPLATE_DELETE',     // UI → Background: remove rule
+
+  // Checklist template responses
+  CHECKLIST_TEMPLATES_DATA: 'CHECKLIST_TEMPLATES_DATA',       // Background → UI: templates array
+
   // Error
   ERROR: 'ERROR'
 };
@@ -484,6 +512,7 @@ export function createErrorResponse(originalMessage, errorCode, errorMessage, de
   return {
     v: MESSAGE_VERSION,
     type: MESSAGE_TYPES.ERROR,
+    success: false,
     // Backward-compatible aliases used by older handler patterns
     // (many handlers check `if (error.errorCode) return error;`)
     errorCode,

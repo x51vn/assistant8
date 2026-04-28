@@ -11,4 +11,5 @@ import '../promptQueueInfo.js';
 import '../dataExport.js';
 import '../dataImport.js';
 import '../promptImprovement.js';
+import '../journal.js';
 

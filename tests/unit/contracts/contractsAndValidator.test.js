@@ -204,3 +204,55 @@ describe('ValidatorEngine.validateResponse', () => {
     expect(result.errors.some(e => e.includes('items'))).toBe(true);
   });
 });
+
+// ─── Canonical Error Envelope + Backward-Compatibility Bridge ────────────────
+
+import { createErrorResponse, MESSAGE_TYPES as MT } from '../../../src/shared/messageSchema.js';
+
+describe('Canonical error envelope', () => {
+  const originMsg = { v: 1, type: 'PORTFOLIO_GET', correlationId: 'corr-001', timestamp: 1000 };
+
+  it('createErrorResponse returns canonical error object', () => {
+    const resp = createErrorResponse(originMsg, 'INVALID_INPUT', 'Bad data', { field: 'symbol' });
+
+    expect(resp.type).toBe(MT.ERROR);
+    expect(resp.error).toBeDefined();
+    expect(resp.error.code).toBe('INVALID_INPUT');
+    expect(resp.error.message).toBe('Bad data');
+    expect(resp.error.details).toEqual({ field: 'symbol' });
+  });
+
+  it('response includes correlationId matching origin', () => {
+    const resp = createErrorResponse(originMsg, 'AUTH_REQUIRED', 'Not authenticated');
+    expect(resp.correlationId).toBe('corr-001');
+  });
+
+  it('response includes inResponseTo matching origin type', () => {
+    const resp = createErrorResponse(originMsg, 'AUTH_REQUIRED', 'Not authenticated');
+    expect(resp.inResponseTo).toBe('PORTFOLIO_GET');
+  });
+
+  it('response includes backward-compat aliases errorCode and errorMessage', () => {
+    const resp = createErrorResponse(originMsg, 'NETWORK_ERROR', 'No connection');
+    // Alias fields required by legacy consumers that check `if (error.errorCode) return error;`
+    expect(resp.errorCode).toBe('NETWORK_ERROR');
+    expect(resp.errorMessage).toBe('No connection');
+  });
+
+  it('canonical fields and legacy aliases carry the same values', () => {
+    const resp = createErrorResponse(originMsg, 'SUPABASE_ERROR', 'DB failed');
+    expect(resp.error.code).toBe(resp.errorCode);
+    expect(resp.error.message).toBe(resp.errorMessage);
+  });
+
+  it('success is false on error response', () => {
+    const resp = createErrorResponse(originMsg, 'UNKNOWN_ERROR', 'Oops');
+    expect(resp.success).toBe(false);
+  });
+
+  it('handles missing originalMessage gracefully', () => {
+    const resp = createErrorResponse(null, 'UNKNOWN_ERROR', 'Fallback');
+    expect(resp.correlationId).toBeTruthy(); // generates one
+    expect(resp.inResponseTo).toBeNull();
+  });
+});

@@ -63,7 +63,7 @@ function getEdiffColorClass(ediff) {
 /**
  * WatchlistRow - Single watchlist item row
  */
-function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbols }) {
+function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enrichingSymbols, onJournalEntry }) {
   const handleToggleHighlight = async () => {
     // Optimistic update
     toggleItemHighlight(item.symbol);
@@ -177,6 +177,17 @@ function WatchlistRow({ item, onToggleHighlight, onEdit, onDelete, onEnrich, enr
         >
           <i class="fas fa-trash-alt"></i>
         </button>
+
+        {onJournalEntry && (
+          <button
+            class="btn-icon btn-journal"
+            onClick={() => onJournalEntry(item)}
+            title="Tạo Journal Entry"
+            type="button"
+          >
+            <i class="fas fa-book"></i>
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -236,7 +247,7 @@ function PaginationControls() {
 /**
  * WatchlistTable - Main table component
  */
-export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbols }) {
+export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSymbols, onJournalEntry }) {
   if (!hasFilteredItems.value) {
     return (
       <div class="empty-state">
@@ -274,6 +285,7 @@ export default function WatchlistTable({ onEdit, onDelete, onEnrich, enrichingSy
                 onDelete={onDelete}
                 onEnrich={onEnrich}
                 enrichingSymbols={enrichingSymbols}
+                onJournalEntry={onJournalEntry}
               />
             ))}
           </tbody>

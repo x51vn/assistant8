@@ -392,6 +392,17 @@ export default function WatchlistPage() {
   };
 
   /**
+   * Handle "Journal Entry" button from watchlist row
+   * Navigates to journal page and opens NewEntryModal pre-filled with watchlist data
+   */
+  const handleJournalEntry = async (item) => {
+    if (!item) return;
+    // Navigate to journal page
+    const event = new CustomEvent('navigate', { detail: { page: 'journal', prefill: { symbol: item.symbol, watchlist_id: item.id } } });
+    window.dispatchEvent(event);
+  };
+
+  /**
    * Handle enrichment for ALL watchlist items (batch mode)
    * Uses batch API to send max 10 symbols per LLM prompt instead of 1-by-1.
    * Background splits into chunks automatically.
@@ -602,6 +613,7 @@ export default function WatchlistPage() {
           onDelete={handleDelete}
           onEnrich={handleEnrich}
           enrichingSymbols={enrichingSymbols}
+          onJournalEntry={handleJournalEntry}
         />
       )}
 

@@ -8,6 +8,7 @@ export const NAVIGATION_PAGES = [
   { id: 'market', label: 'Thị trường', icon: 'fas fa-chart-area', primary: true, order: 3 },
   { id: 'watchlist', label: 'Watchlist', icon: 'fas fa-list-check', primary: true, order: 4 },
   { id: 'assets', label: 'Tài sản', icon: 'fas fa-wallet', primary: true, order: 5 },
+  { id: 'journal', label: 'Journal', icon: 'fas fa-book', primary: true, order: 5.5 },
   { id: 'history', label: 'History', icon: 'fas fa-history', primary: false, order: 6 },
   { id: 'alerts', label: 'Alerts', icon: 'fas fa-bell', primary: false, order: 7 },
   { id: 'writing', label: 'Writing', icon: 'fas fa-pen-fancy', primary: false, order: 8 },

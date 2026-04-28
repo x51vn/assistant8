@@ -20,6 +20,7 @@ import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
 import { setCurrentPage } from '../state/navigationState.js';
 import { ASSET_TYPE_COLORS as TYPE_COLORS, ASSET_TYPE_LABELS as TYPE_LABELS } from '../utils/assetTypes.js';
+import { getJournalSummary } from '../api/journalApi.js';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
@@ -351,6 +352,42 @@ function QuickActions() {
 }
 
 // ========================================================================
+// Journal Summary Card
+// ========================================================================
+
+function JournalSummaryCard({ summary }) {
+  if (!summary) return null;
+  const winRatePct = summary.recentWinRate != null
+    ? `${(summary.recentWinRate * 100).toFixed(0)}%`
+    : '—';
+  return (
+    <div className="dash-card dash-journal-summary" onClick={() => setCurrentPage('journal')} style="cursor:pointer">
+      <div className="dash-card-header">
+        <i className="fas fa-book"></i>
+        <span>Trading Journal</span>
+        <i className="fas fa-chevron-right dash-card-arrow"></i>
+      </div>
+      <div className="dash-journal-stats">
+        <div className="dash-journal-stat">
+          <span className="stat-value">{summary.openCount}</span>
+          <span className="stat-label">Đang mở</span>
+        </div>
+        <div className="dash-journal-stat">
+          <span className="stat-value">{summary.plannedCount}</span>
+          <span className="stat-label">Kế hoạch</span>
+        </div>
+        <div className="dash-journal-stat">
+          <span className={`stat-value ${summary.recentWinRate != null && summary.recentWinRate >= 0.5 ? 'stat-positive' : 'stat-negative'}`}>
+            {winRatePct}
+          </span>
+          <span className="stat-label">Win 30d</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================================================
 // Main Page
 // ========================================================================
 
@@ -358,12 +395,17 @@ export function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [journalSummary, setJournalSummary] = useState(null);
   const timerRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
-      const result = await fetchDashboardData();
+      const [result, { summary }] = await Promise.all([
+        fetchDashboardData(),
+        getJournalSummary(),
+      ]);
       setData(result);
+      if (summary) setJournalSummary(summary);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('[DashboardPage] fetch failed:', err);
@@ -399,6 +441,7 @@ export function DashboardPage() {
 
       <NetWorthCard assets={data.assets} portfolio={data.portfolio} />
       <StatGrid portfolio={data.portfolio} assets={data.assets} />
+      <JournalSummaryCard summary={journalSummary} />
       <TopMovers portfolio={data.portfolio} />
       <AllocationBar assets={data.assets} />
       <RecentActivity history={data.history} />

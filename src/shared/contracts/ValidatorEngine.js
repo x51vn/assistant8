@@ -1,104 +1,103 @@
 /**
- * @fileoverview ValidatorEngine — Layer 2 of I/O standardization
+ * @fileoverview ValidatorEngine
  *
- * Provides runtime validation for message request/response payloads
- * against contracts defined in MessageContractRegistry.
- *
- * Functions:
- *   validateHeader(message)              → ValidationResult
- *   validateRequest(type, payload)       → ValidationResult
- *   validateResponse(type, payload)      → ValidationResult
- *
- * ValidationResult shape: { valid: boolean, errors: string[] }
- *
- * Contract mode handling:
- *   'warn-only' — caller logs and continues (does NOT reject)
- *   'strict'    — caller rejects request/response
+ * Runtime validation for message headers and request/response payloads.
  */
 
-import { getContract, isValidUUID, FIELD_TYPES, HEADER_SCHEMA } from './MessageContractRegistry.js';
+import {
+  CONTRACT_MODES,
+  getContract,
+  isValidUUID,
+  FIELD_TYPES,
+  HEADER_SCHEMA,
+} from './MessageContractRegistry.js';
 
-// ─── Internals ────────────────────────────────────────────────────────────────
+function validateField(value, descriptor, path = descriptor.name) {
+  const {
+    name,
+    type,
+    required,
+    enum: allowedValues,
+    min,
+    max,
+    minLength,
+    maxLength,
+    pattern,
+    items,
+  } = descriptor;
+  const fieldName = path || name;
 
-/**
- * Validate a single field value against its descriptor.
- * @param {*} value
- * @param {import('./MessageContractRegistry.js').FieldDescriptor} descriptor
- * @returns {string|null} error message or null when valid
- */
-function validateField(value, descriptor) {
-  const { name, type, required, enum: allowedValues, min, max, minLength, maxLength, pattern } = descriptor;
-
-  // Presence check
   if (value === undefined || value === null) {
-    if (required) return `Field '${name}' is required`;
-    return null; // optional field, absent → ok
+    if (required) return `Field '${fieldName}' is required`;
+    return null;
   }
 
-  // Type check
   switch (type) {
     case FIELD_TYPES.STRING:
-      if (typeof value !== 'string') return `Field '${name}' must be a string`;
+      if (typeof value !== 'string') return `Field '${fieldName}' must be a string`;
       break;
     case FIELD_TYPES.NUMBER:
-      if (typeof value !== 'number' || !Number.isFinite(value))
-        return `Field '${name}' must be a finite number`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return `Field '${fieldName}' must be a finite number`;
+      }
       break;
     case FIELD_TYPES.BOOLEAN:
-      if (typeof value !== 'boolean') return `Field '${name}' must be a boolean`;
+      if (typeof value !== 'boolean') return `Field '${fieldName}' must be a boolean`;
       break;
     case FIELD_TYPES.ARRAY:
-      if (!Array.isArray(value)) return `Field '${name}' must be an array`;
+      if (!Array.isArray(value)) return `Field '${fieldName}' must be an array`;
       break;
     case FIELD_TYPES.OBJECT:
-      if (typeof value !== 'object' || Array.isArray(value) || value === null)
-        return `Field '${name}' must be a plain object`;
+      if (typeof value !== 'object' || Array.isArray(value) || value === null) {
+        return `Field '${fieldName}' must be a plain object`;
+      }
       break;
     case FIELD_TYPES.UUID:
-      if (!isValidUUID(value)) return `Field '${name}' must be a valid UUID`;
+      if (!isValidUUID(value)) return `Field '${fieldName}' must be a valid UUID`;
       break;
     default:
-      // Unknown type descriptor — skip
       break;
   }
 
-  // Enum check (string / number)
   if (allowedValues && !allowedValues.includes(value)) {
-    return `Field '${name}' must be one of [${allowedValues.join(', ')}], got '${value}'`;
+    return `Field '${fieldName}' must be one of [${allowedValues.join(', ')}], got '${value}'`;
   }
 
-  // Numeric range checks
   if (min !== undefined && typeof value === 'number' && value < min) {
-    return `Field '${name}' must be >= ${min}`;
+    return `Field '${fieldName}' must be >= ${min}`;
   }
   if (max !== undefined && typeof value === 'number' && value > max) {
-    return `Field '${name}' must be <= ${max}`;
+    return `Field '${fieldName}' must be <= ${max}`;
   }
 
-  // String/array length checks
   if (typeof value === 'string' || Array.isArray(value)) {
     if (minLength !== undefined && value.length < minLength) {
-      return `Field '${name}' length must be >= ${minLength}`;
+      return `Field '${fieldName}' length must be >= ${minLength}`;
     }
     if (maxLength !== undefined && value.length > maxLength) {
-      return `Field '${name}' length must be <= ${maxLength}`;
+      return `Field '${fieldName}' length must be <= ${maxLength}`;
     }
   }
 
-  // String pattern check
   if (pattern && typeof value === 'string' && !pattern.test(value)) {
-    return `Field '${name}' does not match required pattern`;
+    return `Field '${fieldName}' does not match required pattern`;
+  }
+
+  if (items && Array.isArray(value)) {
+    for (let i = 0; i < value.length; i += 1) {
+      const itemDescriptor = {
+        name: `${fieldName}[${i}]`,
+        required: true,
+        ...items,
+      };
+      const itemError = validateField(value[i], itemDescriptor, itemDescriptor.name);
+      if (itemError) return itemError;
+    }
   }
 
   return null;
 }
 
-/**
- * Run a list of FieldDescriptors against a data object.
- * @param {FieldDescriptor[]} schema
- * @param {object|null} data
- * @returns {string[]} list of validation error strings
- */
 function applySchema(schema, data) {
   if (!schema || schema.length === 0) return [];
   const obj = data && typeof data === 'object' ? data : {};
@@ -110,68 +109,65 @@ function applySchema(schema, data) {
   return errors;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/**
- * @typedef {Object} ValidationResult
- * @property {boolean}  valid
- * @property {string[]} errors
- * @property {string}   [mode]   - contract mode if contract was found
- */
-
-/**
- * Validate message transport headers (v, type, correlationId).
- * Always strict — these fields are required for routing/tracing.
- * @param {*} message
- * @returns {ValidationResult}
- */
-export function validateHeader(message) {
-  if (!message || typeof message !== 'object') {
-    return { valid: false, errors: ['Message must be a non-null object'] };
-  }
-  const errors = applySchema(HEADER_SCHEMA, message);
-  return { valid: errors.length === 0, errors };
+function resultFromContract(contract, direction, errors) {
+  const modeKey = direction === 'response' ? 'responseMode' : 'requestMode';
+  return {
+    valid: errors.length === 0,
+    errors,
+    mode: contract[modeKey] ?? contract.mode ?? CONTRACT_MODES.WARN_ONLY,
+    contractFound: true,
+    domain: contract.domain,
+    schemaVersion: contract.schemaVersion,
+    domainVersion: contract.domainVersion,
+  };
 }
 
-/**
- * Validate incoming request payload against registered contract.
- * @param {string} type     - MESSAGE_TYPES constant
- * @param {*}      payload  - message.data or message payload object
- * @returns {ValidationResult & { mode: string }}
- */
+export function validateHeader(message) {
+  if (!message || typeof message !== 'object') {
+    return {
+      valid: false,
+      errors: ['Message must be a non-null object'],
+      mode: CONTRACT_MODES.STRICT,
+    };
+  }
+  const errors = applySchema(HEADER_SCHEMA, message);
+  return {
+    valid: errors.length === 0,
+    errors,
+    mode: CONTRACT_MODES.STRICT,
+  };
+}
+
 export function validateRequest(type, payload) {
   const contract = getContract(type);
 
   if (!contract) {
-    // No explicit contract — pass through with warn-only marker
-    return { valid: true, errors: [], mode: 'warn-only' };
+    return {
+      valid: true,
+      errors: [],
+      mode: CONTRACT_MODES.WARN_ONLY,
+      contractFound: false,
+      domain: 'legacy',
+    };
   }
 
   const errors = applySchema(contract.request ?? [], payload);
-  return {
-    valid: errors.length === 0,
-    errors,
-    mode: contract.mode ?? 'warn-only',
-  };
+  return resultFromContract(contract, 'request', errors);
 }
 
-/**
- * Validate outgoing response payload against registered contract.
- * @param {string} type     - Response MESSAGE_TYPES constant
- * @param {*}      payload  - full response object (spread payload, not nested .data)
- * @returns {ValidationResult & { mode: string }}
- */
 export function validateResponse(type, payload) {
   const contract = getContract(type);
 
   if (!contract) {
-    return { valid: true, errors: [], mode: 'warn-only' };
+    return {
+      valid: true,
+      errors: [],
+      mode: CONTRACT_MODES.WARN_ONLY,
+      contractFound: false,
+      domain: 'legacy',
+    };
   }
 
   const errors = applySchema(contract.response ?? [], payload);
-  return {
-    valid: errors.length === 0,
-    errors,
-    mode: contract.mode ?? 'warn-only',
-  };
+  return resultFromContract(contract, 'response', errors);
 }
