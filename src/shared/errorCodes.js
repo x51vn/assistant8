@@ -13,6 +13,16 @@
 // ============================================================================
 
 export const ERROR_CODES = {
+  // ===== Communication / Platform Errors =====
+  TAB_NOT_FOUND: 'TAB_NOT_FOUND',
+  CONTENT_SCRIPT_NOT_READY: 'CONTENT_SCRIPT_NOT_READY',
+  MESSAGE_SEND_FAILED: 'MESSAGE_SEND_FAILED',
+  INVALID_TAB_ID: 'INVALID_TAB_ID',
+  SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
+  INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
+  OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
+  SESSION_MISMATCH: 'SESSION_MISMATCH',
+
   // ===== Network Errors =====
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT: 'TIMEOUT',
@@ -33,6 +43,8 @@ export const ERROR_CODES = {
   
   // ===== Validation Errors =====
   INVALID_INPUT: 'INVALID_INPUT',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  EMPTY_PROMPT: 'EMPTY_PROMPT',
   DUPLICATE_ENTRY: 'DUPLICATE_ENTRY',
   NOT_FOUND: 'NOT_FOUND',
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
@@ -46,6 +58,7 @@ export const ERROR_CODES = {
   // ===== Rate Limiting =====
   RATE_LIMITED: 'RATE_LIMITED',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   
   // ===== ChatGPT Integration =====
   CHATGPT_NOT_AVAILABLE: 'CHATGPT_NOT_AVAILABLE',
@@ -64,9 +77,13 @@ export const ERROR_CODES = {
   // ===== Generic =====
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   OPERATION_FAILED: 'OPERATION_FAILED',
+  QUEUE_ERROR: 'QUEUE_ERROR',
+  STORAGE_ERROR: 'STORAGE_ERROR',
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
 
   // ===== Billing & Subscription (XST-758..XST-763) =====
   USAGE_LIMIT_EXCEEDED: 'USAGE_LIMIT_EXCEEDED',
+  PLAN_LIMIT: 'PLAN_LIMIT',
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
   SUBSCRIPTION_NOT_FOUND: 'SUBSCRIPTION_NOT_FOUND',
   CHECKOUT_FAILED: 'CHECKOUT_FAILED',
@@ -89,6 +106,24 @@ export const ERROR_CODES = {
   LLM_APIKEY_SAVE_FAILED: 'LLM_APIKEY_SAVE_FAILED',
   LLM_APIKEY_MIGRATE_FAILED: 'LLM_APIKEY_MIGRATE_FAILED',
   LLM_HEALTHCHECK_FAILED: 'LLM_HEALTHCHECK_FAILED',
+
+  // ===== Enterprise API Keys =====
+  API_KEY_LIST_ERROR: 'API_KEY_LIST_ERROR',
+  API_KEY_GENERATE_ERROR: 'API_KEY_GENERATE_ERROR',
+  API_KEY_REVOKE_ERROR: 'API_KEY_REVOKE_ERROR',
+
+  // ===== Price Alerts =====
+  ALERT_LIST_ERROR: 'ALERT_LIST_ERROR',
+  ALERT_CREATE_ERROR: 'ALERT_CREATE_ERROR',
+  ALERT_DELETE_ERROR: 'ALERT_DELETE_ERROR',
+  ALERT_TOGGLE_ERROR: 'ALERT_TOGGLE_ERROR',
+
+  // ===== Multi-Portfolio =====
+  PORTFOLIO_LIST_ERROR: 'PORTFOLIO_LIST_ERROR',
+  PORTFOLIO_CREATE_ERROR: 'PORTFOLIO_CREATE_ERROR',
+  PORTFOLIO_UPDATE_ERROR: 'PORTFOLIO_UPDATE_ERROR',
+  PORTFOLIO_DELETE_ERROR: 'PORTFOLIO_DELETE_ERROR',
+  PORTFOLIO_SET_DEFAULT_ERROR: 'PORTFOLIO_SET_DEFAULT_ERROR',
 };
 
 // ============================================================================
@@ -116,6 +151,7 @@ export const ERROR_MESSAGES_VN = {
   
   // Validation
   [ERROR_CODES.INVALID_INPUT]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
+  [ERROR_CODES.VALIDATION_ERROR]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
   [ERROR_CODES.DUPLICATE_ENTRY]: 'Mục này đã tồn tại trong hệ thống.',
   [ERROR_CODES.NOT_FOUND]: 'Không tìm thấy dữ liệu yêu cầu.',
   [ERROR_CODES.MISSING_REQUIRED_FIELD]: 'Vui lòng điền đầy đủ thông tin bắt buộc.',
@@ -150,6 +186,7 @@ export const ERROR_MESSAGES_VN = {
 
   // Billing
   [ERROR_CODES.USAGE_LIMIT_EXCEEDED]: 'Bạn đã đạt giới hạn của gói hiện tại. Nâng cấp lên Pro để tiếp tục.',
+  [ERROR_CODES.PLAN_LIMIT]: 'Gói hiện tại không cho phép thao tác này. Vui lòng nâng cấp để tiếp tục.',
   [ERROR_CODES.PLAN_NOT_FOUND]: 'Không tìm thấy gói dịch vụ.',
   [ERROR_CODES.SUBSCRIPTION_NOT_FOUND]: 'Không tìm thấy thông tin đăng ký.',
   [ERROR_CODES.CHECKOUT_FAILED]: 'Không thể tạo phiên thanh toán. Vui lòng thử lại.',
@@ -172,6 +209,21 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.LLM_APIKEY_SAVE_FAILED]: 'Không thể lưu API key. Vui lòng thử lại.',
   [ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED]: 'Di chuyển API key sang Supabase thất bại. Vui lòng thử lại.',
   [ERROR_CODES.LLM_HEALTHCHECK_FAILED]: 'Kiểm tra kết nối thất bại. Vui lòng kiểm tra API key và thử lại.',
+
+  // Shared operation aliases
+  [ERROR_CODES.QUEUE_ERROR]: 'Không thể thêm tác vụ vào hàng đợi. Vui lòng thử lại.',
+  [ERROR_CODES.API_KEY_LIST_ERROR]: 'Lấy danh sách API key thất bại.',
+  [ERROR_CODES.API_KEY_GENERATE_ERROR]: 'Tạo API key thất bại.',
+  [ERROR_CODES.API_KEY_REVOKE_ERROR]: 'Hủy API key thất bại.',
+  [ERROR_CODES.ALERT_LIST_ERROR]: 'Lấy danh sách cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_CREATE_ERROR]: 'Tạo cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_DELETE_ERROR]: 'Xóa cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_TOGGLE_ERROR]: 'Cập nhật cảnh báo thất bại.',
+  [ERROR_CODES.PORTFOLIO_LIST_ERROR]: 'Lấy danh sách portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_CREATE_ERROR]: 'Tạo portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_UPDATE_ERROR]: 'Cập nhật portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_DELETE_ERROR]: 'Xóa portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_SET_DEFAULT_ERROR]: 'Đặt portfolio mặc định thất bại.',
 };
 
 // ============================================================================

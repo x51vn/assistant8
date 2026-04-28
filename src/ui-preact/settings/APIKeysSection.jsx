@@ -5,10 +5,11 @@
 
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import { createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 async function msg(type, extra = {}) {
-  return chrome.runtime.sendMessage(createMessage(type, extra));
+  return sendRuntimeMessage(type, extra);
 }
 
 const API_DOCS_URL = 'https://docs.your-extension.com/api';
@@ -34,7 +35,7 @@ export function APIKeysSection({ isEnterprise }) {
 
   async function loadKeys() {
     setLoading(true);
-    const res = await msg('API_KEY_LIST');
+    const res = await msg(MESSAGE_TYPES.API_KEY_LIST);
     if (res?.success) setKeys(res.items || []);
     else setError(res?.errorMessage || 'Lấy danh sách API key thất bại');
     setLoading(false);
@@ -46,7 +47,7 @@ export function APIKeysSection({ isEnterprise }) {
     setError('');
     setNewRawKey('');
     try {
-      const res = await msg('API_KEY_GENERATE', { label: label.trim() });
+      const res = await msg(MESSAGE_TYPES.API_KEY_GENERATE, { label: label.trim() });
       if (res?.success) {
         setNewRawKey(res.rawKey);
         setLabel('');
@@ -63,7 +64,7 @@ export function APIKeysSection({ isEnterprise }) {
 
   async function handleRevoke(id) {
     if (!confirm('Hủy API key này? Các tích hợp đang dùng key này sẽ bị ngắt kết nối.')) return;
-    const res = await msg('API_KEY_REVOKE', { id });
+    const res = await msg(MESSAGE_TYPES.API_KEY_REVOKE, { id });
     if (res?.success) {
       setKeys(prev => prev.map(k => k.id === id ? { ...k, revoked: true } : k));
     }
@@ -82,7 +83,15 @@ export function APIKeysSection({ isEnterprise }) {
         <div class="upgrade-prompt">
           <p>🔒 Tính năng REST API chỉ dành cho gói <strong>Enterprise</strong>.</p>
           <p>Integrate dữ liệu portfolio với Google Sheets, custom dashboards, Slack bots thông qua REST API.</p>
-          <a class="btn btn-primary" href="#settings" onClick={() => chrome.runtime.sendMessage(createMessage('SUBSCRIPTION_CREATE_CHECKOUT', { planId: 'enterprise' }))}>
+          <a
+            class="btn btn-primary"
+            href="#settings"
+            onClick={() => {
+              void sendRuntimeMessage(MESSAGE_TYPES.SUBSCRIPTION_CREATE_CHECKOUT, {
+                data: { planId: 'enterprise' },
+              });
+            }}
+          >
             Nâng cấp Enterprise
           </a>
         </div>

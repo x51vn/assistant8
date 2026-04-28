@@ -11,7 +11,8 @@ ChatGPT Assistant là Chrome MV3 extension (side panel) tích hợp:
 - **Chat history & retrospective**: lưu prompt/response/chat_url, chạy retrospective prompts.
 - **Error retrospective tracking**: lưu và quản lý lỗi (severity/type/resolution).
 - **Tài sản & Net worth**: quản lý danh mục tài sản (cash/savings/real_estate/crypto/gold/vehicle/other/debt), history và tổng hợp net worth.
-- **English learning module**: lưu “topic + prompt” gắn với `chat_id` của ChatGPT.
+- **Writing Assistant + English learning workflow**: email/social/summarize/rewrite/translate/outline và bài luyện tiếng Anh qua prompt templates.
+- **Trading Journal**: tạo/lưu trade journal, checklist, metrics và prefill từ watchlist.
 - **Settings management**: cấu hình dạng JSONB lưu trên Supabase.
 - **Context menu “Phân tích”**: right-click selection/page → tạo prompt → gửi sang ChatGPT.
 
@@ -20,7 +21,7 @@ ChatGPT Assistant là Chrome MV3 extension (side panel) tích hợp:
 Luồng chính:
 
 ```
-Side Panel UI (Preact)  ── chrome.runtime.sendMessage ─▶  Background Service Worker
+Side Panel UI (Preact)  ── runtimeGateway / chrome.runtime ─▶  Background Service Worker
        ▲                                                          │
        │                                                          ▼
        └──────────── auth state broadcasts ◀────────── Supabase (Auth + Postgres)
@@ -58,8 +59,9 @@ Các nguyên tắc thiết kế quan trọng (MV3):
 - Assets + Net Worth: `src/background/handlers/assets.js`, `src/background/handlers/netWorth.js`
 - Chat history: `src/background/handlers/chatHistory.js`
 - Error tracking: `src/background/handlers/errorTracking.js`
-- English: `src/background/handlers/english.js`
-- Prompt sending / ChatGPT tab automation: `src/background/handlers/prompt.js`, `src/background/handlers/chatgpt.js`, `src/chatgptSession.js`, `src/content.js`
+- Writing + prompt templates: `src/ui-preact/pages/WritingPage.jsx`, `src/ui-preact/api/writingApi.js`, `src/background/handlers/prompts.js`
+- Prompt sending / provider routing: `src/background/handlers/llm.js`, `src/background/handlers/providers/chatgpt.js`, `src/chatgptSession.js`, `src/content.js`
+- Trading journal + checklist: `src/background/handlers/journal.js`
 - Context menu analysis: `src/background/handlers/contextMenu.js`
 - Alarms: `src/background/handlers/alarms.js` + alarms setup in `src/background/index.js`
 

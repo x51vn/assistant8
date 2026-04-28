@@ -5,10 +5,11 @@
 
 import { h } from 'preact';
 import { useState, useRef } from 'preact/hooks';
-import { createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 async function msg(type, extra = {}) {
-  return chrome.runtime.sendMessage(createMessage(type, extra));
+  return sendRuntimeMessage(type, extra);
 }
 
 export function DataImportSection() {
@@ -61,7 +62,7 @@ export function DataImportSection() {
     setResult(null);
     setError('');
     try {
-      const res = await msg('DATA_IMPORT_REQUEST', {
+      const res = await msg(MESSAGE_TYPES.DATA_IMPORT_REQUEST, {
         fileContent,
         fileType,
         conflictMode: conflict,

@@ -17,8 +17,8 @@
 
 import { h } from 'preact';
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import { createMessage, MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 import {
   getPresetsForUI,
   getPresetConfig,
@@ -47,7 +47,7 @@ const DEFAULTS = {
 const PIPELINE_MODES = getPresetsForUI();
 
 async function msg(type, extra = {}) {
-  return chrome.runtime.sendMessage(createMessage(type, extra));
+  return sendRuntimeMessage(type, extra);
 }
 
 export function StockResearchSection() {
@@ -76,7 +76,7 @@ export function StockResearchSection() {
 
   // Load settings on mount
   useEffect(() => {
-    msg('SETTINGS_GET').then(res => {
+    msg(MESSAGE_TYPES.SETTINGS_GET).then(res => {
       if (res?.config) {
         const sr = res.config.stock_research || {};
         setProvider(sr.provider || DEFAULTS.provider);
@@ -203,11 +203,7 @@ export function StockResearchSection() {
       };
 
       // Send update — merge into existing config
-      const res = await chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.SETTINGS_UPDATE,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
+      const res = await sendRuntimeMessage(MESSAGE_TYPES.SETTINGS_UPDATE, {
         data: {
           config: {
             stock_research: stockResearch,

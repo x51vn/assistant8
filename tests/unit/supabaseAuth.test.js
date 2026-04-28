@@ -10,6 +10,7 @@ import { ERROR_CODES } from '../../src/shared/errorCodes.js';
 // Mock chrome API
 global.chrome = {
   runtime: {
+    getURL: vi.fn((path = '') => `chrome-extension://test-extension/${path}`),
     sendMessage: vi.fn().mockResolvedValue({})
   }
 };

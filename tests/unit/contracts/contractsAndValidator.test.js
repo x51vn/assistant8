@@ -46,6 +46,24 @@ describe('MessageContractRegistry', () => {
       expect(contract.mode).toBeDefined();
     });
 
+    it('covers migrated auth, settings, billing, and journal request domains', () => {
+      const coveredTypes = [
+        MESSAGE_TYPES.SUPABASE_AUTH_CHECK,
+        MESSAGE_TYPES.SUPABASE_AUTH_LOGIN,
+        MESSAGE_TYPES.SETTINGS_GET,
+        MESSAGE_TYPES.SETTINGS_UPDATE,
+        MESSAGE_TYPES.SUBSCRIPTION_GET,
+        MESSAGE_TYPES.SUBSCRIPTION_CREATE_CHECKOUT,
+        MESSAGE_TYPES.JOURNAL_GET_ALL,
+        MESSAGE_TYPES.JOURNAL_CREATE,
+        MESSAGE_TYPES.CHECKLIST_TEMPLATES_GET,
+      ];
+
+      for (const type of coveredTypes) {
+        expect(getContract(type), type).toBeDefined();
+      }
+    });
+
     it('returns null for an unregistered type', () => {
       expect(getContract('TOTALLY_UNKNOWN_TYPE_XYZ')).toBeNull();
     });

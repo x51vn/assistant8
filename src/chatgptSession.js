@@ -2,12 +2,12 @@
 // Provides specialized functions for managing ChatGPT interactions
 // Pure business logic - no direct I/O except Chrome APIs
 
-import { 
-  ERROR_CODES, 
-  createDataResponse, 
-  createApiErrorResponse, 
-  exceptionToApiErrorResponse 
+import {
+  createDataResponse,
+  createApiErrorResponse,
+  exceptionToApiErrorResponse
 } from './types.js';
+import { ERROR_CODES } from './shared/errorCodes.js';
 import { createLogger } from './logger.js';
 import {
   getContentScriptStatus,

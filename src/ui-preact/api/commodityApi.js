@@ -4,8 +4,9 @@
  * Uses background handlers via message passing
  */
 
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { createLogger, generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 const logger = createLogger('CommodityAPI');
 
@@ -20,8 +21,7 @@ export async function getGoldPrices(goldType = null) {
   try {
     logger.info('Fetching gold prices', { correlationId, goldType });
     
-    const response = await chrome.runtime.sendMessage({
-      ...createMessage(MESSAGE_TYPES.COMMODITY_GET_GOLD_PRICES),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.COMMODITY_GET_GOLD_PRICES, {
       correlationId,
       data: { goldType }
     });
@@ -69,8 +69,7 @@ export async function getCryptoPrices(symbols) {
   try {
     logger.info('Fetching crypto prices', { correlationId, symbols });
     
-    const response = await chrome.runtime.sendMessage({
-      ...createMessage(MESSAGE_TYPES.COMMODITY_GET_CRYPTO_PRICES),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.COMMODITY_GET_CRYPTO_PRICES, {
       correlationId,
       data: { symbols }
     });
@@ -121,8 +120,7 @@ export async function updateAssetPrices() {
   try {
     logger.info('Updating commodity asset prices', { correlationId });
 
-    const response = await chrome.runtime.sendMessage({
-      ...createMessage(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES, {
       correlationId
     });
 

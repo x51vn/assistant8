@@ -2,13 +2,13 @@
  * Prompt Improvement API – UI ↔ Background communication layer
  *
  * Routes all prompt-improvement operations (runs, lessons, evaluator, inject, purge)
- * through chrome.runtime.sendMessage to background handlers.
+ * through runtimeGateway to background handlers.
  *
  * Ref: docs/PROMPT_IMPROVEMENT_PLAN.md
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,13 +28,7 @@ function extractError(response) {
 
 async function send(type, data = {}) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      data,
-    });
+    const response = await sendRuntimeMessage(type, { data });
     const error = extractError(response);
     if (error) return { ...response, _error: error };
     return { ...response, _error: null };

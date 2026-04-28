@@ -6,8 +6,9 @@
 
 import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { formatCurrency } from '../utils/formatters.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 /**
  * Date range options
@@ -68,9 +69,9 @@ export default function AssetHistoryChart({ userId }) {
     setError(null);
 
     try {
-      const response = await chrome.runtime.sendMessage(
-        createMessage(MESSAGE_TYPES.ASSET_HISTORY_GET, { data: { range } })
-      );
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.ASSET_HISTORY_GET, {
+        data: { range },
+      });
 
       if (response?.error) {
         throw new Error(response.error);

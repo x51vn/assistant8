@@ -47,8 +47,12 @@ Các pages chính:
   - CRUD errors
   - Mark resolved, notes
 
-- `EnglishPage.jsx`
-  - Get/Add/Delete records (topic + prompt) gắn với chat_id
+- `WritingPage.jsx`
+  - Email/social/summarize/rewrite/translate/outline workflows
+  - English learning prompt workflow through writing templates
+
+- `JournalPage.jsx`
+  - Trade journal CRUD, checklist, metrics, watchlist prefill
 
 - `SettingsPage.jsx`
   - Get/Update/Delete settings (Supabase JSONB)
@@ -56,7 +60,8 @@ Các pages chính:
 
 ## 4) UI ↔ Background integration
 
-- UI gọi background qua `chrome.runtime.sendMessage(createMessage(MESSAGE_TYPES.X, { data }))`.
+- Migrated UI API/settings/assets modules call background through `sendRuntimeMessage()`.
+- A small explicit allowlist still uses direct `chrome.runtime.sendMessage()` for legacy callback-style flows.
 - Response payload được spread trực tiếp (không có `response.data`).
 
 ## 5) Styling

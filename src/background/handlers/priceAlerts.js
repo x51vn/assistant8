@@ -22,6 +22,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('PriceAlerts');
 
@@ -33,7 +34,7 @@ const PLAN_LIMITS = { free: 3, pro: 20, enterprise: Infinity };
 // ============================================================
 // ALERT_LIST
 // ============================================================
-registerHandler('ALERT_LIST', async (message) => {
+registerHandler(MESSAGE_TYPES.ALERT_LIST, async (message) => {
   const correlationId = message.correlationId;
   try {
     const userId = await requireAuth(message);
@@ -47,25 +48,25 @@ registerHandler('ALERT_LIST', async (message) => {
       return data || [];
     }, { operationName: 'alertList', correlationId });
 
-    return createResponse(message, 'ALERT_DATA', { success: true, items });
+    return createResponse(message, MESSAGE_TYPES.ALERT_DATA, { success: true, items });
   } catch (err) {
     logger.error('ALERT_LIST failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'ALERT_LIST_ERROR', err?.message || 'Lấy danh sách cảnh báo thất bại');
+    return createErrorResponse(message, ERROR_CODES.ALERT_LIST_ERROR, err?.message || 'Lấy danh sách cảnh báo thất bại');
   }
 });
 
 // ============================================================
 // ALERT_CREATE
 // ============================================================
-registerHandler('ALERT_CREATE', async (message) => {
+registerHandler(MESSAGE_TYPES.ALERT_CREATE, async (message) => {
   const correlationId = message.correlationId;
   const { symbol, alert_type, target_value, note } = message.data || message;
 
   if (!symbol || !alert_type || target_value == null) {
-    return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu thông tin: symbol, alert_type, target_value');
+    return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu thông tin: symbol, alert_type, target_value');
   }
   if (!['above', 'below', 'change_pct'].includes(alert_type)) {
-    return createErrorResponse(message, 'VALIDATION_ERROR', 'alert_type phải là above, below hoặc change_pct');
+    return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'alert_type phải là above, below hoặc change_pct');
   }
 
   try {
@@ -90,7 +91,7 @@ registerHandler('ALERT_CREATE', async (message) => {
     const limit = PLAN_LIMITS[planId] ?? PLAN_LIMITS.free;
 
     if ((count || 0) >= limit) {
-      return createErrorResponse(message, 'PLAN_LIMIT', `Gói ${planId} giới hạn ${limit} cảnh báo đang hoạt động. Nâng cấp để thêm.`);
+      return createErrorResponse(message, ERROR_CODES.PLAN_LIMIT, `Gói ${planId} giới hạn ${limit} cảnh báo đang hoạt động. Nâng cấp để thêm.`);
     }
 
     const item = await supabaseWithRetry(async () => {
@@ -110,20 +111,20 @@ registerHandler('ALERT_CREATE', async (message) => {
     }, { operationName: 'alertCreate', correlationId });
 
     logger.info('Alert created', { symbol, alert_type, target_value, correlationId });
-    return createResponse(message, 'ALERT_CREATED', { success: true, item });
+    return createResponse(message, MESSAGE_TYPES.ALERT_CREATED, { success: true, item });
   } catch (err) {
     logger.error('ALERT_CREATE failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'ALERT_CREATE_ERROR', err?.message || 'Tạo cảnh báo thất bại');
+    return createErrorResponse(message, ERROR_CODES.ALERT_CREATE_ERROR, err?.message || 'Tạo cảnh báo thất bại');
   }
 });
 
 // ============================================================
 // ALERT_DELETE
 // ============================================================
-registerHandler('ALERT_DELETE', async (message) => {
+registerHandler(MESSAGE_TYPES.ALERT_DELETE, async (message) => {
   const correlationId = message.correlationId;
   const { id } = message.data || message;
-  if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
+  if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id');
 
   try {
     const userId = await requireAuth(message);
@@ -136,21 +137,21 @@ registerHandler('ALERT_DELETE', async (message) => {
       if (error) throw error;
     }, { operationName: 'alertDelete', correlationId });
 
-    return createResponse(message, 'ALERT_DELETED', { success: true, id });
+    return createResponse(message, MESSAGE_TYPES.ALERT_DELETED, { success: true, id });
   } catch (err) {
     logger.error('ALERT_DELETE failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'ALERT_DELETE_ERROR', err?.message || 'Xóa cảnh báo thất bại');
+    return createErrorResponse(message, ERROR_CODES.ALERT_DELETE_ERROR, err?.message || 'Xóa cảnh báo thất bại');
   }
 });
 
 // ============================================================
 // ALERT_TOGGLE (enable/disable)
 // ============================================================
-registerHandler('ALERT_TOGGLE', async (message) => {
+registerHandler(MESSAGE_TYPES.ALERT_TOGGLE, async (message) => {
   const correlationId = message.correlationId;
   const { id, enabled } = message.data || message;
   if (!id || enabled === undefined) {
-    return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id hoặc enabled');
+    return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id hoặc enabled');
   }
 
   try {
@@ -167,10 +168,10 @@ registerHandler('ALERT_TOGGLE', async (message) => {
       return data;
     }, { operationName: 'alertToggle', correlationId });
 
-    return createResponse(message, 'ALERT_TOGGLED', { success: true, item });
+    return createResponse(message, MESSAGE_TYPES.ALERT_TOGGLED, { success: true, item });
   } catch (err) {
     logger.error('ALERT_TOGGLE failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'ALERT_TOGGLE_ERROR', err?.message || 'Cập nhật cảnh báo thất bại');
+    return createErrorResponse(message, ERROR_CODES.ALERT_TOGGLE_ERROR, err?.message || 'Cập nhật cảnh báo thất bại');
   }
 });
 

@@ -16,11 +16,11 @@
 
 import { h } from 'preact';
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { setCurrentPage } from '../state/navigationState.js';
 import { ASSET_TYPE_COLORS as TYPE_COLORS, ASSET_TYPE_LABELS as TYPE_LABELS } from '../utils/assetTypes.js';
 import { getJournalSummary } from '../api/journalApi.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
@@ -56,18 +56,9 @@ function getGreeting() {
 
 async function fetchDashboardData() {
   const [portfolioRes, assetsRes, historyRes] = await Promise.allSettled([
-    chrome.runtime.sendMessage({
-      v: 1, type: MESSAGE_TYPES.PORTFOLIO_GET,
-      correlationId: generateCorrelationId(), timestamp: Date.now()
-    }),
-    chrome.runtime.sendMessage(
-      createMessage(MESSAGE_TYPES.ASSETS_GET, { data: { includeInactive: false } })
-    ),
-    chrome.runtime.sendMessage({
-      v: 1, type: MESSAGE_TYPES.HISTORY_GET_ALL,
-      correlationId: generateCorrelationId(), timestamp: Date.now(),
-      data: { limit: 5 }
-    }),
+    sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_GET),
+    sendRuntimeMessage(MESSAGE_TYPES.ASSETS_GET, { data: { includeInactive: false } }),
+    sendRuntimeMessage(MESSAGE_TYPES.HISTORY_GET_ALL, { data: { limit: 5 } }),
   ]);
 
   return {

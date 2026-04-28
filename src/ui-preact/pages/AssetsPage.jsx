@@ -6,12 +6,12 @@
 
 import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import AssetCard from '../components/AssetCard.jsx';
 import AssetModal from '../components/AssetModal.jsx';
 import NetWorthSummary from '../components/NetWorthSummary.jsx';
 import { updateAssetPrices } from '../api/commodityApi.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 /**
  * Asset type filter options with Font Awesome icons
@@ -75,9 +75,9 @@ export default function AssetsPage() {
     setError(null);
 
     try {
-      const response = await chrome.runtime.sendMessage(
-        createMessage(MESSAGE_TYPES.ASSETS_GET, { data: { includeInactive: false } })
-      );
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.ASSETS_GET, {
+        data: { includeInactive: false },
+      });
 
       if (response.success) {
         setAssets(response.items || []);
@@ -154,9 +154,9 @@ export default function AssetsPage() {
     if (!deleteId) return;
 
     try {
-      const response = await chrome.runtime.sendMessage(
-        createMessage(MESSAGE_TYPES.ASSET_DELETE, { data: { id: deleteId } })
-      );
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.ASSET_DELETE, {
+        data: { id: deleteId },
+      });
 
       if (response.success) {
         setAssets(prev => prev.filter(a => a.id !== deleteId));
@@ -185,9 +185,7 @@ export default function AssetsPage() {
         ? { id: editingAsset.id, ...assetData }
         : assetData;
 
-      const response = await chrome.runtime.sendMessage(
-        createMessage(messageType, { data })
-      );
+      const response = await sendRuntimeMessage(messageType, { data });
 
       if (response.success) {
         if (isEdit) {

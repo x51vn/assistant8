@@ -19,6 +19,7 @@ import { fetchStockPricesWithRetry, classifyPricingError } from './portfolioPric
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { generateCorrelationId } from '../../logger.js';
 import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 // Polling state signals
 export const lastUpdateTime = signal(null);
@@ -121,11 +122,8 @@ export async function updatePricesNow() {
     });
 
     if (Object.keys(priceUpdates).length > 0) {
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES,
+      sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES, {
         correlationId: generateCorrelationId(),
-        timestamp: Date.now(),
         data: { prices: priceUpdates }
       }).catch(err => {
         console.warn('[watchlistPriceUpdater] Failed to persist prices to DB:', err);

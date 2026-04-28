@@ -12,7 +12,7 @@
 
 import { createLogger } from '../logger.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse as createMsgError } from '../shared/messageSchema.js';
-import { ERROR_CODES } from '../types.js';
+import { ERROR_CODES } from '../shared/errorCodes.js';
 import { validateHeader, validateRequest } from '../shared/contracts/ValidatorEngine.js';
 
 const logger = createLogger('MessageRouter');

@@ -15,9 +15,18 @@ describe('navigationConfig', () => {
     }
   });
 
-  it('contains exactly five primary tabs', () => {
-    const primaryCount = NAVIGATION_PAGES.filter((p) => p.primary).length;
-    expect(primaryCount).toBe(5);
+  it('contains the intended primary tabs', () => {
+    const primaryIds = NAVIGATION_PAGES
+      .filter((p) => p.primary)
+      .map((p) => p.id);
+
+    expect(primaryIds).toEqual([
+      'dashboard',
+      'portfolio',
+      'market',
+      'watchlist',
+      'assets',
+      'journal',
+    ]);
   });
 });
-

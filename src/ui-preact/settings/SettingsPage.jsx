@@ -19,7 +19,6 @@ import { ChangePasswordSection } from '../components/auth/ChangePasswordSection.
 import { DeleteAccountSection } from '../components/auth/DeleteAccountSection.jsx';
 import { SubscriptionPage } from '../components/billing/SubscriptionPage.jsx';
 import { ConsentDialog, useConsentGate } from '../components/ConsentDialog.jsx';
-import { generateCorrelationId } from '../../logger.js';
 import { ThemeSelector } from '../context/ThemeContext.jsx';
 import { LanguageSelector } from '../hooks/LanguageSelector.jsx';
 import { useOnboardingGate } from '../components/OnboardingWizard.jsx';
@@ -33,9 +32,10 @@ import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.j
 import { useAuth } from '../hooks/useAuth.js';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { clearTemplateCache } from '../api/writingApi.js';
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { isSaving, showStatus, allPrompts } from '../state/settingsState.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -46,7 +46,7 @@ export function SettingsPage() {
   // Load subscription plan for feature gating
   useEffect(() => {
     if (!user) return;
-    chrome.runtime.sendMessage(createMessage('SUBSCRIPTION_GET'))
+    sendRuntimeMessage(MESSAGE_TYPES.SUBSCRIPTION_GET)
       .then(res => { if (res?.subscription?.plan_id) setPlanId(res.subscription.plan_id); })
       .catch(() => {});
   }, [user]);
@@ -178,12 +178,7 @@ export function SettingsPage() {
   const handleDataExport = async () => {
     setGlobalLoading(true, 'Đang xuất dữ liệu...');
     try {
-      const response = await chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.DATA_EXPORT_REQUEST,
-        correlationId: generateCorrelationId(),
-        timestamp: Date.now()
-      });
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.DATA_EXPORT_REQUEST);
       if (!response?.success) throw new Error(response?.message || 'Export thất bại');
       // Trigger JSON download
       const blob = new Blob([JSON.stringify(response.exportData, null, 2)], { type: 'application/json' });

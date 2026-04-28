@@ -15,7 +15,7 @@
 import { registerHandler } from '../../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../../shared/messageSchema.js';
 import { createLogger } from '../../../logger.js';
-import { ERROR_CODES } from '../../../types.js';
+import { ERROR_CODES } from '../../../shared/errorCodes.js';
 import * as ChatGPTSession from '../../../chatgptSession.js';
 
 const logger = createLogger('Providers/ChatGPT');

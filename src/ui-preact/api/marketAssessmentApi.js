@@ -4,7 +4,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 // ─── Helpers ───
 
@@ -21,13 +21,7 @@ function extractError(response) {
 }
 
 async function sendMessage(type, data = {}) {
-  const response = await chrome.runtime.sendMessage({
-    v: 1,
-    type,
-    data,
-    correlationId: generateCorrelationId(),
-    timestamp: Date.now()
-  });
+  const response = await sendRuntimeMessage(type, { data });
   const err = extractError(response);
   if (err) return { success: false, error: err, ...response };
   return response;

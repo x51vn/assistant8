@@ -275,6 +275,9 @@ export const MESSAGE_TYPES = {
   WATCHLIST_AI_ENRICH_CANCELLED: 'WATCHLIST_AI_ENRICH_CANCELLED', // Background → UI: enrichment cancelled
   WATCHLIST_AI_ENRICH_DONE: 'WATCHLIST_AI_ENRICH_DONE',         // Background → UI: run completed
   WATCHLIST_AI_ENRICH_RESET: 'WATCHLIST_AI_ENRICH_RESET',       // UI → Background: force reset stuck state
+  WATCHLIST_AI_ENRICH_RESET_DONE: 'WATCHLIST_AI_ENRICH_RESET_DONE', // Background → UI: queue reset complete
+  WATCHLIST_ENRICH_SYMBOL: 'WATCHLIST_ENRICH_SYMBOL',           // Legacy UI → Background alias
+  WATCHLIST_ENRICHED: 'WATCHLIST_ENRICHED',                     // Legacy Background → UI alias
 
   // Unified Prompt Queue (p-queue based, concurrency=1)
   PROMPT_QUEUE_STATUS: 'PROMPT_QUEUE_STATUS',                   // Background → UI: generic queue job status update

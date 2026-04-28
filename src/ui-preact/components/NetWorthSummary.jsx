@@ -6,9 +6,10 @@
 
 import { useState, useEffect } from 'preact/hooks';
 import { showLoading, hideLoading } from '../state/appState.js';
-import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
 import { formatCurrency, formatPercent } from '../utils/formatters.js';
 import { ASSET_TYPE_CONFIG } from '../utils/assetTypes.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 /**
  * NetWorthSummary component
  * @param {Object} props
@@ -35,9 +36,7 @@ export default function NetWorthSummary({ onRefresh }) {
     setError(null);
 
     try {
-      const response = await chrome.runtime.sendMessage(
-        createMessage(MESSAGE_TYPES.NET_WORTH_GET)
-      );
+      const response = await sendRuntimeMessage(MESSAGE_TYPES.NET_WORTH_GET);
 
       if (response?.error || response?.errorCode) {
         throw new Error(response.errorMessage || response.error || 'Lỗi không xác định');

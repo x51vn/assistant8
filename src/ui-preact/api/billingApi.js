@@ -2,14 +2,14 @@
  * Billing API - Background communication layer
  * XST-758, XST-759, XST-760, XST-761, XST-762
  *
- * UI → chrome.runtime.sendMessage → background billing handler → Supabase/Stripe
+ * UI → runtimeGateway → background billing handler → Supabase/Stripe
  *
  * Note: createResponse() spreads payload directly.
  * Access response.subscription, response.plans, etc. (NOT response.data.xxx)
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 // ============================================================================
 // SUBSCRIPTION
@@ -21,12 +21,7 @@ import { generateCorrelationId } from '../../logger.js';
  */
 export async function getSubscription() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUBSCRIPTION_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUBSCRIPTION_GET);
 
     if (response.errorCode || response.error) {
       return { success: false, error: response.errorMessage || 'Không thể tải thông tin gói.' };
@@ -49,12 +44,7 @@ export async function getSubscription() {
  */
 export async function getPlans() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PLANS_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PLANS_GET);
 
     if (response.errorCode || response.error) {
       return { success: false, plans: [], error: response.errorMessage };
@@ -75,11 +65,7 @@ export async function getPlans() {
  */
 export async function createCheckoutSession(planId, interval = 'monthly') {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUBSCRIPTION_CREATE_CHECKOUT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUBSCRIPTION_CREATE_CHECKOUT, {
       data: { planId, interval }
     });
 
@@ -100,12 +86,7 @@ export async function createCheckoutSession(planId, interval = 'monthly') {
  */
 export async function createPortalSession() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUBSCRIPTION_CREATE_PORTAL,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUBSCRIPTION_CREATE_PORTAL);
 
     if (response.errorCode || response.error) {
       return { success: false, portalUrl: null, error: response.errorMessage || 'Không thể mở trang quản lý.' };
@@ -129,11 +110,7 @@ export async function createPortalSession() {
  */
 export async function checkUsage(feature) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.USAGE_CHECK,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.USAGE_CHECK, {
       data: { feature }
     });
 
@@ -159,11 +136,7 @@ export async function checkUsage(feature) {
  */
 export async function incrementUsage(feature, amount = 1) {
   try {
-    await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.USAGE_INCREMENT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    await sendRuntimeMessage(MESSAGE_TYPES.USAGE_INCREMENT, {
       data: { feature, amount }
     });
   } catch (error) {
@@ -177,12 +150,7 @@ export async function incrementUsage(feature, amount = 1) {
  */
 export async function getUsageStats() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.USAGE_GET_STATS,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.USAGE_GET_STATS);
 
     if (response.errorCode || response.error) {
       return { success: false, stats: {}, error: response.errorMessage };

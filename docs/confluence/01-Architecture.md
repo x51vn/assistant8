@@ -10,7 +10,7 @@
 
 - **Side Panel UI (Preact)**
   - UI Auth-gated: hiển thị Login nếu chưa đăng nhập
-  - Các page: Portfolio / Assets / History / Errors / English / Settings
+  - Các page: Dashboard / Portfolio / Market / Watchlist / Assets / Journal / History / Errors / Writing / Jobs / Alerts / Settings
   - Không trực tiếp gọi Supabase; tất cả qua background handlers
 
 - **Content Script (`https://chatgpt.com/*`)**
@@ -60,9 +60,9 @@ Background dùng message router (`src/background/messageRouter.js`) + `registerH
   - Session token persistence qua adapter dùng `chrome.storage.local` (KHÔNG dùng `localStorage` trong SW)
 
 - Postgres tables với `user_id` và RLS:
-  - portfolio, chat_history, errors, settings, prompts, categories, runs
+  - portfolio, watchlist, trade_journal, checklist_templates, chat_history, errors, settings, prompts, categories, runs
   - assets, asset_history, asset_summaries
-  - english (tạo bởi migration 006)
+  - english (legacy records; English learning workflow hiện nằm trong Writing Assistant)
 
 ## 6) Observability
 

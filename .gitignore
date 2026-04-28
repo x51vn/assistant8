@@ -38,6 +38,8 @@ Thumbs.db
 # Testing
 .coverage/
 test-results/
+tests/e2e/reports/
+test-user-data-*/
 
 # Build output
 build/

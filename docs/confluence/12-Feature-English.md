@@ -1,9 +1,10 @@
-# Feature: English Learning
+# Legacy Feature: English Learning
 
 ## 1) Mục tiêu
 
-- Hỗ trợ user chạy các prompt học tiếng Anh theo topic.
-- Lưu lại record đã tạo để quản lý và tái sử dụng.
+- Module này là legacy path cho record học tiếng Anh cũ.
+- Workflow học tiếng Anh hiện tại nằm trong `WritingPage.jsx` qua Writing Assistant templates (`english_learning`).
+- Không còn là primary navigation page.
 
 ## 2) Data model
 
@@ -43,9 +44,14 @@ Tất cả ops:
   - `addEnglish(chatId, topic, prompt)`
   - `deleteEnglish(id)`
 
-English module cũng sử dụng prompt sending flow:
+Current primary UI:
+- `src/ui-preact/pages/WritingPage.jsx`
+- `src/ui-preact/api/writingApi.js`
+- `WRITING_TEMPLATE_KEYS.ENGLISH_LEARNING`
+
+Legacy English module từng sử dụng prompt sending flow:
 - `sendPromptToChatGPT(prompt, options)` dùng `MESSAGE_TYPES.SEND_PROMPT` (payload-based).
-- `getChatGPTOutput()` (polling) dùng `MESSAGE_TYPES.CHATGPT_GET_OUTPUT` để lấy response.
+- `getChatGPTOutput()` polling qua `MESSAGE_TYPES.CHATGPT_GET_OUTPUT`; không phải path khuyến nghị cho provider routing mới.
 
 ## 5) Privacy
 

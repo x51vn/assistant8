@@ -9,7 +9,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 /**
  * Check authentication status
@@ -17,12 +17,7 @@ import { generateCorrelationId } from '../../logger.js';
  */
 export async function checkAuthStatus() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_CHECK,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_CHECK);
 
     const loadError = response.error?.message || response.errorMessage;
     if (response.error || response.errorCode || loadError) {
@@ -49,11 +44,7 @@ export async function checkAuthStatus() {
  */
 export async function login(email, password) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_LOGIN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_LOGIN, {
       data: { email, password }
     });
 
@@ -83,12 +74,7 @@ export async function login(email, password) {
  */
 export async function logout() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_LOGOUT);
 
     const logoutError = response.error?.message || response.errorMessage;
     if (response.error || response.errorCode || logoutError) {
@@ -145,11 +131,7 @@ export function listenAuthStateChanges(callback) {
  */
 export async function changePassword(currentPassword, newPassword) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_CHANGE_PASSWORD,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_CHANGE_PASSWORD, {
       data: { currentPassword, newPassword }
     });
 
@@ -177,11 +159,7 @@ export async function changePassword(currentPassword, newPassword) {
  */
 export async function resetPasswordRequest(email) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_RESET_PASSWORD_REQUEST,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_RESET_PASSWORD_REQUEST, {
       data: { email }
     });
 
@@ -211,11 +189,7 @@ export async function resetPasswordRequest(email) {
  */
 export async function register(email, password, name) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_REGISTER,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_REGISTER, {
       data: { email, password, name }
     });
 
@@ -243,11 +217,7 @@ export async function register(email, password, name) {
  */
 export async function resendConfirmation(email) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_RESEND_CONFIRMATION,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_RESEND_CONFIRMATION, {
       data: { email }
     });
 
@@ -274,12 +244,7 @@ export async function resendConfirmation(email) {
  */
 export async function signInWithGoogle() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SUPABASE_AUTH_GOOGLE_LOGIN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_GOOGLE_LOGIN);
 
     const error = response.error?.message || response.errorMessage;
     if (response.error || response.errorCode || error) {
@@ -306,11 +271,7 @@ export async function signInWithGoogle() {
  */
 export async function deleteAccount(confirmText) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.ACCOUNT_DELETE_REQUEST,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.ACCOUNT_DELETE_REQUEST, {
       data: { confirmText }
     });
 

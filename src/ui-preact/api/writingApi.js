@@ -6,8 +6,8 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
 import { renderTemplate } from '../../shared/templateRenderer.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 import {
   DEFAULT_WRITING_TEMPLATES,
   WRITING_TEMPLATE_KEYS,
@@ -149,11 +149,7 @@ Make it engaging and practical for English learners.`;
  */
 async function fetchWritingTemplates() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PROMPTS_GET_BY_TYPE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PROMPTS_GET_BY_TYPE, {
       data: { promptType: 'writing', preferCache: true }
     });
 
@@ -310,11 +306,7 @@ export async function sendWritingJob(jobType, inputs, options = {}) {
       }
     };
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SEND_PROMPT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SEND_PROMPT, {
       payload: {
         prompt,
         options: {
@@ -366,11 +358,7 @@ async function sendWritingJobWithFallback(jobType, inputs, options, fallbackTemp
       }
     };
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SEND_PROMPT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SEND_PROMPT, {
       payload: {
         prompt,
         options: {
@@ -452,12 +440,7 @@ export async function openWritingChat(chatId) {
 export async function fetchWritingHistory(limit = 50) {
   try {
     // Fetch full chat history and filter by module
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.HISTORY_GET_ALL,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.HISTORY_GET_ALL);
 
     const error = extractError(response);
     if (error) {
@@ -589,11 +572,7 @@ export async function autoSelectTopic() {
     const pickPrompt = `You are an assistant that picks the single most popular trending topic this week suitable for an English learning exercise. Reply with exactly one short topic phrase (max 6 words) and nothing else.`;
 
     // Send prompt via SEND_PROMPT (routes to the active provider via XST-816 fix)
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.SEND_PROMPT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SEND_PROMPT, {
       payload: {
         prompt: pickPrompt,
         options: {

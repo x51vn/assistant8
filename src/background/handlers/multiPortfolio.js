@@ -24,6 +24,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('MultiPortfolio');
 
@@ -62,7 +63,7 @@ async function ensureDefaultPortfolio(userId) {
 // ============================================================
 // PORTFOLIO_LIST_PORTFOLIOS
 // ============================================================
-registerHandler('PORTFOLIO_LIST_PORTFOLIOS', async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_LIST_PORTFOLIOS, async (message) => {
   const correlationId = message.correlationId;
   try {
     const userId = await requireAuth(message);
@@ -78,21 +79,21 @@ registerHandler('PORTFOLIO_LIST_PORTFOLIOS', async (message) => {
       return data || [];
     }, { operationName: 'listPortfolios', correlationId });
 
-    return createResponse(message, 'PORTFOLIO_PORTFOLIOS_DATA', { success: true, items });
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PORTFOLIOS_DATA, { success: true, items });
   } catch (err) {
     logger.error('PORTFOLIO_LIST_PORTFOLIOS failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'PORTFOLIO_LIST_ERROR', err?.message || 'Lấy danh sách portfolio thất bại');
+    return createErrorResponse(message, ERROR_CODES.PORTFOLIO_LIST_ERROR, err?.message || 'Lấy danh sách portfolio thất bại');
   }
 });
 
 // ============================================================
 // PORTFOLIO_CREATE_PORTFOLIO
 // ============================================================
-registerHandler('PORTFOLIO_CREATE_PORTFOLIO', async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_CREATE_PORTFOLIO, async (message) => {
   const correlationId = message.correlationId;
   const { name, description } = message.data || message;
 
-  if (!name?.trim()) return createErrorResponse(message, 'VALIDATION_ERROR', 'Tên portfolio là bắt buộc');
+  if (!name?.trim()) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Tên portfolio là bắt buộc');
 
   try {
     const userId = await requireAuth(message);
@@ -105,7 +106,7 @@ registerHandler('PORTFOLIO_CREATE_PORTFOLIO', async (message) => {
 
     if ((count || 0) >= limit) {
       return createErrorResponse(
-        message, 'PLAN_LIMIT',
+        message, ERROR_CODES.PLAN_LIMIT,
         `Gói ${planId} giới hạn ${limit} portfolio. Nâng cấp để tạo thêm.`
       );
     }
@@ -121,20 +122,20 @@ registerHandler('PORTFOLIO_CREATE_PORTFOLIO', async (message) => {
     }, { operationName: 'createPortfolio', correlationId });
 
     logger.info('Portfolio created', { name, correlationId });
-    return createResponse(message, 'PORTFOLIO_PORTFOLIO_CREATED', { success: true, item });
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PORTFOLIO_CREATED, { success: true, item });
   } catch (err) {
     logger.error('PORTFOLIO_CREATE_PORTFOLIO failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'PORTFOLIO_CREATE_ERROR', err?.message || 'Tạo portfolio thất bại');
+    return createErrorResponse(message, ERROR_CODES.PORTFOLIO_CREATE_ERROR, err?.message || 'Tạo portfolio thất bại');
   }
 });
 
 // ============================================================
 // PORTFOLIO_UPDATE_PORTFOLIO
 // ============================================================
-registerHandler('PORTFOLIO_UPDATE_PORTFOLIO', async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE_PORTFOLIO, async (message) => {
   const correlationId = message.correlationId;
   const { id, name, description } = message.data || message;
-  if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
+  if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id');
 
   try {
     const userId = await requireAuth(message);
@@ -154,20 +155,20 @@ registerHandler('PORTFOLIO_UPDATE_PORTFOLIO', async (message) => {
       return data;
     }, { operationName: 'updatePortfolio', correlationId });
 
-    return createResponse(message, 'PORTFOLIO_PORTFOLIO_UPDATED', { success: true, item });
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PORTFOLIO_UPDATED, { success: true, item });
   } catch (err) {
     logger.error('PORTFOLIO_UPDATE_PORTFOLIO failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'PORTFOLIO_UPDATE_ERROR', err?.message || 'Cập nhật portfolio thất bại');
+    return createErrorResponse(message, ERROR_CODES.PORTFOLIO_UPDATE_ERROR, err?.message || 'Cập nhật portfolio thất bại');
   }
 });
 
 // ============================================================
 // PORTFOLIO_DELETE_PORTFOLIO
 // ============================================================
-registerHandler('PORTFOLIO_DELETE_PORTFOLIO', async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_DELETE_PORTFOLIO, async (message) => {
   const correlationId = message.correlationId;
   const { id } = message.data || message;
-  if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
+  if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id');
 
   try {
     const userId = await requireAuth(message);
@@ -180,8 +181,8 @@ registerHandler('PORTFOLIO_DELETE_PORTFOLIO', async (message) => {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (!p) return createErrorResponse(message, 'NOT_FOUND', 'Portfolio không tìm thấy');
-    if (p.is_default) return createErrorResponse(message, 'VALIDATION_ERROR', 'Không thể xóa portfolio mặc định');
+    if (!p) return createErrorResponse(message, ERROR_CODES.NOT_FOUND, 'Portfolio không tìm thấy');
+    if (p.is_default) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Không thể xóa portfolio mặc định');
 
     // Delete all stocks in this portfolio first
     await supabase.from('portfolio').delete().eq('portfolio_id', id).eq('user_id', userId);
@@ -195,20 +196,20 @@ registerHandler('PORTFOLIO_DELETE_PORTFOLIO', async (message) => {
       if (error) throw error;
     }, { operationName: 'deletePortfolio', correlationId });
 
-    return createResponse(message, 'PORTFOLIO_PORTFOLIO_DELETED', { success: true, id });
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PORTFOLIO_DELETED, { success: true, id });
   } catch (err) {
     logger.error('PORTFOLIO_DELETE_PORTFOLIO failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'PORTFOLIO_DELETE_ERROR', err?.message || 'Xóa portfolio thất bại');
+    return createErrorResponse(message, ERROR_CODES.PORTFOLIO_DELETE_ERROR, err?.message || 'Xóa portfolio thất bại');
   }
 });
 
 // ============================================================
 // PORTFOLIO_SET_DEFAULT
 // ============================================================
-registerHandler('PORTFOLIO_SET_DEFAULT', async (message) => {
+registerHandler(MESSAGE_TYPES.PORTFOLIO_SET_DEFAULT, async (message) => {
   const correlationId = message.correlationId;
   const { id } = message.data || message;
-  if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
+  if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id');
 
   try {
     const userId = await requireAuth(message);
@@ -228,9 +229,9 @@ registerHandler('PORTFOLIO_SET_DEFAULT', async (message) => {
       return data;
     }, { operationName: 'setDefaultPortfolio', correlationId });
 
-    return createResponse(message, 'PORTFOLIO_DEFAULT_SET', { success: true, item });
+    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_DEFAULT_SET, { success: true, item });
   } catch (err) {
     logger.error('PORTFOLIO_SET_DEFAULT failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'PORTFOLIO_SET_DEFAULT_ERROR', err?.message || 'Đặt portfolio mặc định thất bại');
+    return createErrorResponse(message, ERROR_CODES.PORTFOLIO_SET_DEFAULT_ERROR, err?.message || 'Đặt portfolio mặc định thất bại');
   }
 });

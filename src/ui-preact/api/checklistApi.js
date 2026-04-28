@@ -6,7 +6,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 function extractError(response) {
   if (!response) return { code: 'NO_RESPONSE', message: 'Không nhận được phản hồi' };
@@ -16,9 +16,7 @@ function extractError(response) {
 }
 
 async function sendMsg(type, data = {}) {
-  return chrome.runtime.sendMessage({
-    v: 1, type, correlationId: generateCorrelationId(), timestamp: Date.now(), data,
-  });
+  return sendRuntimeMessage(type, { data });
 }
 
 /**

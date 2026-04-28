@@ -6,7 +6,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 /**
  * Map background response error to user-friendly message
@@ -38,11 +38,7 @@ function extractError(response) {
  */
 export async function fetchHistory(limit = 50) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.HISTORY_GET_ALL,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.HISTORY_GET_ALL, {
       data: { limit }
     });
 
@@ -86,11 +82,7 @@ export async function deleteHistory(id) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.HISTORY_DELETE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.HISTORY_DELETE, {
       data: { id }
     });
 
@@ -122,12 +114,7 @@ export async function deleteHistory(id) {
  */
 export async function clearAllHistory() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.HISTORY_CLEAR,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.HISTORY_CLEAR);
 
     const error = extractError(response);
     if (error) {

@@ -6,7 +6,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 /**
  * Map background response error to user-friendly message
@@ -56,12 +56,7 @@ function extractError(response) {
  */
 export async function fetchPortfolio() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PORTFOLIO_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_GET);
 
     const error = extractError(response);
     if (error) {
@@ -101,13 +96,7 @@ export async function addPortfolio(data) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PORTFOLIO_ADD,
-      data,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_ADD, { data });
 
     const error = extractError(response);
     if (error) {
@@ -147,12 +136,8 @@ export async function updatePortfolio(id, updates) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PORTFOLIO_UPDATE,
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_UPDATE, {
       data: { id, updates },
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
     });
 
     const error = extractError(response);
@@ -193,12 +178,8 @@ export async function deletePortfolio(id) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PORTFOLIO_REMOVE,
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_REMOVE, {
       data: { id },
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
     });
 
     const error = extractError(response);
@@ -230,12 +211,7 @@ export async function deletePortfolio(id) {
  */
 export async function updatePrices() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES);
 
     const error = extractError(response);
     if (error) {

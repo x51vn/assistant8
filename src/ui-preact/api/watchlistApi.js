@@ -6,7 +6,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 /**
  * Map background response error to user-friendly message
@@ -58,11 +58,7 @@ function extractError(response) {
  */
 export async function fetchWatchlist(page = 1, size = 20) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.XNEEWS_WATCHLIST_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, {
       data: {
         page,
         size
@@ -122,11 +118,7 @@ export async function toggleHighlight(symbol) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, {
       data: {
         symbol
       }
@@ -159,13 +151,7 @@ export async function toggleHighlight(symbol) {
  */
 export async function checkSupabaseAuth() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: 'SUPABASE_AUTH_CHECK',
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
-      data: {}
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.SUPABASE_AUTH_CHECK, { data: {} });
 
     return response.authenticated === true;
   } catch (error) {
@@ -194,11 +180,7 @@ export async function enrichWatchlistItem(symbol) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN, {
       data: { symbol }
     });
 
@@ -247,11 +229,7 @@ export async function enrichWatchlistBatch(symbols) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, {
       data: { symbols }
     });
 
@@ -287,11 +265,7 @@ export async function enrichWatchlistBatch(symbols) {
  */
 export async function cancelEnrichment(correlationId) {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL, {
       data: { correlationId }
     });
 
@@ -336,11 +310,7 @@ export async function addWatchlistItem(data) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, {
       data: {
         symbol: data.symbol,
         investment_thesis: data.investment_thesis || data.investmentThesis,
@@ -390,11 +360,7 @@ export async function updateWatchlistItem(symbol, updates) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, {
       data: {
         symbol,
         updates: {
@@ -445,11 +411,7 @@ export async function deleteWatchlistItem(symbol) {
       };
     }
 
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now(),
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, {
       data: {
         symbol
       }

@@ -5,7 +5,8 @@
  */
 
 import { createLogger } from '../logger.js';
-import { createDataResponse, createApiErrorResponse, ERROR_CODES } from '../types.js';
+import { createDataResponse, createApiErrorResponse } from '../types.js';
+import { ERROR_CODES } from '../shared/errorCodes.js';
 
 const logger = createLogger('Platform/Tabs');
 

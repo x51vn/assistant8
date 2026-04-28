@@ -79,6 +79,16 @@ function handleSupabaseError(message, error, operation) {
   return createErrorResponse(message, ERROR_CODES.SUPABASE_ERROR, getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR), { technicalError: error.message });
 }
 
+/**
+ * Check if error indicates missing table in Supabase schema cache.
+ * Typical code: PGRST205
+ */
+function isTableNotFoundError(error) {
+  return error?.code === 'PGRST205'
+    || error?.message?.includes('PGRST205')
+    || error?.message?.includes('Could not find the table');
+}
+
 // ============================================================================
 // JOURNAL CRUD HANDLERS
 // ============================================================================
@@ -471,6 +481,18 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_SUMMARY, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
+
+    if (isTableNotFoundError(error)) {
+      logger.warn('JOURNAL_GET_SUMMARY: trade_journal table not found, returning empty summary fallback');
+      return createResponse(message, MESSAGE_TYPES.JOURNAL_SUMMARY, {
+        success: true,
+        openCount: 0,
+        plannedCount: 0,
+        recentWinRate: null,
+        avgRMultiple: null,
+      });
+    }
+
     return handleSupabaseError(message, error, 'JOURNAL_GET_SUMMARY');
   }
 });

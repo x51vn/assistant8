@@ -18,11 +18,12 @@
 
 import { h } from 'preact';
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import { createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 /** Send a typed message to Background and return the response */
 async function msg(type, extra = {}) {
-  return chrome.runtime.sendMessage(createMessage(type, extra));
+  return sendRuntimeMessage(type, extra);
 }
 
 /** Provider display config */
@@ -73,7 +74,7 @@ export function LLMApiKeysSection() {
     setRevealed(false);
     setKeyInput('');
     try {
-      const res = await msg('SETTINGS_APIKEY_GET', { provider });
+      const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_GET, { provider });
       if (res?.success) {
         setHasKey(!!res.hasKey);
         setMaskedKey(res.apiKey ? maskKey(res.apiKey) : '');
@@ -102,7 +103,7 @@ export function LLMApiKeysSection() {
     setLoading(true);
     setStatus('');
     try {
-      const res = await msg('SETTINGS_APIKEY_SET', { provider: selectedProvider, apiKey: keyInput.trim() });
+      const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_SET, { provider: selectedProvider, apiKey: keyInput.trim() });
       if (res?.success) {
         setStatus('Đã lưu API key thành công!');
         setStatusType('success');
@@ -127,7 +128,7 @@ export function LLMApiKeysSection() {
     setLoading(true);
     setStatus('');
     try {
-      const res = await msg('SETTINGS_APIKEY_DELETE', { provider: selectedProvider });
+      const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_DELETE, { provider: selectedProvider });
       if (res?.success) {
         setStatus('Đã xóa API key');
         setStatusType('info');
@@ -151,7 +152,7 @@ export function LLMApiKeysSection() {
     setTestLoading(true);
     setStatus('');
     try {
-      const res = await msg('SETTINGS_APIKEY_HEALTHCHECK', { provider: selectedProvider });
+      const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_HEALTHCHECK, { provider: selectedProvider });
       if (res?.success) {
         setStatus(`✅ ${res.message || 'Kết nối thành công!'}`);
         setStatusType('success');
@@ -173,7 +174,7 @@ export function LLMApiKeysSection() {
       if (!confirm('Hiển thị API key? Đảm bảo không ai nhìn thấy màn hình của bạn.')) return;
       // Fetch full key
       try {
-        const res = await msg('SETTINGS_APIKEY_GET', { provider: selectedProvider });
+        const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_GET, { provider: selectedProvider });
         if (res?.success && res.apiKey) {
           setMaskedKey(res.apiKey);
           setRevealed(true);
@@ -194,7 +195,7 @@ export function LLMApiKeysSection() {
     setMigrateLoading(true);
     setStatus('');
     try {
-      const res = await msg('SETTINGS_APIKEY_MIGRATE');
+      const res = await msg(MESSAGE_TYPES.SETTINGS_APIKEY_MIGRATE);
       if (res?.success) {
         const migratedList = (res.migrated || []).join(', ');
         setStatus(`Di chuyển thành công: ${migratedList || 'không có key local'}`);

@@ -23,6 +23,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('APIKeys');
 
@@ -58,7 +59,7 @@ async function requireEnterprise(userId) {
 
   if (data?.plan_id !== 'enterprise') {
     throw Object.assign(new Error('Tính năng API Access chỉ dành cho gói Enterprise'), {
-      code: 'PLAN_LIMIT',
+      code: ERROR_CODES.PLAN_LIMIT,
     });
   }
 }
@@ -66,7 +67,7 @@ async function requireEnterprise(userId) {
 // ============================================================
 // API_KEY_LIST
 // ============================================================
-registerHandler('API_KEY_LIST', async (message) => {
+registerHandler(MESSAGE_TYPES.API_KEY_LIST, async (message) => {
   const correlationId = message.correlationId;
   try {
     const userId = await requireAuth(message);
@@ -82,9 +83,9 @@ registerHandler('API_KEY_LIST', async (message) => {
       return data || [];
     }, { operationName: 'apiKeyList', correlationId });
 
-    return createResponse(message, 'API_KEY_DATA', { success: true, items });
+    return createResponse(message, MESSAGE_TYPES.API_KEY_DATA, { success: true, items });
   } catch (err) {
-    const code = err?.code || 'API_KEY_LIST_ERROR';
+    const code = err?.code || ERROR_CODES.API_KEY_LIST_ERROR;
     return createErrorResponse(message, code, err?.message || 'Lấy danh sách API key thất bại');
   }
 });
@@ -92,7 +93,7 @@ registerHandler('API_KEY_LIST', async (message) => {
 // ============================================================
 // API_KEY_GENERATE
 // ============================================================
-registerHandler('API_KEY_GENERATE', async (message) => {
+registerHandler(MESSAGE_TYPES.API_KEY_GENERATE, async (message) => {
   const correlationId = message.correlationId;
   const { label = 'Default Key' } = message.data || message;
 
@@ -108,7 +109,7 @@ registerHandler('API_KEY_GENERATE', async (message) => {
       .eq('revoked', false);
 
     if ((count || 0) >= 5) {
-      return createErrorResponse(message, 'PLAN_LIMIT', 'Tối đa 5 API keys đang hoạt động. Hủy key cũ để tạo mới.');
+      return createErrorResponse(message, ERROR_CODES.PLAN_LIMIT, 'Tối đa 5 API keys đang hoạt động. Hủy key cũ để tạo mới.');
     }
 
     const rawKey = generateRawKey();
@@ -128,13 +129,13 @@ registerHandler('API_KEY_GENERATE', async (message) => {
     logger.info('API key generated', { prefix: keyPrefix, correlationId });
 
     // Return rawKey ONCE — user must copy it now
-    return createResponse(message, 'API_KEY_GENERATED', {
+    return createResponse(message, MESSAGE_TYPES.API_KEY_GENERATED, {
       success: true,
       rawKey,       // ⚠️ Only time this is returned — not stored in DB
       item,
     });
   } catch (err) {
-    const code = err?.code || 'API_KEY_GENERATE_ERROR';
+    const code = err?.code || ERROR_CODES.API_KEY_GENERATE_ERROR;
     return createErrorResponse(message, code, err?.message || 'Tạo API key thất bại');
   }
 });
@@ -142,10 +143,10 @@ registerHandler('API_KEY_GENERATE', async (message) => {
 // ============================================================
 // API_KEY_REVOKE
 // ============================================================
-registerHandler('API_KEY_REVOKE', async (message) => {
+registerHandler(MESSAGE_TYPES.API_KEY_REVOKE, async (message) => {
   const correlationId = message.correlationId;
   const { id } = message.data || message;
-  if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu id');
+  if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu id');
 
   try {
     const userId = await requireAuth(message);
@@ -160,9 +161,9 @@ registerHandler('API_KEY_REVOKE', async (message) => {
       if (error) throw error;
     }, { operationName: 'apiKeyRevoke', correlationId });
 
-    return createResponse(message, 'API_KEY_REVOKED', { success: true, id });
+    return createResponse(message, MESSAGE_TYPES.API_KEY_REVOKED, { success: true, id });
   } catch (err) {
-    const code = err?.code || 'API_KEY_REVOKE_ERROR';
+    const code = err?.code || ERROR_CODES.API_KEY_REVOKE_ERROR;
     return createErrorResponse(message, code, err?.message || 'Hủy API key thất bại');
   }
 });

@@ -151,6 +151,8 @@ function copyExtensionStatic() {
       await copyFile(path.resolve(staticDir, 'styles-settings.css'), path.resolve(outDir, 'styles-settings.css'));
       
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
+      await copyFile(path.resolve(staticDir, 'privacy-policy.html'), path.resolve(outDir, 'privacy-policy.html'));
+      await copyFile(path.resolve(staticDir, 'terms-of-service.html'), path.resolve(outDir, 'terms-of-service.html'));
 
       const imagesDir = path.resolve(staticDir, 'images');
       await copyDir(imagesDir, path.resolve(outDir, 'images'));

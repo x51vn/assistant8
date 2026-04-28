@@ -4,7 +4,7 @@
  */
 
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { generateCorrelationId } from '../../logger.js';
+import { sendRuntimeMessage } from './runtimeGateway.js';
 
 /**
  * Map background response error to user-friendly message
@@ -51,12 +51,7 @@ function extractError(response) {
  */
 export async function fetchMarketIndices() {
   try {
-    const response = await chrome.runtime.sendMessage({
-      v: 1,
-      type: MESSAGE_TYPES.MARKET_INDICES_GET,
-      correlationId: generateCorrelationId(),
-      timestamp: Date.now()
-    });
+    const response = await sendRuntimeMessage(MESSAGE_TYPES.MARKET_INDICES_GET);
 
     const error = extractError(response);
     if (error) {

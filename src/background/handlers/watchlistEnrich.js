@@ -28,6 +28,7 @@ import { persistPromptSafe } from './_persistPromptHelper.js';
 import { getFeatureFlag } from '../../shared/featureFlags.js';
 import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
 import { parseJsonResponse, isNoiseOnlyResponse, extractFinancialFieldsFromProse } from '../../shared/llm/parseJsonResponse.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 /** Rate-limit window: 1 AI analysis per symbol per hour */
 const AI_ANALYSIS_COOLDOWN_MS = 60 * 60 * 1000;
@@ -1108,7 +1109,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN, async (message) => {
 
   try {
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
-      return createErrorResponse(message, 'INVALID_INPUT', 'Mã cổ phiếu là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Mã cổ phiếu là bắt buộc');
     }
 
     const result = await enqueueBackgroundJob({
@@ -1128,7 +1129,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RUN, async (message) => {
     });
   } catch (error) {
     logger.error('Enqueue failed', { error: error.message, correlationId });
-    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
+    return createErrorResponse(message, ERROR_CODES.QUEUE_ERROR, error.message);
   }
 });
 
@@ -1145,7 +1146,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, async (message) => 
 
   try {
     if (!Array.isArray(symbols) || symbols.length === 0) {
-      return createErrorResponse(message, 'INVALID_INPUT', 'Danh sách mã cổ phiếu là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Danh sách mã cổ phiếu là bắt buộc');
     }
 
     // Sanitize & deduplicate
@@ -1156,7 +1157,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, async (message) => 
     )];
 
     if (cleanSymbols.length === 0) {
-      return createErrorResponse(message, 'INVALID_INPUT', 'Không có mã cổ phiếu hợp lệ');
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Không có mã cổ phiếu hợp lệ');
     }
 
     // Split into chunks of BATCH_SIZE
@@ -1190,7 +1191,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, async (message) => 
     });
   } catch (error) {
     logger.error('Batch enqueue failed', { error: error.message, correlationId });
-    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
+    return createErrorResponse(message, ERROR_CODES.QUEUE_ERROR, error.message);
   }
 });
 
@@ -1212,7 +1213,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL, async (message) => {
     });
   }
 
-  return createErrorResponse(message, 'NOT_FOUND', 'Không tìm thấy tác vụ để hủy');
+  return createErrorResponse(message, ERROR_CODES.NOT_FOUND, 'Không tìm thấy tác vụ để hủy');
 });
 
 /**
@@ -1220,7 +1221,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL, async (message) => {
  */
 registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RESET, async (message) => {
   await resetQueue();
-  return createResponse(message, 'WATCHLIST_AI_ENRICH_RESET_DONE', {
+  return createResponse(message, MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RESET_DONE, {
     success: true,
     message: 'Đã reset hàng đợi'
   });
@@ -1230,7 +1231,7 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_RESET, async (message) => {
  * WATCHLIST_ENRICH_SYMBOL — Legacy handler (backward compat)
  * Enqueues the job via unified queue and returns immediately with queue info
  */
-registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
+registerHandler(MESSAGE_TYPES.WATCHLIST_ENRICH_SYMBOL, async (message) => {
   const { correlationId } = message;
   const { symbol } = message.data || {};
 
@@ -1238,7 +1239,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
 
   try {
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
-      return createErrorResponse(message, 'INVALID_INPUT', 'Mã cổ phiếu là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Mã cổ phiếu là bắt buộc');
     }
 
     const result = await enqueueBackgroundJob({
@@ -1247,7 +1248,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
       processor: processEnrichmentJob
     });
 
-    return createResponse(message, 'WATCHLIST_ENRICHED', {
+    return createResponse(message, MESSAGE_TYPES.WATCHLIST_ENRICHED, {
       success: true,
       queued: true,
       correlationId: result.jobId,
@@ -1257,7 +1258,7 @@ registerHandler('WATCHLIST_ENRICH_SYMBOL', async (message) => {
     });
   } catch (error) {
     logger.error('Legacy enqueue failed', { error: error.message, correlationId });
-    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
+    return createErrorResponse(message, ERROR_CODES.QUEUE_ERROR, error.message);
   }
 });
 

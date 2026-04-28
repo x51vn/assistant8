@@ -11,10 +11,11 @@
 
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import { createMessage } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { sendRuntimeMessage } from '../api/runtimeGateway.js';
 
 async function msg(type, extra = {}) {
-  return chrome.runtime.sendMessage(createMessage(type, extra));
+  return sendRuntimeMessage(type, extra);
 }
 
 /** Login URLs for each provider */
@@ -32,7 +33,7 @@ export function LLMProviderSection() {
   const [error, setError]             = useState('');
 
   useEffect(() => {
-    msg('LLM_GET_PROVIDERS').then(res => {
+    msg(MESSAGE_TYPES.LLM_GET_PROVIDERS).then(res => {
       if (res?.success) {
         setProviders(res.providers || []);
         setActive(res.activeProvider || 'chatgpt');
@@ -45,7 +46,7 @@ export function LLMProviderSection() {
     setError('');
     setStatus('');
     try {
-      const res = await msg('LLM_SET_PROVIDER', { provider: active });
+      const res = await msg(MESSAGE_TYPES.LLM_SET_PROVIDER, { provider: active });
       if (res?.success) setStatus('✅ Đã lưu cấu hình LLM provider');
       else setError(res?.errorMessage || 'Lưu thất bại');
     } catch (err) {
@@ -57,7 +58,7 @@ export function LLMProviderSection() {
 
   async function handleTestStatus() {
     setStatus('Đang kiểm tra...');
-    const res = await msg('LLM_GET_STATUS', { provider: active });
+    const res = await msg(MESSAGE_TYPES.LLM_GET_STATUS, { provider: active });
     if (res?.success) {
       const icon = res.status === 'connected' ? '✅' : res.status === 'error' ? '❌' : '⚠️';
       setStatus(`${icon} ${res.provider}: ${res.status}`);

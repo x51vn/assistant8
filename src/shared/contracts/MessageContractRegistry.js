@@ -27,6 +27,12 @@ export const DOMAIN_VERSIONS = Object.freeze({
   content: 'content@1',
   portfolio: 'portfolio@1',
   watchlist: 'watchlist@1',
+  auth: 'auth@1',
+  settings: 'settings@1',
+  billing: 'billing@1',
+  journal: 'journal@1',
+  assets: 'assets@1',
+  market: 'market@1',
 });
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -276,6 +282,304 @@ const REGISTRY = {
       { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
     ],
     responseMode: CONTRACT_MODES.STRICT,
+  }),
+
+  // Auth contracts are warn-only because the Supabase handler still returns
+  // legacy top-level fields while callers migrate at different speeds.
+  SUPABASE_AUTH_CHECK: withDefaults({
+    domain: 'auth',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_LOGIN: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'email', type: FIELD_TYPES.STRING, required: true, minLength: 3, maxLength: 320 },
+      { name: 'password', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_LOGOUT: withDefaults({
+    domain: 'auth',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_CHANGE_PASSWORD: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'currentPassword', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+      { name: 'newPassword', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_RESET_PASSWORD_REQUEST: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'email', type: FIELD_TYPES.STRING, required: true, minLength: 3, maxLength: 320 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_REGISTER: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'email', type: FIELD_TYPES.STRING, required: true, minLength: 3, maxLength: 320 },
+      { name: 'password', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+      { name: 'name', type: FIELD_TYPES.STRING, required: false, maxLength: 200 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_RESEND_CONFIRMATION: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'email', type: FIELD_TYPES.STRING, required: true, minLength: 3, maxLength: 320 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUPABASE_AUTH_GOOGLE_LOGIN: withDefaults({
+    domain: 'auth',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  ACCOUNT_DELETE_REQUEST: withDefaults({
+    domain: 'auth',
+    request: [
+      { name: 'confirmText', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_GET: withDefaults({
+    domain: 'settings',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_UPDATE: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'settings', type: FIELD_TYPES.OBJECT, required: false },
+      { name: 'config', type: FIELD_TYPES.OBJECT, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_DELETE: withDefaults({
+    domain: 'settings',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PROMPTS_GET_BY_TYPE: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'promptType', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'preferCache', type: FIELD_TYPES.BOOLEAN, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_APIKEY_GET: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'provider', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_APIKEY_SET: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'provider', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'apiKey', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_APIKEY_DELETE: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'provider', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_APIKEY_MIGRATE: withDefaults({
+    domain: 'settings',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SETTINGS_APIKEY_HEALTHCHECK: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'provider', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  DATA_IMPORT_REQUEST: withDefaults({
+    domain: 'settings',
+    request: [
+      { name: 'fileContent', type: FIELD_TYPES.STRING, required: true, minLength: 1 },
+      { name: 'fileType', type: FIELD_TYPES.STRING, required: true, enum: ['json', 'csv'] },
+      { name: 'conflictMode', type: FIELD_TYPES.STRING, required: false, enum: ['skip', 'overwrite'] },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  DATA_EXPORT_REQUEST: withDefaults({
+    domain: 'settings',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUBSCRIPTION_GET: withDefaults({
+    domain: 'billing',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PLANS_GET: withDefaults({
+    domain: 'billing',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUBSCRIPTION_CREATE_CHECKOUT: withDefaults({
+    domain: 'billing',
+    request: [
+      { name: 'planId', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'interval', type: FIELD_TYPES.STRING, required: false, enum: ['monthly', 'yearly'] },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  SUBSCRIPTION_CREATE_PORTAL: withDefaults({
+    domain: 'billing',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  USAGE_CHECK: withDefaults({
+    domain: 'billing',
+    request: [
+      { name: 'feature', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  USAGE_INCREMENT: withDefaults({
+    domain: 'billing',
+    request: [
+      { name: 'feature', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'amount', type: FIELD_TYPES.NUMBER, required: false, min: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  USAGE_GET_STATS: withDefaults({
+    domain: 'billing',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GET_ALL: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'status', type: FIELD_TYPES.STRING, required: false, maxLength: 50 },
+      { name: 'symbol', type: FIELD_TYPES.STRING, required: false, minLength: 1, maxLength: 20, pattern: SYMBOL_PATTERN },
+      { name: 'limit', type: FIELD_TYPES.NUMBER, required: false, min: 1 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_CREATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'symbol', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 20, pattern: SYMBOL_PATTERN },
+      { name: 'watchlist_id', type: FIELD_TYPES.UUID, required: false },
+      { name: 'checklist', type: FIELD_TYPES.OBJECT, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_UPDATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+      { name: 'updates', type: FIELD_TYPES.OBJECT, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_DELETE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GET_PREFILL: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'symbol', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 20, pattern: SYMBOL_PATTERN },
+      { name: 'watchlist_id', type: FIELD_TYPES.UUID, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GET_METRICS: withDefaults({
+    domain: 'journal',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GET_SUMMARY: withDefaults({
+    domain: 'journal',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  CHECKLIST_TEMPLATES_GET: withDefaults({
+    domain: 'journal',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  CHECKLIST_TEMPLATE_CREATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'rule_key', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'label', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 300 },
+      { name: 'order_num', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  CHECKLIST_TEMPLATE_UPDATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+      { name: 'updates', type: FIELD_TYPES.OBJECT, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  CHECKLIST_TEMPLATE_DELETE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
   }),
 };
 

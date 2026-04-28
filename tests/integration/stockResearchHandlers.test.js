@@ -90,6 +90,7 @@ vi.mock('../../src/shared/errorCodes.js', () => ({
     INVALID_INPUT: 'INVALID_INPUT',
     OPERATION_FAILED: 'OPERATION_FAILED',
     SUPABASE_ERROR: 'SUPABASE_ERROR',
+    UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   },
   getUserFriendlyMessage: vi.fn((code) => `Error: ${code}`),
 }));
