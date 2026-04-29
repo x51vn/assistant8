@@ -2,9 +2,9 @@
  * App State - Global reactive state
  * 
  * Centralized loading state for entire application
- * Ensures only ONE loading bar is shown at a time
+ * Ensures only ONE loading indicator is shown at a time
  * 
- * X51LABS: Single loading bar requirement
+ * X51LABS: Single loading indicator requirement
  */
 
 import { signal } from '@preact/signals';

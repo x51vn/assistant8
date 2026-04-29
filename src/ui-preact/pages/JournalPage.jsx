@@ -25,6 +25,7 @@ import {
 } from '../state/journalState.js';
 import {
   fetchJournalEntries, updateJournalEntry, deleteJournalEntry, getJournalMetrics,
+  getPlaybookInsights, savePlaybookInsightFeedback,
 } from '../api/journalApi.js';
 import NewEntryModal from './journal/NewEntryModal.jsx';
 import CloseTradeModal from './journal/CloseTradeModal.jsx';
@@ -118,6 +119,7 @@ function MetricsBar({ metrics }) {
 export function JournalPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [playbookInsights, setPlaybookInsights] = useState([]);
 
   const loadData = useCallback(async () => {
     setJournalLoading(true);
@@ -130,10 +132,23 @@ export function JournalPage() {
       if (entriesRes.error) setJournalError(entriesRes.error.message);
       else setJournalEntries(entriesRes.items);
       if (metricsRes.metrics) setJournalMetrics(metricsRes.metrics);
+
+      const { items: insights } = await getPlaybookInsights({ refresh: true, limit: 3 });
+      setPlaybookInsights(insights || []);
     } finally {
       setJournalLoading(false);
     }
   }, []);
+
+  async function handleInsightFeedback(insightId, helpful) {
+    const { success, error } = await savePlaybookInsightFeedback(insightId, helpful);
+    if (!success) {
+      setActionError(error?.message || 'Không thể lưu feedback');
+      return;
+    }
+    const { items: insights } = await getPlaybookInsights({ refresh: false, limit: 3 });
+    setPlaybookInsights(insights || []);
+  }
 
   useEffect(() => { loadData(); }, []);
 
@@ -197,6 +212,36 @@ export function JournalPage() {
 
       {/* Metrics bar */}
       <MetricsBar metrics={metrics} />
+
+      {/* Playbook Suggestions */}
+      {playbookInsights.length > 0 && (
+        <div class="surface-card" style="padding:12px; margin:10px 0 14px; border:1px solid var(--surface-border); border-radius:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <h3 style="margin:0; font-size:14px;">🧭 Playbook gợi ý (Actionable)</h3>
+            <span class="text-muted" style="font-size:12px;">Top {playbookInsights.length} insight</span>
+          </div>
+          <div style="display:grid; gap:8px;">
+            {playbookInsights.map((insight) => (
+              <div key={insight.id} class="surface-card" style="padding:10px; border:1px solid var(--surface-border); border-radius:8px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                  <div>
+                    <div style="font-weight:600; margin-bottom:4px;">{insight.title}</div>
+                    <div class="text-muted" style="font-size:12px; margin-bottom:6px;">{insight.evidenceSummary || 'Không có evidence summary'}</div>
+                    <div style="font-size:13px;">{insight.recommendation}</div>
+                  </div>
+                  <div style="font-size:12px; white-space:nowrap; color:var(--text-muted);">
+                    Confidence {(Number(insight.confidence || 0) * 100).toFixed(0)}%
+                  </div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                  <button class="btn-small btn-ghost" onClick={() => handleInsightFeedback(insight.id, true)}>👍 Hữu ích</button>
+                  <button class="btn-small btn-ghost" onClick={() => handleInsightFeedback(insight.id, false)}>👎 Chưa hợp</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {actionError && (

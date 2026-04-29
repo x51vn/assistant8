@@ -90,7 +90,7 @@ export default function NetWorthSummary({ onRefresh }) {
         percentage: (value / total) * 100,
         config: ASSET_TYPE_CONFIG[type] || ASSET_TYPE_CONFIG.other
       }))
-      .filter(item => item.value > 0 && !item.config.isLiability) // Exclude debts from bar
+      .filter(item => item.value > 0 && !item.config.isLiability) // Exclude debts from allocation strip
       .sort((a, b) => b.value - a.value);
   };
 
@@ -133,13 +133,13 @@ export default function NetWorthSummary({ onRefresh }) {
         </div>
       </div>
 
-      {/* Breakdown Bar */}
+      {/* Breakdown allocation strip */}
       {breakdown.length > 0 && (
-        <div className="net-worth-bar">
+        <div className="allocation-strip">
           {breakdown.map(item => (
             <div
               key={item.type}
-              className="bar-segment"
+              className="allocation-segment"
               style={{
                 width: `${item.percentage}%`,
                 backgroundColor: item.config.color

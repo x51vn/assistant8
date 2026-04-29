@@ -598,6 +598,7 @@ export function buildAnalysisPrompt(symbol, evidencePack, discoveredSources, opt
 5. Nếu có, đưa ra giá vào (entryPrice), giá mục tiêu (targetPrice) và cắt lỗ (stopLoss) tính bằng VND
 6. Mỗi luận điểm phải gắn với nguồn cụ thể (URL) đã cung cấp
 7. Không được bịa số liệu chưa có trong dữ liệu thu thập
+8. BẮT BUỘC thêm các trường explainable: supportingEvidence, counterEvidence, invalidConditions
 
 ## Format JSON bắt buộc (CHỈ trả lời JSON, không thêm text):
 \`\`\`json
@@ -611,6 +612,9 @@ export function buildAnalysisPrompt(symbol, evidencePack, discoveredSources, opt
   "timeHorizon": "1w|1m|1-3m|3-6m|6-12m|1y+",
   "thesis": ["luận điểm 1", "luận điểm 2"],
   "risks": ["rủi ro 1", "rủi ro 2"],
+  "supportingEvidence": ["bằng chứng ủng hộ 1", "bằng chứng ủng hộ 2"],
+  "counterEvidence": ["bằng chứng phản biện 1"],
+  "invalidConditions": ["điều kiện vô hiệu luận điểm 1"],
   "catalysts": ["catalyst 1"],
   "sources": [{"url": "...", "reason": "...", "credibility": "high|medium|low"}]
 }
@@ -842,6 +846,36 @@ async function persistResults(runId, symbol, userId, { output, sources, evidence
           run_id: runId,
           insight_type: 'risk',
           content: r,
+        });
+      }
+    }
+
+    if (output.supportingEvidence?.length > 0) {
+      for (const item of output.supportingEvidence) {
+        insights.push({
+          run_id: runId,
+          insight_type: 'supporting_evidence',
+          content: item,
+        });
+      }
+    }
+
+    if (output.counterEvidence?.length > 0) {
+      for (const item of output.counterEvidence) {
+        insights.push({
+          run_id: runId,
+          insight_type: 'counter_evidence',
+          content: item,
+        });
+      }
+    }
+
+    if (output.invalidConditions?.length > 0) {
+      for (const item of output.invalidConditions) {
+        insights.push({
+          run_id: runId,
+          insight_type: 'invalid_condition',
+          content: item,
         });
       }
     }

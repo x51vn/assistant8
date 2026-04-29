@@ -221,7 +221,7 @@ function TopMovers({ portfolio }) {
 }
 
 // ========================================================================
-// Asset Allocation Bar
+// Asset Allocation Strip
 // ========================================================================
 
 function AllocationBar({ assets }) {
@@ -245,12 +245,12 @@ function AllocationBar({ assets }) {
       <div className="dash-section-header">
         <span className="dash-section-title"><i className="fas fa-chart-pie"></i> Phân bổ tài sản</span>
       </div>
-      {/* Horizontal bar */}
-      <div className="net-worth-bar" style={{ marginBottom: 10 }}>
+      {/* Allocation strip */}
+      <div className="allocation-strip" style={{ marginBottom: 10 }}>
         {items.map(it => (
           <div
             key={it.type}
-            className="bar-segment"
+            className="allocation-segment"
             style={{ width: `${Math.max(it.pct, 2)}%`, backgroundColor: TYPE_COLORS[it.type] || TYPE_COLORS.other }}
             title={`${TYPE_LABELS[it.type] || it.type}: ${it.pct.toFixed(1)}%`}
           />

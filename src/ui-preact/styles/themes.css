@@ -325,7 +325,7 @@ html, body {
 
 .toast-close:hover { color: var(--text-primary); }
 
-.toast-progress {
+.toast-timer {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -333,11 +333,11 @@ html, body {
   background: currentColor;
   opacity: 0.3;
   width: 100%;
-  animation: toast-progress linear forwards;
+  animation: toast-timer linear forwards;
   transform-origin: left;
 }
 
-@keyframes toast-progress {
+@keyframes toast-timer {
   from { transform: scaleX(1); }
   to   { transform: scaleX(0); }
 }
@@ -371,7 +371,7 @@ html, body {
   gap: 20px;
 }
 
-.onboarding-progress {
+.onboarding-steps {
   display: flex;
   gap: 6px;
   justify-content: center;

@@ -125,6 +125,9 @@ export async function getJournalMetrics() {
         ruleAdherenceRate: response.ruleAdherenceRate,
         topErrors: response.topErrors || [],
         periodTrades: response.periodTrades,
+        repeatedErrorRate: response.repeatedErrorRate,
+        disciplineScore: response.disciplineScore,
+        insightAdoptionRate: response.insightAdoptionRate,
       },
       error: null,
     };
@@ -147,10 +150,92 @@ export async function getJournalSummary() {
         plannedCount: response.plannedCount ?? 0,
         recentWinRate: response.recentWinRate,
         avgRMultiple: response.avgRMultiple,
+        disciplineScore: response.disciplineScore,
+        topRepeatedErrors: response.topRepeatedErrors || [],
       },
       error: null,
     };
   } catch (err) {
     return { summary: null, error: { code: 'EXTENSION_ERROR', message: err.message } };
+  }
+}
+
+/**
+ * Evaluate weighted decision score for an entry candidate.
+ * @param {Object} data
+ */
+export async function evaluateDecisionScore(data) {
+  try {
+    const response = await sendMsg(MESSAGE_TYPES.DECISION_SCORE_EVALUATE, data);
+    const error = extractError(response);
+    if (error) return { result: null, error };
+    return {
+      result: {
+        policyVersion: response.policyVersion,
+        decisionScore: response.decisionScore,
+        grade: response.grade,
+        ruleBreakdown: response.ruleBreakdown || [],
+        blockingReasons: response.blockingReasons || [],
+        advice: response.advice || [],
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { result: null, error: { code: 'EXTENSION_ERROR', message: err.message } };
+  }
+}
+
+/**
+ * Evaluate pre-trade guardrails.
+ * @param {Object} data
+ */
+export async function evaluateJournalGuardrails(data) {
+  try {
+    const response = await sendMsg(MESSAGE_TYPES.JOURNAL_GUARDRAIL_EVALUATE, data);
+    const error = extractError(response);
+    if (error) return { result: null, error };
+    return {
+      result: {
+        policyVersion: response.policyVersion,
+        allowed: Boolean(response.allowed),
+        checks: response.checks || [],
+        blockingReasons: response.blockingReasons || [],
+        warnings: response.warnings || [],
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { result: null, error: { code: 'EXTENSION_ERROR', message: err.message } };
+  }
+}
+
+/**
+ * Get or refresh playbook insights.
+ * @param {{ refresh?: boolean, limit?: number }} options
+ */
+export async function getPlaybookInsights(options = {}) {
+  try {
+    const response = await sendMsg(MESSAGE_TYPES.PLAYBOOK_INSIGHTS_GET, options);
+    const error = extractError(response);
+    if (error) return { items: [], error };
+    return { items: response.items || [], error: null };
+  } catch (err) {
+    return { items: [], error: { code: 'EXTENSION_ERROR', message: err.message } };
+  }
+}
+
+/**
+ * Save helpful/not-helpful feedback for an insight.
+ * @param {string} insightId
+ * @param {boolean} helpful
+ */
+export async function savePlaybookInsightFeedback(insightId, helpful) {
+  try {
+    const response = await sendMsg(MESSAGE_TYPES.PLAYBOOK_INSIGHT_FEEDBACK, { insightId, helpful });
+    const error = extractError(response);
+    if (error) return { success: false, error };
+    return { success: true, error: null };
+  } catch (err) {
+    return { success: false, error: { code: 'EXTENSION_ERROR', message: err.message } };
   }
 }

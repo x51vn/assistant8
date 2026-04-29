@@ -12,4 +12,5 @@ import '../dataExport.js';
 import '../dataImport.js';
 import '../promptImprovement.js';
 import '../journal.js';
+import '../decisionIntelligence.js';
 

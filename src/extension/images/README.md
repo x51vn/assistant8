@@ -1,6 +1,6 @@
-# Icons for ChatGPT Assistant Extension
+# Icons for Assistant8 Extension
 
-This folder contains the icons used by the ChatGPT Assistant Chrome Extension.
+This folder contains the icons used by the Assistant8 Chrome Extension.
 
 ## Icon Sizes
 
@@ -46,7 +46,7 @@ You can replace these icons with your own:
 
 The current icons use:
 - Gradient background (purple-blue to deep purple)
-- Large "G" letter for "ChatGPT"
+- Large "A8" monogram suggestion for Assistant8
 - Simple, clean design
 - Professional appearance
 - Good contrast

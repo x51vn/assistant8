@@ -15,6 +15,7 @@ import { useState } from 'preact/hooks';
 import { useAuth } from '../../hooks/useAuth.js';
 import { changePassword } from '../../api/authApi.js';
 import { getPasswordStrength, PASSWORD_REGEX } from '../../utils/passwordStrength.js';
+import { ProgressBar } from '../ProgressBar.jsx';
 
 /**
  * Validate password meets policy requirements
@@ -183,12 +184,13 @@ export function ChangePasswordSection() {
           </div>
           {newPassword && (
             <div class="password-strength">
-              <div class="strength-bar">
-                <div 
-                  class="strength-fill" 
-                  style={`width: ${(strength.score / 6) * 100}%; background-color: ${strength.color};`}
-                ></div>
-              </div>
+              <ProgressBar
+                ariaLabel="Độ mạnh mật khẩu mới"
+                value={strength.score}
+                max={6}
+                tone={strength.score <= 2 ? 'danger' : strength.score <= 4 ? 'warning' : 'success'}
+                size="sm"
+              />
               <span class="strength-label" style={`color: ${strength.color};`}>
                 {strength.label}
               </span>

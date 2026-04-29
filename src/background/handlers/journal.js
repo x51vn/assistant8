@@ -18,6 +18,12 @@ import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js';
 import { createLogger } from '../../logger.js';
+import {
+  DECISION_POLICY_VERSION,
+  GUARDRAIL_POLICY_VERSION,
+  evaluateDecisionScore,
+  evaluateGuardrails,
+} from '../services/decisionIntelligenceService.js';
 
 const logger = createLogger('Handlers/Journal');
 
@@ -136,6 +142,45 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
       return createErrorResponse(message, 'VALIDATION_ERROR', 'Symbol là bắt buộc');
     }
 
+    // Pre-trade guardrail + decision scoring snapshot
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+
+    const { count: recentErrorCount, error: recentErrorError } = await supabase
+      .from('trade_journal')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('symbol', String(entry.symbol).toUpperCase().trim())
+      .not('error_category', 'is', null)
+      .gte('updated_at', since.toISOString());
+
+    if (recentErrorError) throw recentErrorError;
+
+    const scoreResult = evaluateDecisionScore({
+      ...entry,
+      recentErrorCount: recentErrorCount || 0,
+    });
+
+    const guardrailResult = evaluateGuardrails({
+      ...entry,
+      strictRegime: entry.strictRegime,
+      minChecklistRatio: entry.minChecklistRatio,
+      maxRiskPct: entry.maxRiskPct,
+    });
+
+    if (!guardrailResult.allowed) {
+      return createErrorResponse(
+        message,
+        'GUARDRAIL_BLOCKED',
+        'Lệnh bị chặn bởi pre-trade guardrails',
+        {
+          blockingReasons: guardrailResult.blockingReasons,
+          warnings: guardrailResult.warnings,
+          checks: guardrailResult.checks,
+        }
+      );
+    }
+
     // Auto-determine initial status
     const status = entry.actual_entry != null ? 'open' : 'planned';
 
@@ -155,6 +200,24 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
       risk_per_trade_pct: entry.risk_per_trade_pct != null ? Number(entry.risk_per_trade_pct) : null,
       account_size_snapshot: entry.account_size_snapshot != null ? Number(entry.account_size_snapshot) : null,
       checklist: entry.checklist || {},
+      decision_score_snapshot: {
+        policyVersion: DECISION_POLICY_VERSION,
+        decisionScore: scoreResult.decisionScore,
+        grade: scoreResult.grade,
+        ruleBreakdown: scoreResult.ruleBreakdown,
+      },
+      guardrail_result_snapshot: {
+        policyVersion: GUARDRAIL_POLICY_VERSION,
+        allowed: guardrailResult.allowed,
+        checks: guardrailResult.checks,
+        blockingReasons: guardrailResult.blockingReasons,
+        warnings: guardrailResult.warnings,
+      },
+      guardrail_policy_version: GUARDRAIL_POLICY_VERSION,
+      playbook_hint_snapshot: {
+        advice: scoreResult.advice,
+        generatedAt: new Date().toISOString(),
+      },
       status,
       actual_entry: entry.actual_entry != null ? Number(entry.actual_entry) : null,
       actual_qty: entry.actual_qty != null ? Number(entry.actual_qty) : null,
@@ -165,6 +228,44 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
       const { data, error } = await supabase.from('trade_journal').insert(row).select().single();
       if (error) throw error;
       return data;
+    });
+
+    await supabaseWithRetry(async () => {
+      const { error } = await supabase.from('decision_score_snapshots').insert({
+        user_id: userId,
+        trade_journal_id: data.id,
+        symbol: row.symbol,
+        policy_version: DECISION_POLICY_VERSION,
+        input_fingerprint: `${row.symbol}::${Date.now()}`,
+        decision_score: scoreResult.decisionScore,
+        grade: scoreResult.grade,
+        rule_breakdown: scoreResult.ruleBreakdown,
+        blocking_reasons: scoreResult.blockingReasons,
+        advice: scoreResult.advice,
+      });
+      if (error) throw error;
+    }, {
+      operationName: 'journalCreate.persistDecisionSnapshot',
+      correlationId: message.correlationId,
+      maxRetries: 1,
+    });
+
+    await supabaseWithRetry(async () => {
+      const { error } = await supabase.from('guardrail_evaluations').insert({
+        user_id: userId,
+        trade_journal_id: data.id,
+        symbol: row.symbol,
+        policy_version: GUARDRAIL_POLICY_VERSION,
+        allowed: guardrailResult.allowed,
+        checks: guardrailResult.checks,
+        blocking_reasons: guardrailResult.blockingReasons,
+        warnings: guardrailResult.warnings,
+      });
+      if (error) throw error;
+    }, {
+      operationName: 'journalCreate.persistGuardrailEvaluation',
+      correlationId: message.correlationId,
+      maxRetries: 1,
     });
 
     return createResponse(message, MESSAGE_TYPES.JOURNAL_CREATED, { item: data, success: true });
@@ -431,10 +532,41 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_METRICS, async (message) => {
       return new Date(e.entry_date) >= thirtyDaysAgo;
     }).length;
 
+    const repeatedErrorTotal = Object.values(errorCounts).filter(c => c > 1).reduce((s, c) => s + c, 0);
+    const repeatedErrorRate = entries.length > 0 ? repeatedErrorTotal / entries.length : null;
+
+    const disciplineScoreParts = [
+      winRate == null ? 50 : (winRate * 45),
+      ruleAdherenceRate == null ? 20 : (ruleAdherenceRate * 45),
+      repeatedErrorRate == null ? 10 : (Math.max(0, 1 - repeatedErrorRate) * 10),
+    ];
+    const disciplineScore = Number(disciplineScoreParts.reduce((s, n) => s + n, 0).toFixed(2));
+
+    const { count: helpfulCount, error: helpfulErr } = await supabase
+      .from('playbook_insight_feedback')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('helpful', true);
+
+    const { count: totalFeedbackCount, error: totalFeedbackErr } = await supabase
+      .from('playbook_insight_feedback')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (helpfulErr) throw helpfulErr;
+    if (totalFeedbackErr) throw totalFeedbackErr;
+
+    const insightAdoptionRate = totalFeedbackCount > 0
+      ? (helpfulCount / totalFeedbackCount)
+      : null;
+
     return createResponse(message, MESSAGE_TYPES.JOURNAL_METRICS, {
       success: true,
       totalTrades: entries.length, winCount, lossCount, winRate,
       avgRMultiple, ruleAdherenceRate, topErrors, periodTrades,
+      repeatedErrorRate,
+      disciplineScore,
+      insightAdoptionRate,
     });
   } catch (error) {
     if (error.errorCode) return error;
@@ -451,7 +583,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_SUMMARY, async (message) => {
 
     const { data: entries, error } = await supabase
       .from('trade_journal')
-      .select('status, pnl_pct, r_multiple, entry_date')
+      .select('status, pnl_pct, r_multiple, entry_date, error_category')
       .eq('user_id', userId);
 
     if (error) throw error;
@@ -475,9 +607,29 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_SUMMARY, async (message) => {
       ? validR.reduce((s, r) => s + r, 0) / validR.length
       : null;
 
+    const errorCounts = {};
+    for (const e of recent) {
+      if (e.error_category) {
+        errorCounts[e.error_category] = (errorCounts[e.error_category] || 0) + 1;
+      }
+    }
+
+    const topRepeatedErrors = Object.entries(errorCounts)
+      .filter(([, count]) => count > 1)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([category, count]) => ({ category, count }));
+
+    const disciplineScore = Number((
+      (recentWinRate == null ? 50 : recentWinRate * 50) +
+      (avgRMultiple == null ? 25 : Math.max(0, Math.min(50, (avgRMultiple + 1) * 15)))
+    ).toFixed(2));
+
     return createResponse(message, MESSAGE_TYPES.JOURNAL_SUMMARY, {
       success: true,
       openCount, plannedCount, recentWinRate, avgRMultiple,
+      disciplineScore,
+      topRepeatedErrors,
     });
   } catch (error) {
     if (error.errorCode) return error;
@@ -490,6 +642,8 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_SUMMARY, async (message) => {
         plannedCount: 0,
         recentWinRate: null,
         avgRMultiple: null,
+        disciplineScore: null,
+        topRepeatedErrors: [],
       });
     }
 

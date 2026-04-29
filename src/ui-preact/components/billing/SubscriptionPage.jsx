@@ -4,7 +4,7 @@
  *
  * Sections:
  * 1. Current Plan: name, price, status, renewal date
- * 2. Usage: progress bars per feature
+ * 2. Usage: shared quota indicators per feature
  * 3. Plan Comparison: 3-column table (Free / Pro / Enterprise)
  * 4. Upgrade / Manage buttons
  * 5. Payment History
@@ -13,33 +13,38 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { useSubscription, usePlanUpgrade, useFeatureGate } from '../../context/SubscriptionContext.jsx';
+import { ProgressBar } from '../ProgressBar.jsx';
 
 // ============================================================================
 // HELPER COMPONENTS
 // ============================================================================
 
-function UsageBar({ label, used, limit, unlimited }) {
+function UsageLimitRow({ label, used, limit, unlimited }) {
   if (unlimited) {
     return (
-      <div class="usage-bar-row">
-        <span class="usage-bar-label">{label}</span>
-        <span class="usage-bar-value">Không giới hạn</span>
+      <div class="usage-row">
+        <span class="usage-row__label">{label}</span>
+        <span class="usage-row__value">Không giới hạn</span>
       </div>
     );
   }
 
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const colorClass = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'ok';
+  const tone = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'success';
 
   return (
-    <div class="usage-bar-row">
-      <div class="usage-bar-header">
-        <span class="usage-bar-label">{label}</span>
-        <span class="usage-bar-value">{used}/{limit}</span>
+    <div class="usage-row">
+      <div class="usage-row__header">
+        <span class="usage-row__label">{label}</span>
+        <span class="usage-row__value">{used}/{limit}</span>
       </div>
-      <div class="usage-bar-track">
-        <div class={`usage-bar-fill ${colorClass}`} style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressBar
+        ariaLabel={`${label} usage`}
+        value={used}
+        max={limit}
+        tone={tone}
+        size="sm"
+      />
     </div>
   );
 }
@@ -242,7 +247,7 @@ export function SubscriptionPage() {
           <h3 class="sub-section-title">Sử dụng tháng này</h3>
           <div class="usage-section">
             {Object.entries(stats).map(([feature, stat]) => (
-              <UsageBar
+              <UsageLimitRow
                 key={feature}
                 label={USAGE_LABELS[feature] || feature}
                 used={stat.used}

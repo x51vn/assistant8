@@ -549,6 +549,96 @@ const REGISTRY = {
     requestMode: CONTRACT_MODES.WARN_ONLY,
   }),
 
+  DECISION_SCORE_EVALUATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'symbol', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 20, pattern: SYMBOL_PATTERN },
+      { name: 'planned_entry', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'planned_stoploss', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'risk_per_trade_pct', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'checklist', type: FIELD_TYPES.OBJECT, required: false },
+      { name: 'market_regime_snapshot', type: FIELD_TYPES.STRING, required: false, maxLength: 20 },
+      { name: 'strategyTag', type: FIELD_TYPES.STRING, required: false, maxLength: 100 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GUARDRAIL_EVALUATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'symbol', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 20, pattern: SYMBOL_PATTERN },
+      { name: 'planned_entry', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'planned_stoploss', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'risk_per_trade_pct', type: FIELD_TYPES.NUMBER, required: false, min: 0 },
+      { name: 'checklist', type: FIELD_TYPES.OBJECT, required: false },
+      { name: 'market_regime_snapshot', type: FIELD_TYPES.STRING, required: false, maxLength: 20 },
+      { name: 'strictRegime', type: FIELD_TYPES.BOOLEAN, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PLAYBOOK_INSIGHTS_GET: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'refresh', type: FIELD_TYPES.BOOLEAN, required: false },
+      { name: 'limit', type: FIELD_TYPES.NUMBER, required: false, min: 1, max: 20 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PLAYBOOK_INSIGHT_FEEDBACK: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'insightId', type: FIELD_TYPES.UUID, required: true },
+      { name: 'helpful', type: FIELD_TYPES.BOOLEAN, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOWS_GET: withDefaults({
+    domain: 'journal',
+    request: [],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_CREATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'name', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 200 },
+      { name: 'trigger_type', type: FIELD_TYPES.STRING, required: true, minLength: 1, maxLength: 100 },
+      { name: 'conditions', type: FIELD_TYPES.OBJECT, required: false },
+      { name: 'actions', type: FIELD_TYPES.ARRAY, required: true, minLength: 1 },
+      { name: 'is_active', type: FIELD_TYPES.BOOLEAN, required: false },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_UPDATE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+      { name: 'updates', type: FIELD_TYPES.OBJECT, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_DELETE: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_EXECUTIONS_GET: withDefaults({
+    domain: 'journal',
+    request: [
+      { name: 'workflowId', type: FIELD_TYPES.UUID, required: false },
+      { name: 'limit', type: FIELD_TYPES.NUMBER, required: false, min: 1, max: 200 },
+    ],
+    requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
   CHECKLIST_TEMPLATES_GET: withDefaults({
     domain: 'journal',
     request: [],
@@ -580,6 +670,118 @@ const REGISTRY = {
       { name: 'id', type: FIELD_TYPES.UUID, required: true },
     ],
     requestMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  DECISION_SCORE_RESULT: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'decisionScore', type: FIELD_TYPES.NUMBER, required: true, min: 0, max: 100 },
+      { name: 'grade', type: FIELD_TYPES.STRING, required: true },
+      { name: 'ruleBreakdown', type: FIELD_TYPES.ARRAY, required: true },
+      { name: 'blockingReasons', type: FIELD_TYPES.ARRAY, required: true },
+      { name: 'advice', type: FIELD_TYPES.ARRAY, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_GUARDRAIL_RESULT: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'allowed', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'blockingReasons', type: FIELD_TYPES.ARRAY, required: true },
+      { name: 'warnings', type: FIELD_TYPES.ARRAY, required: true },
+      { name: 'checks', type: FIELD_TYPES.ARRAY, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PLAYBOOK_INSIGHTS_DATA: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'items', type: FIELD_TYPES.ARRAY, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  PLAYBOOK_INSIGHT_FEEDBACK_SAVED: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'insightId', type: FIELD_TYPES.UUID, required: true },
+      { name: 'helpful', type: FIELD_TYPES.BOOLEAN, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOWS_DATA: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'items', type: FIELD_TYPES.ARRAY, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_CREATED: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'item', type: FIELD_TYPES.OBJECT, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_UPDATED: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'item', type: FIELD_TYPES.OBJECT, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_WORKFLOW_DELETED: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'id', type: FIELD_TYPES.UUID, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  AUTOMATION_EXECUTIONS_DATA: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'items', type: FIELD_TYPES.ARRAY, required: true },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_METRICS: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'totalTrades', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+      { name: 'winCount', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+      { name: 'lossCount', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+      { name: 'topErrors', type: FIELD_TYPES.ARRAY, required: true },
+      { name: 'periodTrades', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
+  }),
+
+  JOURNAL_SUMMARY: withDefaults({
+    domain: 'journal',
+    response: [
+      { name: 'success', type: FIELD_TYPES.BOOLEAN, required: true },
+      { name: 'openCount', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+      { name: 'plannedCount', type: FIELD_TYPES.NUMBER, required: true, min: 0 },
+    ],
+    responseMode: CONTRACT_MODES.WARN_ONLY,
   }),
 };
 

@@ -32,6 +32,7 @@ import {
   setAssessmentRuns, setAssessmentRecords, setSectors,
   setRunning, setRunStatus, setError, setSelectedRunId, setCurrentRunRecords,
 } from '../state/marketAssessmentState.js';
+import { ProgressBar } from '../components/ProgressBar.jsx';
 
 // ========================================================================
 // Helpers
@@ -276,9 +277,12 @@ export function MarketPage() {
       {/* ─── Run Status ─── */}
       {runStatus.value && running.value && (
         <div class="mkt-run-status">
-          <div class="mkt-run-progress">
-            <div class="mkt-run-bar" style={{ width: `${((runStatus.value.step || 0) / (runStatus.value.totalSteps || 5)) * 100}%` }}></div>
-          </div>
+          <ProgressBar
+            ariaLabel="Tiến trình đánh giá thị trường"
+            value={runStatus.value.step || 0}
+            max={runStatus.value.totalSteps || 5}
+            size="sm"
+          />
           <span class="mkt-run-msg">{runStatus.value.message}</span>
         </div>
       )}
@@ -405,20 +409,20 @@ export function MarketPage() {
         </div>
       )}
 
-      {/* ─── Regime History Chart (simple bar/visual) ─── */}
+      {/* ─── Regime History Chart (column visual) ─── */}
       {regime.length > 1 && (
         <div class="mkt-section">
           <h3><i class="fas fa-chart-bar"></i> Regime History</h3>
           <div class="mkt-regime-chart">
             {regime.map((point, i) => (
-              <div key={i} class="mkt-regime-bar-wrapper" title={`${point.date}: ${point.score} (${point.state})`}>
+              <div key={i} class="mkt-regime-column-wrapper" title={`${point.date}: ${point.score} (${point.state})`}>
                 <div
-                  class={`mkt-regime-bar ${point.state === 'ON' ? 'regime-on' : 'regime-off'}`}
+                  class={`mkt-regime-column ${point.state === 'ON' ? 'regime-on' : 'regime-off'}`}
                   style={{ height: `${point.score}%` }}
                 >
-                  <span class="mkt-regime-bar-label">{point.score}</span>
+                  <span class="mkt-regime-column-label">{point.score}</span>
                 </div>
-                <span class="mkt-regime-bar-date">{point.date.slice(5)}</span>
+                <span class="mkt-regime-column-date">{point.date.slice(5)}</span>
               </div>
             ))}
           </div>

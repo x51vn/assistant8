@@ -168,7 +168,7 @@ registerHandler(MESSAGE_TYPES.DATA_EXPORT_REQUEST, async (message) => {
         exported_at: new Date().toISOString(),
         user_id: userId,
         user_email: userEmail,
-        app: 'ChatGPT Assistant',
+        app: 'Assistant8',
         tables_included: [
           'portfolio', 'assets', 'watchlist', 'chat_history', 'errors',
           'settings', 'english', 'subscriptions', 'usage_tracking', 'payment_history'

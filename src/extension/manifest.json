@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT Assistant",
+  "name": "Assistant8",
   "version": "1.0.0",
   "description": "Tự động mở ChatGPT và xử lý prompt từ cấu hình",
   "minimum_chrome_version": "114",
@@ -36,7 +36,7 @@
     "https://generativelanguage.googleapis.com/*"
   ],
   "action": {
-    "default_title": "ChatGPT Assistant"
+    "default_title": "Assistant8"
   },
 
   "side_panel": {

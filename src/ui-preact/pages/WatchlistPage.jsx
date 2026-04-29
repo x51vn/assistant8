@@ -16,6 +16,7 @@
 import { h } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import WatchlistTable from '../components/WatchlistTable.jsx';
+import { ProgressBar } from '../components/ProgressBar.jsx';
 import {
   AddWatchlistModal,
   EditWatchlistModal,
@@ -65,6 +66,7 @@ export default function WatchlistPage() {
 
   // Enrichment state (queue-based) - Set tracks multiple symbols being enriched
   const [enrichingSymbols, setEnrichingSymbols] = useState(new Set());
+  const [batchEnrichmentTotal, setBatchEnrichmentTotal] = useState(0);
   const [enrichmentError, setEnrichmentError] = useState(null);
 
   /**
@@ -140,6 +142,12 @@ export default function WatchlistPage() {
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []); // Functional updates on Set — no closure dependency needed
+
+  useEffect(() => {
+    if (enrichingSymbols.size === 0 && batchEnrichmentTotal > 0) {
+      setBatchEnrichmentTotal(0);
+    }
+  }, [enrichingSymbols.size, batchEnrichmentTotal]);
 
   /**
    * Restore enrichment state on mount from chrome.storage.local
@@ -414,6 +422,7 @@ export default function WatchlistPage() {
     setEnrichmentError(null);
 
     const symbols = items.map(item => item.symbol).filter(Boolean);
+    setBatchEnrichmentTotal(symbols.length);
 
     // Optimistically mark all symbols as enriching
     setEnrichingSymbols(prev => {
@@ -431,6 +440,7 @@ export default function WatchlistPage() {
         });
         // Clear all enriching indicators on total failure
         setEnrichingSymbols(new Set());
+        setBatchEnrichmentTotal(0);
       } else {
         console.log(`[WatchlistPage] Batch enrichment enqueued: ${result.totalSymbols} symbols in ${result.batches} batch(es)`);
       }
@@ -440,9 +450,18 @@ export default function WatchlistPage() {
         message: 'Lỗi gửi yêu cầu đánh giá. Vui lòng thử lại.'
       });
       setEnrichingSymbols(new Set());
+      setBatchEnrichmentTotal(0);
       console.error('[WatchlistPage] Batch enrichment exception:', err);
     }
   };
+
+  const activeEnrichmentCount = enrichingSymbols.size;
+  const hasKnownBatchTotal = batchEnrichmentTotal > 0;
+  const showBatchEnrichmentStatus =
+    activeEnrichmentCount > 0 && (hasKnownBatchTotal || activeEnrichmentCount > 1);
+  const completedBatchEnrichmentCount = hasKnownBatchTotal
+    ? Math.max(0, batchEnrichmentTotal - activeEnrichmentCount)
+    : 0;
 
   // Auth check in progress
   if (!authChecked) {
@@ -550,6 +569,23 @@ export default function WatchlistPage() {
           )}
         </div>
       </div>
+
+      {showBatchEnrichmentStatus && (
+        <div class="watchlist-enrichment-status">
+          <ProgressBar
+            ariaLabel="Tiến trình đánh giá watchlist"
+            value={completedBatchEnrichmentCount}
+            max={batchEnrichmentTotal}
+            indeterminate={!hasKnownBatchTotal}
+            size="sm"
+            caption={
+              hasKnownBatchTotal
+                ? `${completedBatchEnrichmentCount}/${batchEnrichmentTotal} mã đã xử lý`
+                : `Đang đánh giá ${activeEnrichmentCount} mã...`
+            }
+          />
+        </div>
+      )}
 
       {/* Error State */}
       {error.value && (

@@ -441,6 +441,30 @@ export const MESSAGE_TYPES = {
   JOURNAL_GET_METRICS: 'JOURNAL_GET_METRICS',                 // UI → Background: compute aggregate stats
   JOURNAL_GET_SUMMARY: 'JOURNAL_GET_SUMMARY',                 // UI → Background: lightweight summary for Dashboard
 
+  // Decision Intelligence / Guardrails
+  DECISION_SCORE_EVALUATE: 'DECISION_SCORE_EVALUATE',         // UI → Background: evaluate weighted decision score
+  DECISION_SCORE_RESULT: 'DECISION_SCORE_RESULT',             // Background → UI: score payload with breakdown
+  JOURNAL_GUARDRAIL_EVALUATE: 'JOURNAL_GUARDRAIL_EVALUATE',   // UI → Background: run pre-trade guardrails
+  JOURNAL_GUARDRAIL_RESULT: 'JOURNAL_GUARDRAIL_RESULT',       // Background → UI: allow/block + reasons
+
+  // Journal-to-Playbook Insights
+  PLAYBOOK_INSIGHTS_GET: 'PLAYBOOK_INSIGHTS_GET',             // UI → Background: get generated insights
+  PLAYBOOK_INSIGHTS_DATA: 'PLAYBOOK_INSIGHTS_DATA',           // Background → UI: ranked insights payload
+  PLAYBOOK_INSIGHT_FEEDBACK: 'PLAYBOOK_INSIGHT_FEEDBACK',     // UI → Background: mark insight helpful/not-helpful
+  PLAYBOOK_INSIGHT_FEEDBACK_SAVED: 'PLAYBOOK_INSIGHT_FEEDBACK_SAVED', // Background → UI: feedback persisted
+
+  // Automation Hub v1 (safe action sandbox)
+  AUTOMATION_WORKFLOWS_GET: 'AUTOMATION_WORKFLOWS_GET',
+  AUTOMATION_WORKFLOWS_DATA: 'AUTOMATION_WORKFLOWS_DATA',
+  AUTOMATION_WORKFLOW_CREATE: 'AUTOMATION_WORKFLOW_CREATE',
+  AUTOMATION_WORKFLOW_CREATED: 'AUTOMATION_WORKFLOW_CREATED',
+  AUTOMATION_WORKFLOW_UPDATE: 'AUTOMATION_WORKFLOW_UPDATE',
+  AUTOMATION_WORKFLOW_UPDATED: 'AUTOMATION_WORKFLOW_UPDATED',
+  AUTOMATION_WORKFLOW_DELETE: 'AUTOMATION_WORKFLOW_DELETE',
+  AUTOMATION_WORKFLOW_DELETED: 'AUTOMATION_WORKFLOW_DELETED',
+  AUTOMATION_EXECUTIONS_GET: 'AUTOMATION_EXECUTIONS_GET',
+  AUTOMATION_EXECUTIONS_DATA: 'AUTOMATION_EXECUTIONS_DATA',
+
   // Journal CRUD responses
   JOURNAL_CREATED: 'JOURNAL_CREATED',                         // Background → UI: entry created
   JOURNAL_LIST: 'JOURNAL_LIST',                               // Background → UI: entries list

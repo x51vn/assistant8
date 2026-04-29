@@ -112,7 +112,7 @@ function _showBanner() {
 
   _bannerEl.innerHTML =
     '<span style="display:inline-block;animation:__cga_spin 1s linear infinite">⏳</span>' +
-    '<span>ChatGPT Assistant đang xử lý — vui lòng không chuyển chat</span>';
+    '<span>Assistant8 đang xử lý — vui lòng không chuyển chat</span>';
 
   // Inject keyframe animation (once)
   if (!document.getElementById(GUARD_STYLE_ID)) {

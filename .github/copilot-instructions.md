@@ -1,8 +1,8 @@
-# ChatGPT Assistant - Hướng dẫn cho AI Coding Agent
+# Assistant8 - Hướng dẫn cho AI Coding Agent
 
 ## Mục tiêu Dự án
 
-**ChatGPT Assistant** là Chrome MV3 extension tương tác với ChatGPT với 3 lĩnh vực chính:
+**Assistant8** (trước đây là ChatGPT Assistant) là Chrome MV3 extension tương tác với ChatGPT với 3 lĩnh vực chính:
 
 1. **📈 Quản lý Portfolio Chứng khoán**: 
    - Theo dõi cổ phiếu yêu thích trên Supabase

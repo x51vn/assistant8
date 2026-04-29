@@ -1,7 +1,7 @@
 /**
  * SettingsPage - Main settings page container
  * X51LABS-150: Implement Settings Form with Preact Signals
- * X51LABS: Use global loading bar (NO local loading UI)
+ * X51LABS: Use global loading indicator (NO local loading UI)
  *
  * Features:
  * - Load settings from Supabase on mount
@@ -171,7 +171,7 @@ export function SettingsPage() {
     }
   };
 
-  // ✅ NO LOCAL LOADING UI - Using global loading bar from App.jsx
+  // ✅ NO LOCAL LOADING UI - Using global loading indicator from App.jsx
   // All loading states are handled by setGlobalLoading() / hideLoading()
 
   // GDPR Data Export handler (XST-765)
@@ -185,7 +185,7 @@ export function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `chatgpt-assistant-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `assistant8-data-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
       showStatus('Xuất dữ liệu thành công!', 'success');

@@ -13,6 +13,7 @@
 
 import { h } from 'preact';
 import { useState, useEffect, useCallback } from 'preact/hooks';
+import { ProgressBar } from './ProgressBar.jsx';
 
 /**
  * Risk options for select dropdown
@@ -78,7 +79,7 @@ function parseSymbols(value) {
  *
  * Modes:
  *   Single  — 1 symbol → full detail form (investment_thesis, risk, entry, target, stoploss, notes)
- *   Bulk    — comma-separated symbols → symbol-only batch add, shows per-symbol progress chips
+ *   Bulk    — comma-separated symbols → symbol-only batch add, shows per-symbol status chips
  */
 export function AddWatchlistModal({ isOpen, onClose, onSave }) {
   const [symbolInput, setSymbolInput] = useState('');
@@ -92,7 +93,7 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Bulk progress: [{ symbol, status: 'pending'|'success'|'error', error? }]
+  // Bulk status details: [{ symbol, status: 'pending'|'success'|'error', error? }]
   const [bulkResults, setBulkResults] = useState([]);
 
   const isBulkMode = symbolInput.includes(',');
@@ -179,6 +180,8 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
 
   const bulkSuccessCount = bulkResults.filter(r => r.status === 'success').length;
   const bulkErrorCount = bulkResults.filter(r => r.status === 'error').length;
+  const bulkCompletedCount = bulkSuccessCount + bulkErrorCount;
+  const showBulkStatus = isBulkMode && bulkResults.length > 0 && bulkSymbols.length > 0;
 
   if (!isOpen) return null;
 
@@ -243,6 +246,17 @@ export function AddWatchlistModal({ isOpen, onClose, onSave }) {
                     </span>
                   );
                 })}
+              </div>
+            )}
+            {showBulkStatus && (
+              <div class="bulk-add-status">
+                <ProgressBar
+                  ariaLabel="Tiến trình thêm watchlist hàng loạt"
+                  value={bulkCompletedCount}
+                  max={bulkSymbols.length}
+                  size="sm"
+                  caption={`${bulkCompletedCount}/${bulkSymbols.length} mã đã xử lý`}
+                />
               </div>
             )}
           </div>

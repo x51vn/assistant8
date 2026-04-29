@@ -114,7 +114,7 @@ export function ConsentDialog({ onConsentSaved }) {
 
         <div class="consent-body">
           <p class="consent-intro">
-            ChatGPT Assistant thu thập một số dữ liệu kỹ thuật để cải thiện chất lượng dịch vụ.
+            Assistant8 thu thập một số dữ liệu kỹ thuật để cải thiện chất lượng dịch vụ.
             Bạn có thể kiểm soát những gì chúng tôi thu thập.
           </p>
 

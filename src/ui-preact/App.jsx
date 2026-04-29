@@ -4,7 +4,7 @@
  * Decides whether to show LoginForm, RegisterForm, ForgotPassword, or MainApp
  * 
  * X51LABS-170: Auth gate for Preact UI
- * X51LABS: Single global loading bar for entire extension
+ * X51LABS: Single global loading indicator for entire extension
  * XST-751: Password Reset Flow
  * XST-752: Email Verification
  * XST-756: Unified Auth (Login + Register)
@@ -85,7 +85,7 @@ export function App() {
         return (
           <div class="auth-card">
             <div class="auth-header">
-              <h1>ChatGPT Assistant</h1>
+              <h1>Assistant8</h1>
               <p>Đăng nhập để tiếp tục</p>
             </div>
             <LoginForm 

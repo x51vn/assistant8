@@ -21,6 +21,7 @@ import { getPortfolioPrompt } from '../state/settingsState.js';
 import { generateCorrelationId } from '../../logger.js';
 import { MESSAGE_TYPES, MESSAGE_VERSION } from '../../shared/messageSchema.js';
 import { getFeatureFlag } from '../../shared/featureFlags.js';
+import { ProgressBar } from './ProgressBar.jsx';
 
 
 // ===== CONSTANTS =====
@@ -281,7 +282,7 @@ export default function PortfolioEvalModal() {
         <div class="modal__body">
           {/* ===== LOADING FLAG ===== */}
           {flagLoading && (
-            <div class="research-progress">
+            <div class="operation-status">
               <i class="fas fa-spinner fa-spin"></i> Đang tải cấu hình...
             </div>
           )}
@@ -325,10 +326,10 @@ export default function PortfolioEvalModal() {
             </>
           )}
 
-          {/* ===== PROGRESS VIEW ===== */}
+          {/* ===== STATUS VIEW ===== */}
           {isRunning && (
-            <div class="research-progress">
-              <div class="progress-header">
+            <div class="operation-status">
+              <div class="operation-status__header">
                 <i class="fas fa-spinner fa-spin"></i>
                 <span>
                   {useOrchestrator
@@ -337,12 +338,19 @@ export default function PortfolioEvalModal() {
                 </span>
               </div>
               {useOrchestrator && (
-                <div class="progress-bar-container">
-                  <div
-                    class="progress-bar"
-                    style={{ width: `${totalSymbols > 0 ? Math.round((currentIndex / totalSymbols) * 100) : 0}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  ariaLabel="Tiến trình đánh giá danh mục"
+                  value={currentIndex}
+                  max={totalSymbols}
+                  size="sm"
+                />
+              )}
+              {!useOrchestrator && (
+                <ProgressBar
+                  ariaLabel="Tiến trình gửi đánh giá danh mục"
+                  indeterminate
+                  size="sm"
+                />
               )}
 
               {/* Partial results during orchestrator run */}

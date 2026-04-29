@@ -82,6 +82,15 @@ describe('validateStockResearchOutput — valid inputs', () => {
     risks: [
       'Biên lợi nhuận giảm do cạnh tranh',
     ],
+    supportingEvidence: [
+      'KQKD quý gần nhất tăng trưởng tốt',
+    ],
+    counterEvidence: [
+      'Định giá đã không còn rẻ',
+    ],
+    invalidConditions: [
+      'Tăng trưởng doanh thu dưới 10% trong 2 quý liên tiếp',
+    ],
     catalysts: [
       'KQKD Q1/2026 công bố tháng 4',
     ],
@@ -101,6 +110,9 @@ describe('validateStockResearchOutput — valid inputs', () => {
     expect(result.data.timeHorizon).toBe('3-6m');
     expect(result.data.thesis).toHaveLength(2);
     expect(result.data.risks).toHaveLength(1);
+    expect(result.data.supportingEvidence).toHaveLength(1);
+    expect(result.data.counterEvidence).toHaveLength(1);
+    expect(result.data.invalidConditions).toHaveLength(1);
     expect(result.data.catalysts).toHaveLength(1);
     expect(result.data.sources).toHaveLength(1);
     expect(result.errors).toHaveLength(0);
@@ -118,7 +130,10 @@ describe('validateStockResearchOutput — valid inputs', () => {
     expect(result.valid).toBe(true);
     expect(result.data.symbol).toBe('VCB');
     expect(result.data.catalysts).toBeUndefined();
-    expect(result.data.sources).toBeUndefined();
+    expect(result.data.supportingEvidence).toEqual(['Ngân hàng tốt']);
+    expect(result.data.counterEvidence).toEqual(['Nợ xấu tăng']);
+    expect(result.data.invalidConditions).toEqual(['Nợ xấu tăng']);
+    expect(result.data.sources).toEqual([]);
   });
 
   it('validates code-fenced output', () => {
@@ -234,6 +249,26 @@ describe('validateStockResearchOutput — auto-corrections', () => {
     expect(result.data.timeHorizon).toBe('1-3m');
     expect(result.autoCorrections).toBe(true);
   });
+
+  it('maps snake_case explainable fields', () => {
+    const data = {
+      symbol: 'VNM',
+      recommendation: 'BUY',
+      confidence: 60,
+      thesis: ['Sữa tốt'],
+      risks: ['Cạnh tranh'],
+      supporting_evidence: ['Sản lượng phục hồi'],
+      counter_evidence: ['Chi phí đầu vào tăng'],
+      invalid_conditions: ['Biên gộp giảm dưới 35%'],
+      sources: [{ url: 'https://example.com', reason: 'report' }],
+    };
+    const result = validateStockResearchOutput(JSON.stringify(data));
+    expect(result.valid).toBe(true);
+    expect(result.data.supportingEvidence).toEqual(['Sản lượng phục hồi']);
+    expect(result.data.counterEvidence).toEqual(['Chi phí đầu vào tăng']);
+    expect(result.data.invalidConditions).toEqual(['Biên gộp giảm dưới 35%']);
+    expect(result.autoCorrections).toBe(true);
+  });
 });
 
 // ============================================================================
@@ -317,6 +352,25 @@ describe('validateStockResearchOutput — invalid inputs (strict)', () => {
     expect(result.errors.some(e => e.includes('risks'))).toBe(true);
   });
 
+  it('rejects when explainable fields are explicitly empty', () => {
+    const data = {
+      symbol: 'FPT',
+      recommendation: 'BUY',
+      confidence: 70,
+      thesis: ['Good'],
+      risks: ['Bad'],
+      supportingEvidence: [],
+      counterEvidence: [],
+      invalidConditions: [],
+      sources: [],
+    };
+    const result = validateStockResearchOutput(JSON.stringify(data));
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('supportingEvidence'))).toBe(true);
+    expect(result.errors.some(e => e.includes('counterEvidence'))).toBe(true);
+    expect(result.errors.some(e => e.includes('invalidConditions'))).toBe(true);
+  });
+
   it('rejects non-JSON text', () => {
     const result = validateStockResearchOutput('This is not JSON at all.');
     expect(result.valid).toBe(false);
@@ -354,6 +408,22 @@ describe('validateStockResearchOutput — partial mode', () => {
     const result = validateStockResearchOutput('garbage', { strict: false });
     expect(result.valid).toBe(false);
     expect(result.data).toBeNull();
+  });
+
+  it('safely degrades by deriving explainable fields from thesis/risks', () => {
+    const data = {
+      symbol: 'FPT',
+      recommendation: 'BUY',
+      confidence: 70,
+      thesis: ['Nhu cầu AI tăng'],
+      risks: ['Định giá cao'],
+    };
+    const result = validateStockResearchOutput(JSON.stringify(data), { strict: false });
+    expect(result.data).not.toBeNull();
+    expect(result.data.supportingEvidence).toEqual(['Nhu cầu AI tăng']);
+    expect(result.data.counterEvidence).toEqual(['Định giá cao']);
+    expect(result.data.invalidConditions).toEqual(['Định giá cao']);
+    expect(result.data.sources).toEqual([]);
   });
 });
 

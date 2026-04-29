@@ -26,7 +26,17 @@ const VALID_TIME_HORIZONS = ['1w', '1m', '1-3m', '3-6m', '6-12m', '1y+'];
 
 const VALID_CREDIBILITIES = ['high', 'medium', 'low'];
 
-const REQUIRED_FIELDS = ['symbol', 'recommendation', 'confidence', 'thesis', 'risks'];
+const REQUIRED_FIELDS = [
+  'symbol',
+  'recommendation',
+  'confidence',
+  'thesis',
+  'risks',
+  'supportingEvidence',
+  'counterEvidence',
+  'invalidConditions',
+  'sources',
+];
 
 const MAX_ARRAY_ITEMS = 5;
 
@@ -229,15 +239,78 @@ export function validateStockResearchOutput(rawText, options = {}) {
     }
   }
 
+  // --- Explainable v2 fields ---
+  // supportingEvidence (required, array<string>)
+  const supportingEvidenceRaw = raw.supportingEvidence ?? raw.supporting_evidence;
+  const supportingResult = supportingEvidenceRaw !== undefined
+    ? validateStringArray(supportingEvidenceRaw, 'supportingEvidence', { minItems: 1, maxItems: MAX_ARRAY_ITEMS })
+    : { valid: true, items: (data.thesis || []).slice(0, MAX_ARRAY_ITEMS), errors: [] };
+
+  if (supportingResult.valid && supportingResult.items.length > 0) {
+    data.supportingEvidence = supportingResult.items;
+  } else {
+    errors.push(...(supportingResult.errors || []));
+  }
+  if (supportingEvidenceRaw === undefined) {
+    warnings.push('supportingEvidence missing, auto-mapped from thesis');
+    autoCorrections = true;
+  }
+  if (raw.supporting_evidence !== undefined && raw.supportingEvidence === undefined) {
+    warnings.push('supporting_evidence auto-mapped to supportingEvidence');
+    autoCorrections = true;
+  }
+
+  // counterEvidence (required, array<string>)
+  const counterEvidenceRaw = raw.counterEvidence ?? raw.counter_evidence;
+  const counterResult = counterEvidenceRaw !== undefined
+    ? validateStringArray(counterEvidenceRaw, 'counterEvidence', { minItems: 1, maxItems: MAX_ARRAY_ITEMS })
+    : { valid: true, items: (data.risks || []).slice(0, MAX_ARRAY_ITEMS), errors: [] };
+
+  if (counterResult.valid && counterResult.items.length > 0) {
+    data.counterEvidence = counterResult.items;
+  } else {
+    errors.push(...(counterResult.errors || []));
+  }
+  if (counterEvidenceRaw === undefined) {
+    warnings.push('counterEvidence missing, auto-mapped from risks');
+    autoCorrections = true;
+  }
+  if (raw.counter_evidence !== undefined && raw.counterEvidence === undefined) {
+    warnings.push('counter_evidence auto-mapped to counterEvidence');
+    autoCorrections = true;
+  }
+
+  // invalidConditions (required, array<string>, allow fallback)
+  const invalidConditionsRaw = raw.invalidConditions ?? raw.invalid_conditions;
+  const invalidResult = invalidConditionsRaw !== undefined
+    ? validateStringArray(invalidConditionsRaw, 'invalidConditions', { minItems: 1, maxItems: MAX_ARRAY_ITEMS })
+    : { valid: true, items: (data.risks || []).slice(0, MAX_ARRAY_ITEMS), errors: [] };
+
+  if (invalidResult.valid && invalidResult.items.length > 0) {
+    data.invalidConditions = invalidResult.items;
+  } else {
+    errors.push(...(invalidResult.errors || []));
+  }
+  if (invalidConditionsRaw === undefined) {
+    warnings.push('invalidConditions missing, auto-mapped from risks');
+    autoCorrections = true;
+  }
+  if (raw.invalid_conditions !== undefined && raw.invalidConditions === undefined) {
+    warnings.push('invalid_conditions auto-mapped to invalidConditions');
+    autoCorrections = true;
+  }
+
   // --- sources (optional, array of {url, reason, credibility?}) ---
   if (raw.sources !== undefined) {
     const sourcesResult = validateSources(raw.sources);
-    if (sourcesResult.items.length > 0) {
-      data.sources = sourcesResult.items;
-    }
+    data.sources = sourcesResult.items;
     if (sourcesResult.warnings.length > 0) {
       warnings.push(...sourcesResult.warnings);
     }
+  } else {
+    data.sources = [];
+    warnings.push('sources missing, defaulted to empty array');
+    autoCorrections = true;
   }
 
   // Step 3: Determine validity

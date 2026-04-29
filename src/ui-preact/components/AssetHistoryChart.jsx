@@ -112,7 +112,7 @@ export default function AssetHistoryChart({ userId }) {
     };
   };
 
-  // Render simple ASCII chart (visual bar representation)
+  // Render simple column chart
   const renderSimpleChart = () => {
     if (history.length === 0) return null;
 
@@ -125,7 +125,7 @@ export default function AssetHistoryChart({ userId }) {
 
     return (
       <div className="simple-chart">
-        <div className="chart-bars">
+        <div className="chart-columns">
           {chartData.map((entry, index) => {
             const height = ((entry.total_value - minValue) / range) * 100;
             const isLatest = index === chartData.length - 1;
@@ -133,11 +133,11 @@ export default function AssetHistoryChart({ userId }) {
             return (
               <div 
                 key={entry.snapshot_date || index}
-                className={`chart-bar-container ${isLatest ? 'latest' : ''}`}
+                className={`chart-column-container ${isLatest ? 'latest' : ''}`}
                 title={`${formatDate(entry.snapshot_date)}: ${formatCurrency(entry.total_value)}`}
               >
                 <div 
-                  className="chart-bar"
+                  className="chart-column"
                   style={{ height: `${Math.max(height, 5)}%` }}
                 />
                 <span className="chart-date">

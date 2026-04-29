@@ -142,7 +142,7 @@ function ToastItem({ toast, onDismiss }) {
       </button>
       {duration > 0 && (
         <div
-          class="toast-progress"
+          class="toast-timer"
           style={{ animationDuration: `${duration}ms` }}
           aria-hidden="true"
         />

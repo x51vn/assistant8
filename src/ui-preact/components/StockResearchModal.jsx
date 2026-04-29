@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import { isTeaStockModalOpen } from '../state/portfolioState.js';
 import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { sendRuntimeMessage } from '../api/runtimeGateway.js';
+import { ProgressBar } from './ProgressBar.jsx';
 import {
   validateOverrideField,
   validateOverrides,
@@ -83,6 +84,9 @@ export default function StockResearchModal() {
   const [expandedSections, setExpandedSections] = useState({
     thesis: true,
     risks: true,
+    supportingEvidence: true,
+    counterEvidence: true,
+    invalidConditions: true,
     catalysts: false,
     sources: false,
   });
@@ -271,8 +275,15 @@ export default function StockResearchModal() {
   if (!isOpen) return null;
 
   const output = result?.output;
-  const progressPercent = totalSteps > 0 ? Math.round((currentStep / totalSteps) * 100) : 0;
-
+  const supportingEvidence = output?.supportingEvidence?.length > 0
+    ? output.supportingEvidence
+    : (output?.thesis || []);
+  const counterEvidence = output?.counterEvidence?.length > 0
+    ? output.counterEvidence
+    : (output?.risks || []);
+  const invalidConditions = output?.invalidConditions?.length > 0
+    ? output.invalidConditions
+    : (output?.risks || []);
   return (
     <div class="modal-overlay">
       <div class="modal modal--stock-research">
@@ -515,22 +526,20 @@ export default function StockResearchModal() {
             </>
           )}
 
-          {/* ===== PROGRESS VIEW ===== */}
+          {/* ===== STATUS VIEW ===== */}
           {isRunning && (
-            <div class="research-progress">
-              <div class="progress-header">
+            <div class="operation-status">
+              <div class="operation-status__header">
                 <i class="fas fa-spinner fa-spin"></i>
                 <span>{statusText || 'Đang xử lý...'}</span>
               </div>
-              <div class="progress-bar-container">
-                <div
-                  class="progress-bar"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <span class="progress-steps">
-                Bước {currentStep}/{totalSteps}
-              </span>
+              <ProgressBar
+                ariaLabel="Tiến trình Stock Research"
+                value={currentStep}
+                max={totalSteps}
+                size="sm"
+                caption={`Bước ${currentStep}/${totalSteps}`}
+              />
             </div>
           )}
 
@@ -547,14 +556,14 @@ export default function StockResearchModal() {
 
               {/* Confidence Meter */}
               <div class="confidence-meter">
-                <label>Độ tin cậy</label>
-                <div class="confidence-bar-container">
-                  <div
-                    class={`confidence-bar ${output.confidence >= 70 ? 'high' : output.confidence >= 40 ? 'medium' : 'low'}`}
-                    style={{ width: `${output.confidence || 0}%` }}
-                  />
-                </div>
-                <span class="confidence-value">{output.confidence || 0}%</span>
+                <ProgressBar
+                  label="Độ tin cậy"
+                  ariaLabel="Độ tin cậy phân tích"
+                  value={output.confidence || 0}
+                  max={100}
+                  tone={output.confidence >= 70 ? 'success' : output.confidence >= 40 ? 'warning' : 'danger'}
+                  showValue
+                />
               </div>
 
               {/* Target Price & Stop Loss */}
@@ -593,6 +602,54 @@ export default function StockResearchModal() {
                 >
                   <ul class="insight-list">
                     {output.thesis.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </CollapsibleSection>
+              )}
+
+              {/* Supporting Evidence Section (collapsible) */}
+              {supportingEvidence?.length > 0 && (
+                <CollapsibleSection
+                  title="Bằng chứng ủng hộ"
+                  icon="fa-check-circle"
+                  expanded={expandedSections.supportingEvidence}
+                  onToggle={() => toggleSection('supportingEvidence')}
+                >
+                  <ul class="insight-list">
+                    {supportingEvidence.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </CollapsibleSection>
+              )}
+
+              {/* Counter Evidence Section (collapsible) */}
+              {counterEvidence?.length > 0 && (
+                <CollapsibleSection
+                  title="Bằng chứng phản biện"
+                  icon="fa-balance-scale"
+                  expanded={expandedSections.counterEvidence}
+                  onToggle={() => toggleSection('counterEvidence')}
+                >
+                  <ul class="insight-list insight-list--risks">
+                    {counterEvidence.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </CollapsibleSection>
+              )}
+
+              {/* Invalid Conditions Section (collapsible) */}
+              {invalidConditions?.length > 0 && (
+                <CollapsibleSection
+                  title="Điều kiện vô hiệu luận điểm"
+                  icon="fa-ban"
+                  expanded={expandedSections.invalidConditions}
+                  onToggle={() => toggleSection('invalidConditions')}
+                >
+                  <ul class="insight-list insight-list--risks">
+                    {invalidConditions.map((item, i) => (
                       <li key={i}>{item}</li>
                     ))}
                   </ul>

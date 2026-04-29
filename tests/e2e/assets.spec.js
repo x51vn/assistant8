@@ -292,11 +292,11 @@ test.describe('Net Worth Calculation Tests', () => {
     await assetsTab.click();
     await page.waitForTimeout(500);
 
-    // Breakdown bar might not exist if no assets
-    const breakdownBar = page.locator('.net-worth-bar');
-    const exists = await breakdownBar.count() > 0;
+    // Allocation strip might not exist if no assets
+    const allocationStrip = page.locator('.allocation-strip');
+    const exists = await allocationStrip.count() > 0;
     
-    console.log(exists ? '✅ Breakdown bar displayed' : '⚠️ No breakdown bar (no assets)');
+    console.log(exists ? '✅ Allocation strip displayed' : '⚠️ No allocation strip (no assets)');
   });
 
   test('should toggle breakdown details on click', async () => {

@@ -314,7 +314,7 @@ export async function createContextMenus() {
     // Parent menu
     chrome.contextMenus.create({
       id: MENU_IDS.PARENT,
-      title: 'ChatGPT Assistant',
+      title: 'Assistant8',
       contexts: ['selection', 'page', 'link', 'image']
     });
 

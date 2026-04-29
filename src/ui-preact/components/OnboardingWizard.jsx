@@ -24,7 +24,7 @@ import { setCurrentPage } from '../state/navigationState.js';
 const STEPS = [
   {
     icon: '👋',
-    title: 'Chào mừng đến với ChatGPT Assistant!',
+    title: 'Chào mừng đến với Assistant8!',
     desc: 'Quản lý danh mục chứng khoán, lưu lịch sử chat, và học tiếng Anh — tất cả trong một extension.',
     action: 'Bắt đầu',
   },
@@ -157,8 +157,8 @@ export function OnboardingWizard({ onDone, onSkip }) {
   return (
     <div class="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Onboarding">
       <div class="onboarding-card">
-        {/* Progress dots */}
-        <div class="onboarding-progress" role="navigation" aria-label="Tiến trình">
+        {/* Step dots */}
+        <div class="onboarding-steps" role="navigation" aria-label="Các bước">
           {STEPS.map((_, i) => (
             <div
               key={i}
