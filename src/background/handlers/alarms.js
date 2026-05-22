@@ -6,22 +6,16 @@
 
 import { createLogger } from '../../logger.js';
 import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
-import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, MARKET_OPEN_HOUR, MARKET_CLOSE_HOUR } from '../../shared/appConstants.js';
+import { ALARM_UPDATE_PRICES, ALARM_DAILY_CLEANUP, ALARM_PROMPT_IMPROVEMENT_PURGE } from '../../shared/appConstants.js';
 import { generateCorrelationId } from '../../logger.js';
+import { route } from '../messageRouter.js';
+import { isMarketHours } from '../utils/marketHours.js';
+import { _performSessionCheck } from './sessionManager.js';
 
 const logger = createLogger('Alarms');
 
-/**
- * Check if current time is during market hours
- * Vietnam stock market: 9:00 AM - 3:00 PM
- */
-function isMarketHours() {
-  const now = new Date();
-  const hour = now.getHours();
-  
-  // Market hours: 9:00 - 15:00 (3:00 PM)
-  return hour >= MARKET_OPEN_HOUR && hour < MARKET_CLOSE_HOUR;
-}
+// Alarm name for commodity (gold/crypto) price updates
+export const ALARM_UPDATE_COMMODITY_PRICES = 'updateCommodityPrices';
 
 /**
  * Handle alarm event
@@ -47,15 +41,17 @@ export async function handleAlarm(alarm) {
       }
       
       try {
-        // Send message to portfolio handler to update prices
-        const response = await chrome.runtime.sendMessage({
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
           v: 1,
           type: MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES,
           correlationId,
           timestamp: Date.now()
-        });
+        }, { id: 'alarm' });
         
-        if (response.errorCode) {
+        if (!response) {
+          logger.warn('No response from portfolio price update handler', { correlationId });
+        } else if (response.errorCode) {
           logger.error('Price update failed', {
             correlationId,
             error: response.errorMessage
@@ -63,12 +59,109 @@ export async function handleAlarm(alarm) {
         } else {
           logger.info('Price update completed', {
             correlationId,
-            updated: response.data?.updated,
-            failed: response.data?.failed
+            updated: response.updated,
+            failed: response.failed
           });
         }
       } catch (error) {
         logger.error('UPDATE_PRICES alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // UPDATE_COMMODITY_PRICES alarm - Update gold & crypto prices (24/7)
+    if (alarm.name === ALARM_UPDATE_COMMODITY_PRICES || alarm.name === 'updateCommodityPrices') {
+      logger.info('UPDATE_COMMODITY_PRICES alarm triggered', { correlationId });
+      
+      try {
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.COMMODITY_UPDATE_ASSET_PRICES,
+          correlationId,
+          timestamp: Date.now()
+        }, { id: 'alarm' });
+        
+        if (!response) {
+          logger.warn('No response from commodity price update handler', { correlationId });
+        } else if (response.errorCode) {
+          logger.error('Commodity price update failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else {
+          logger.info('Commodity price update completed', {
+            correlationId,
+            updated: response.updated,
+            goldUpdated: response.results?.gold?.length || 0,
+            cryptoUpdated: response.results?.crypto?.length || 0
+          });
+        }
+      } catch (error) {
+        logger.error('UPDATE_COMMODITY_PRICES alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // WATCHLIST_PRICE_UPDATE alarm - Update Supabase watchlist prices (market hours only)
+    // XST-744: Real-time price updates from Supabase
+    if (alarm.name === 'watchlistPriceUpdate') {
+      logger.info('WATCHLIST_PRICE_UPDATE alarm triggered', { correlationId });
+
+      // Market hours check is done in the handler (for logging consistency)
+      // Alarm fires every 5 minutes regardless, handler decides to skip
+
+      try {
+        // Call route() directly — reliable even when side panel is closed
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.XNEEWS_PRICE_UPDATE,
+          correlationId,
+          timestamp: Date.now()
+        }, { id: 'alarm' });
+        
+        if (!response) {
+          logger.warn('No response from watchlist price update handler', { correlationId });
+        } else if (response.errorCode) {
+          logger.error('Watchlist price update failed', {
+            correlationId,
+            error: response.errorMessage
+          });
+        } else if (response.skipped) {
+          logger.debug('Watchlist price update skipped', {
+            correlationId,
+            reason: response.reason
+          });
+        } else {
+          logger.info('Watchlist price update completed', {
+            correlationId,
+            itemsCount: response.itemsCount
+          });
+        }
+      } catch (error) {
+        logger.error('WATCHLIST_PRICE_UPDATE alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // ✅ SESSION_CHECK alarm - Check if session is about to expire (every 1 minute)
+    // Calls internal function directly - NO chrome.runtime.sendMessage()
+    // Guaranteed to execute even if UI closed/SW restarted
+    if (alarm.name === 'SESSION_CHECK') {
+      logger.debug('SESSION_CHECK alarm triggered', { correlationId });
+      
+      try {
+        // Call directly - reliable execution regardless of UI state
+        const result = await _performSessionCheck(correlationId);
+        
+        logger.debug('Session check completed', {
+          correlationId,
+          status: result.status,
+          authenticated: result.authenticated,
+          minutesUntilExpiry: result.minutesUntilExpiry
+        });
+      } catch (error) {
+        logger.error('SESSION_CHECK alarm failed', { correlationId, error: error.message });
       }
       return;
     }
@@ -87,6 +180,36 @@ export async function handleAlarm(alarm) {
         logger.info('Cleanup completed', { correlationId });
       } catch (error) {
         logger.error('DAILY_CLEANUP alarm failed', { correlationId, error: error.message });
+      }
+      return;
+    }
+
+    // PROMPT_IMPROVEMENT_PURGE alarm - Purge expired prompt_runs (7d) and prompt_lessons
+    if (alarm.name === ALARM_PROMPT_IMPROVEMENT_PURGE || alarm.name === 'promptImprovementPurge') {
+      logger.info('PROMPT_IMPROVEMENT_PURGE alarm triggered', { correlationId });
+
+      try {
+        const response = await route({
+          v: 1,
+          type: MESSAGE_TYPES.PROMPT_IMPROVEMENT_PURGE,
+          correlationId,
+          timestamp: Date.now()
+        }, { id: 'alarm' });
+
+        if (!response || response.errorCode) {
+          logger.error('Prompt improvement purge failed', {
+            correlationId,
+            error: response?.errorMessage
+          });
+        } else {
+          logger.info('Prompt improvement purge completed', {
+            correlationId,
+            purgedRuns: response.purgedRuns,
+            purgedLessons: response.purgedLessons
+          });
+        }
+      } catch (error) {
+        logger.error('PROMPT_IMPROVEMENT_PURGE alarm failed', { correlationId, error: error.message });
       }
       return;
     }

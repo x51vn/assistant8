@@ -12,6 +12,8 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { fetchStockPricesBatch } from '../utils/ssiPriceFetcher.js';
+import { PortfolioMapper } from '../../shared/mappers/portfolioMapper.js';
+import { validateEgress } from '../../shared/contracts/egressValidator.js';
 
 const logger = createLogger('Handlers/Portfolio');
 
@@ -81,10 +83,11 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_GET, async (message) => {
     
     logger.info('Portfolio fetched', { correlationId, itemCount: items.length });
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_DATA, {
+    const getResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_DATA, {
       success: true,
-      items
+      items: PortfolioMapper.fromEntityList(items)
     });
+    return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_DATA, getResponse, logger);
     
   } catch (error) {
     // If error already formatted by requireAuth
@@ -162,10 +165,11 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_ADD, async (message) => {
     
     logger.info('Portfolio item added', { correlationId, symbol: normalizedSymbol });
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_ADDED, {
+    const addResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_ADDED, {
       success: true,
-      item
+      item: PortfolioMapper.toResponseItem(PortfolioMapper.fromEntity(item))
     });
+    return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_ADDED, addResponse, logger);
     
   } catch (error) {
     // If error already formatted by requireAuth
@@ -261,10 +265,11 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE, async (message) => {
     
     logger.info('Portfolio item updated', { correlationId, identifier, symbol: item.symbol });
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_UPDATED, {
+    const updateResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_UPDATED, {
       success: true,
-      item
+      item: PortfolioMapper.toResponseItem(PortfolioMapper.fromEntity(item))
     });
+    return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_UPDATED, updateResponse, logger);
     
   } catch (error) {
     // If error already formatted by requireAuth
@@ -354,10 +359,11 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
     
     logger.info('Portfolio item removed', { correlationId, identifier });
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_REMOVED, {
+    const removeResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_REMOVED, {
       success: true,
       identifier
     });
+    return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_REMOVED, removeResponse, logger);
     
   } catch (error) {
     // If error already formatted by requireAuth
@@ -382,8 +388,6 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_REMOVE, async (message) => {
     );
   }
 });
-
-logger.info('Portfolio handlers registered');
 
 /**
  * Handle PORTFOLIO_UPDATE_PRICES
@@ -417,11 +421,12 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES, async (message) => {
     
     if (items.length === 0) {
       logger.info('No portfolio items to update', { correlationId });
-      return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, {
+      const emptyPricesResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, {
         success: true,
         updated: 0,
         prices: {}
       });
+      return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, emptyPricesResponse, logger);
     }
     
     const symbols = items.map(item => item.symbol);
@@ -475,12 +480,13 @@ registerHandler(MESSAGE_TYPES.PORTFOLIO_UPDATE_PRICES, async (message) => {
       failed: failCount
     });
     
-    return createResponse(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, {
+    const pricesResponse = createResponse(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, {
       success: true,
       updated: successCount,
       failed: failCount,
       prices: priceMap
     });
+    return validateEgress(message, MESSAGE_TYPES.PORTFOLIO_PRICES_UPDATED, pricesResponse, logger);
     
   } catch (error) {
     // If error already formatted by requireAuth

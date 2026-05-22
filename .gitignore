@@ -14,6 +14,7 @@ npm-debug.log*
 chrome-extension-backup/
 *.zip
 *.crx
+*.pem
 
 # Development
 .env
@@ -37,11 +38,13 @@ Thumbs.db
 # Testing
 .coverage/
 test-results/
+tests/e2e/reports/
+test-user-data-*/
 
 # Build output
 build/
 out/
-dist/*.map
+dist/
 
 # Source map files (generated during build, not needed in git)
 *.map
@@ -50,3 +53,6 @@ dist/*.map
 *.tmp
 *.temp
 .cache/
+
+# Claude/AI agent temp folders (repo pollution)
+tmpclaude-*-cwd/

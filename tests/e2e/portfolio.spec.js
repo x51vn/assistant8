@@ -1,11 +1,12 @@
 /**
  * X51LABS-90: Portfolio Tab Tests
- * Verify portfolio management features work correctly
+ * Verify the live Preact portfolio page and stock modal work correctly
  */
 
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { launchExtensionContext } from './extensionTestUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,31 +16,22 @@ test.describe('Portfolio Tab Tests', () => {
   let extensionId;
   let page;
 
+  async function openPortfolioPage() {
+    await page.locator('button:has-text("Portfolio")').click();
+    await expect(page.locator('.portfolio-page')).toBeVisible();
+  }
+
+  async function openAddStockModal() {
+    await openPortfolioPage();
+    await page.locator('.portfolio-actions .action-button--primary').click();
+    await expect(page.locator('.modal-overlay .modal-content')).toBeVisible();
+  }
+
   test.beforeAll(async () => {
-    const extensionPath = path.join(__dirname, '../../src/extension');
-    const userDataDir = path.join(__dirname, '../../test-user-data-portfolio');
+    ({ context, extensionId } = await launchExtensionContext(__dirname, 'test-user-data-portfolio'));
 
-    context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ]
-    });
-
-    // Get extension ID
-    const backgroundPages = context.backgroundPages();
-    if (backgroundPages.length > 0) {
-      const url = backgroundPages[0].url();
-      const match = url.match(/chrome-extension:\/\/([a-z]+)\//);
-      if (match) {
-        extensionId = match[1];
-      }
-    }
-
-    // Open sidepanel
     page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await page.goto(`chrome-extension://${extensionId}/sidepanel-preact.html`);
     await page.waitForTimeout(1000);
   });
 
@@ -49,145 +41,68 @@ test.describe('Portfolio Tab Tests', () => {
   });
 
   test('should navigate to Portfolio tab', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
-
-    // Verify Portfolio page loaded
-    const portfolioPage = page.locator('#portfolio-page');
-    await expect(portfolioPage).toBeVisible();
-    
+    await openPortfolioPage();
     console.log('✅ Portfolio tab opened');
   });
 
-  test('should display Add Stock button', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should display portfolio actions and current surface', async () => {
+    await openPortfolioPage();
 
-    const addButton = page.locator('button:has-text("Thêm"), button:has-text("Add")');
-    const exists = await addButton.count() > 0;
-    
-    expect(exists).toBe(true);
-    console.log('✅ Add Stock button found');
+    await expect(page.locator('.portfolio-actions')).toBeVisible();
+
+    const hasTable = await page.locator('.portfolio-table').count() > 0;
+    const hasEmptyState = await page.locator('.portfolio-table-container .empty-state').count() > 0;
+    expect(hasTable || hasEmptyState).toBe(true);
+
+    console.log('✅ Portfolio actions and content surface visible');
   });
 
-  test('should display portfolio table', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should open the live Add Stock modal', async () => {
+    await openAddStockModal();
 
-    const table = page.locator('table, .portfolio-table');
-    const exists = await table.count() > 0;
-    
-    expect(exists).toBe(true);
-    console.log('✅ Portfolio table found');
-  });
+    await expect(page.locator('.modal-header h2')).toContainText('Thêm cổ phiếu');
 
-  test('should open Add Stock modal when clicking Add button', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
-
-    // Click Add button
-    const addButton = page.locator('button:has-text("Thêm"), button:has-text("Add")').first();
-    await addButton.click();
-    await page.waitForTimeout(500);
-
-    // Check if modal opened
-    const modal = page.locator('#portfolioModal');
-    await expect(modal).toBeVisible();
-    
     console.log('✅ Add Stock modal opened');
   });
 
-  test('should display modal input fields', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should display current stock modal input fields', async () => {
+    await openAddStockModal();
 
-    // Open modal
-    const addButton = page.locator('button:has-text("Thêm"), button:has-text("Add")').first();
-    await addButton.click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#symbol')).toBeVisible();
+    await expect(page.locator('#entryPrice')).toBeVisible();
+    await expect(page.locator('#quantity')).toBeVisible();
+    await expect(page.locator('.form-buttons .btn-submit')).toBeVisible();
 
-    // Check for input fields
-    const codeInput = page.locator('#stockCodeInput');
-    const entryInput = page.locator('#stockEntryInput');
-    const quantityInput = page.locator('#stockQuantityInput');
-    
-    await expect(codeInput).toBeVisible();
-    await expect(entryInput).toBeVisible();
-    await expect(quantityInput).toBeVisible();
-    
-    console.log('✅ Modal input fields displayed');
+    console.log('✅ Current stock modal fields displayed');
   });
 
-  test('should have Save button in modal', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should keep submit disabled until the form is valid', async () => {
+    await openAddStockModal();
 
-    // Open modal
-    const addButton = page.locator('button:has-text("Thêm"), button:has-text("Add")').first();
-    await addButton.click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('.form-buttons .btn-submit')).toBeDisabled();
 
-    // Check for Save button
-    const saveButton = page.locator('#saveStockBtn');
-    await expect(saveButton).toBeVisible();
-    
-    console.log('✅ Save button found in modal');
+    console.log('✅ Submit starts disabled');
   });
 
-  test('should be able to input stock data', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should accept current stock modal inputs', async () => {
+    await openAddStockModal();
 
-    // Open modal
-    const addButton = page.locator('button:has-text("Thêm"), button:has-text("Add")').first();
-    await addButton.click();
-    await page.waitForTimeout(500);
+    await page.fill('#symbol', 'VNM');
+    await page.fill('#entryPrice', '70000');
+    await page.fill('#quantity', '100');
 
-    // Fill in test data
-    await page.fill('#stockCodeInput', 'VNM');
-    await page.fill('#stockEntryInput', '70000');
-    await page.fill('#stockQuantityInput', '100');
-    
-    // Verify values
-    const codeValue = await page.inputValue('#stockCodeInput');
-    const entryValue = await page.inputValue('#stockEntryInput');
-    const quantityValue = await page.inputValue('#stockQuantityInput');
-    
-    expect(codeValue).toBe('VNM');
-    expect(entryValue).toBe('70000');
-    expect(quantityValue).toBe('100');
-    
-    console.log('✅ Stock data input successful');
+    await expect(page.locator('#symbol')).toHaveValue('VNM');
+    await expect(page.locator('#entryPrice')).toHaveValue('70000');
+    await expect(page.locator('#quantity')).toHaveValue('100');
+
+    console.log('✅ Stock modal accepts input');
   });
 
-  test('should display P/L calculation section', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
+  test('should expose refresh action for manual price updates', async () => {
+    await openPortfolioPage();
 
-    // Look for P/L related elements
-    const plSection = page.locator('.pl-section, #pl-section, .profit-loss');
-    const exists = await plSection.count() > 0;
-    
-    console.log(`✅ P/L section exists: ${exists}`);
-  });
+    await expect(page.locator('.portfolio-actions .action-button--secondary')).toBeVisible();
 
-  test('should have refresh/update button', async () => {
-    const portfolioTab = page.locator('button:has-text("Portfolio")');
-    await portfolioTab.click();
-    await page.waitForTimeout(500);
-
-    // Look for refresh/update button
-    const refreshButton = page.locator('button:has-text("Refresh"), button:has-text("Update"), button:has-text("Cập nhật")');
-    const exists = await refreshButton.count() > 0;
-    
-    console.log(`✅ Refresh button exists: ${exists}`);
+    console.log('✅ Refresh action visible');
   });
 });

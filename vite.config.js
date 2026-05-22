@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import preact from '@preact/preset-vite';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
@@ -95,6 +96,41 @@ async function copyDir(srcDir, destDir) {
   }
 }
 
+/**
+ * Vite plugin: strip ES module export syntax from content scripts.
+ *
+ * Problem: `format: 'es'` makes Rollup append `export default ...;` to every
+ * output chunk, turning them into ES modules. Chrome's manifest `content_scripts`
+ * supports `"type": "module"` for static injection, but
+ * `chrome.scripting.executeScript({ files })` always injects as a CLASSIC script.
+ * Classic scripts cannot contain `export` — they throw:
+ *   "Uncaught SyntaxError: Unexpected token 'export'"
+ *
+ * Solution: post-process the built content script chunks to strip all top-level
+ * export statements. The bundled scripts are already self-contained IIFEs
+ * (Vite/Rollup wraps all imports); the `export default` is the only ES-module
+ * artefact. Without it they load correctly as classic scripts in both contexts.
+ */
+function contentScriptClassicPlugin() {
+  const CONTENT_SCRIPTS = new Set(['content.js', 'content-gemini.js', 'content-claude.js']);
+  return {
+    name: 'content-script-classic',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        if (chunk.type !== 'chunk' || !CONTENT_SCRIPTS.has(fileName)) continue;
+        // Remove Rollup ES-module wrappers from minified single-line bundles.
+        // Handles both `\nexport ...` and `;export ...` tail forms.
+        chunk.code = chunk.code
+          .replace(/;\s*export default [^;]+;?\s*$/, ';')
+          .replace(/\nexport default [^;]+;?\s*$/, '\n')
+          .replace(/;\s*export \{[^}]*\};?\s*$/, ';')
+          .replace(/\nexport \{[^}]*\};?\s*$/, '\n');
+      }
+    },
+  };
+}
+
 function copyExtensionStatic() {
   return {
     name: 'copy-extension-static',
@@ -106,10 +142,17 @@ function copyExtensionStatic() {
       const staticDir = path.resolve(root, 'src', 'extension');
 
       await copyFile(path.resolve(staticDir, 'manifest.json'), path.resolve(outDir, 'manifest.json'));
-      await copyFile(path.resolve(staticDir, 'sidepanel.html'), path.resolve(outDir, 'sidepanel.html'));
-      await copyFile(path.resolve(staticDir, 'popup.html'), path.resolve(outDir, 'popup.html'));
-      await copyFile(path.resolve(staticDir, 'styles.css'), path.resolve(outDir, 'styles.css'));
+      // ✅ CLEANUP: Removed legacy sidepanel.html, popup.html
+      await copyFile(path.resolve(staticDir, 'sidepanel-preact.html'), path.resolve(outDir, 'sidepanel-preact.html'));
+      
+      // ✅ CLEANUP: Only copy active CSS files (removed styles-legacy.css, styles.css)
+      await copyFile(path.resolve(staticDir, 'styles-shared.css'), path.resolve(outDir, 'styles-shared.css'));
+      await copyFile(path.resolve(staticDir, 'styles-preact.css'), path.resolve(outDir, 'styles-preact.css'));
+      await copyFile(path.resolve(staticDir, 'styles-settings.css'), path.resolve(outDir, 'styles-settings.css'));
+      
       await copyFile(path.resolve(staticDir, 'prompt-template.md'), path.resolve(outDir, 'prompt-template.md'));
+      await copyFile(path.resolve(staticDir, 'privacy-policy.html'), path.resolve(outDir, 'privacy-policy.html'));
+      await copyFile(path.resolve(staticDir, 'terms-of-service.html'), path.resolve(outDir, 'terms-of-service.html'));
 
       const imagesDir = path.resolve(staticDir, 'images');
       await copyDir(imagesDir, path.resolve(outDir, 'images'));
@@ -123,9 +166,17 @@ function copyExtensionStatic() {
 
 export default defineConfig({
   plugins: [
+    preact(),
     validateEnvPlugin(), // X51LABS-130: Validate env vars before build
+    contentScriptClassicPlugin(), // Strip ES module exports from content scripts
     copyExtensionStatic()
   ],
+  resolve: {
+    alias: {
+      'react': 'preact/compat',
+      'react-dom': 'preact/compat'
+    }
+  },
   // X51LABS-79: TODO - Add build size validation plugin (requires CJS or external script)
   build: {
     outDir: 'dist',
@@ -136,11 +187,16 @@ export default defineConfig({
       input: {
         background: path.resolve(__dirname, 'src/background/index.js'),
         content: path.resolve(__dirname, 'src/content.js'),
-        ui: path.resolve(__dirname, 'src/ui/index.js'),
+        'content-gemini': path.resolve(__dirname, 'src/content/gemini.js'),
+        'content-claude': path.resolve(__dirname, 'src/content/claude.js'),
+        // ✅ CLEANUP: Removed legacy 'ui' entry point
+        'settings-preact': path.resolve(__dirname, 'src/ui-preact/settings/index.jsx'),
       },
       output: {
         entryFileNames: '[name].js',
         chunkFileNames: '[name]-[hash].js',
+        // Predictable CSS names so statically-copied HTML can reference them
+        assetFileNames: 'assets/[name][extname]',
         format: 'es',
         // X51LABS-79: Removed manualChunks - Vite auto-splits optimally
       },

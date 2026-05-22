@@ -1,0 +1,415 @@
+/* Shared Styles - Variables, Theme, Common Components */
+
+/* Theme tokens */
+/* Theme tokens */
+:root {
+  color-scheme: light dark;
+  --app-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --app-text: #333;
+  --surface-bg: #ffffff;
+  --surface-alt: #f6f7fb;
+  --surface-border: #e8eaf3;
+  --surface-shadow: 0 8px 20px rgba(17, 24, 39, 0.06);
+  --heading-text: #1f2937;
+  --body-text: #374151;
+  --muted-text: #6b7280;
+  --input-bg: #fbfbfd;
+  --input-border: #d8dce7;
+  --input-focus: #667eea;
+  --input-text: #2c3e50;
+  --toast-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  --dialog-overlay: rgba(0, 0, 0, 0.4);
+  --success-bg: #d4edda;
+  --success-text: #155724;
+  --success-border: #c3e6cb;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+  --error-border: #f5c6cb;
+  --info-bg: #d1ecf1;
+  --info-text: #0c5460;
+  --info-border: #bee5eb;
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --warning-border: #ffeeba;
+  /* Additional theme tokens */
+  --primary-color: #667eea;
+  --primary-hover: #5568d3;
+  --primary-shadow: rgba(102, 126, 234, 0.3);
+  --secondary-bg: #e8e8e8;
+  --secondary-text: #333;
+  --secondary-border: #d0d0d0;
+  --accent-color: #2ecc71;
+  --accent-hover: #27ae60;
+  --table-header-bg: #f8f9ff;
+  --table-row-hover: #f8f9ff;
+  --scrollbar-track: #f1f1f1;
+  --scrollbar-thumb: #ccc;
+  --scrollbar-thumb-hover: #999;
+  --card-gradient: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+  --card-positive-gradient: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  --card-negative-gradient: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  /* Danger/Delete button colors */
+  --danger-bg: #dc3545;
+  --danger-hover: #c82333;
+  --danger-light-bg: #fee2e2;
+  --danger-light-text: #dc3545;
+  --danger-light-border: #fca5a5;
+  /* Severity colors */
+  --severity-low: #6c757d;
+  --severity-medium-bg: #fef3c7;
+  --severity-medium-text: #b45309;
+  --severity-medium-border: #ffc107;
+  --severity-high-bg: #ffedd5;
+  --severity-high-text: #c2410c;
+  --severity-high-border: #fd7e14;
+  --severity-critical-bg: #fee2e2;
+  --severity-critical-text: #dc3545;
+  --severity-critical-border: #dc3545;
+}
+
+
+/* Dark theme - Both media query AND class-based for runtime updates */
+/* Dark theme - Both media query AND class-based for runtime updates */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #0f172a;
+    --app-text: #e5e7eb;
+    --surface-bg: #111827;
+    --surface-alt: #0b1220;
+    --surface-border: #1f2937;
+    --surface-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    --heading-text: #f3f4f6;
+    --body-text: #d1d5db;
+    --muted-text: #9ca3af;
+    --input-bg: #0f172a;
+    --input-border: #243146;
+    --input-focus: #93a4ff;
+    --input-text: #e5e7eb;
+    --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+    --dialog-overlay: rgba(2, 6, 23, 0.7);
+    --success-bg: #1f3a2d;
+    --success-text: #b7f7d5;
+    --success-border: #2c5d41;
+    --error-bg: #3c1b1b;
+    --error-text: #f8b4b4;
+    --error-border: #6b2a2a;
+    --info-bg: #0c2f38;
+    --info-text: #9fe7f5;
+    --info-border: #1e4a54;
+    --warning-bg: #3a2f10;
+    --warning-text: #f5da8b;
+    --warning-border: #5a481a;
+    /* Additional dark theme tokens */
+    --primary-color: #818cf8;
+    --primary-hover: #6366f1;
+    --primary-shadow: rgba(129, 140, 248, 0.3);
+    --secondary-bg: #374151;
+    --secondary-text: #e5e7eb;
+    --secondary-border: #4b5563;
+    --accent-color: #34d399;
+    --accent-hover: #10b981;
+    --table-header-bg: #1f2937;
+    --table-row-hover: #1e293b;
+    --scrollbar-track: #1f2937;
+    --scrollbar-thumb: #4b5563;
+    --scrollbar-thumb-hover: #6b7280;
+    --card-gradient: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    --card-positive-gradient: linear-gradient(135deg, #14532d 0%, #111827 100%);
+    --card-negative-gradient: linear-gradient(135deg, #450a0a 0%, #111827 100%);
+    /* Danger/Delete button colors - dark theme */
+    --danger-bg: #ef4444;
+    --danger-hover: #dc2626;
+    --danger-light-bg: #450a0a;
+    --danger-light-text: #f8b4b4;
+    --danger-light-border: #991b1b;
+    /* Severity colors - dark theme */
+    --severity-low: #9ca3af;
+    --severity-medium-bg: #78350f;
+    --severity-medium-text: #fcd34d;
+    --severity-medium-border: #d97706;
+    --severity-high-bg: #7c2d12;
+    --severity-high-text: #fdba74;
+    --severity-high-border: #ea580c;
+    --severity-critical-bg: #450a0a;
+    --severity-critical-text: #f8b4b4;
+    --severity-critical-border: #dc2626;
+  }
+}
+
+
+/* Class-based dark theme override (for runtime theme switching) */
+/* Class-based dark theme override (for runtime theme switching) */
+body.dark {
+  --app-bg: #0f172a;
+  --app-text: #e5e7eb;
+  --surface-bg: #111827;
+  --surface-alt: #0b1220;
+  --surface-border: #1f2937;
+  --surface-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  --heading-text: #f3f4f6;
+  --body-text: #d1d5db;
+  --muted-text: #9ca3af;
+  --input-bg: #0f172a;
+  --input-border: #243146;
+  --input-focus: #93a4ff;
+  --input-text: #e5e7eb;
+  --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  --dialog-overlay: rgba(2, 6, 23, 0.7);
+  --success-bg: #1f3a2d;
+  --success-text: #b7f7d5;
+  --success-border: #2c5d41;
+  --error-bg: #3c1b1b;
+  --error-text: #f8b4b4;
+  --error-border: #6b2a2a;
+  --info-bg: #0c2f38;
+  --info-text: #9fe7f5;
+  --info-border: #1e4a54;
+  --warning-bg: #3a2f10;
+  --warning-text: #f5da8b;
+  --warning-border: #5a481a;
+  /* Additional dark theme tokens */
+  --primary-color: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-shadow: rgba(129, 140, 248, 0.3);
+  --secondary-bg: #374151;
+  --secondary-text: #e5e7eb;
+  --secondary-border: #4b5563;
+  --accent-color: #34d399;
+  --accent-hover: #10b981;
+  --table-header-bg: #1f2937;
+  --table-row-hover: #1e293b;
+  --scrollbar-track: #1f2937;
+  --scrollbar-thumb: #4b5563;
+  --scrollbar-thumb-hover: #6b7280;
+  --card-gradient: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  --card-positive-gradient: linear-gradient(135deg, #14532d 0%, #111827 100%);
+  --card-negative-gradient: linear-gradient(135deg, #450a0a 0%, #111827 100%);
+  /* Danger/Delete button colors - dark theme */
+  --danger-bg: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-light-bg: #450a0a;
+  --danger-light-text: #f8b4b4;
+  --danger-light-border: #991b1b;
+  /* Severity colors - dark theme */
+  --severity-low: #9ca3af;
+  --severity-medium-bg: #78350f;
+  --severity-medium-text: #fcd34d;
+  --severity-medium-border: #d97706;
+  --severity-high-bg: #7c2d12;
+  --severity-high-text: #fdba74;
+  --severity-high-border: #ea580c;
+  --severity-critical-bg: #450a0a;
+  --severity-critical-text: #f8b4b4;
+  --severity-critical-border: #dc2626;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+/* Layout: Prevent body scroll, only page content scrolls */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* Body doesn't scroll */
+}
+
+body.sidepanel .content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden; /* Content container doesn't scroll either */
+}
+
+header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.nav-buttons {
+  display: flex;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.nav-btn.active {
+  background: white;
+  color: #667eea;
+}
+
+.page {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  animation: fadeIn 0.3s ease;
+}
+
+.page.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 15px;
+  color: var(--heading-text, #333);
+  font-weight: 600;
+}
+
+
+/* Confirmation Dialog */
+/* Confirmation Dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--dialog-overlay, rgba(0, 0, 0, 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.confirm-dialog {
+  background: var(--surface-bg, #fff);
+  border-radius: 10px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: var(--surface-shadow, 0 10px 30px rgba(0, 0, 0, 0.2));
+  animation: confirmFadeIn 0.2s ease;
+}
+
+.confirm-header {
+  padding: 16px 20px 0;
+}
+
+.confirm-header h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.confirm-body {
+  padding: 0 20px 16px;
+  font-size: 13px;
+  color: var(--body-text, #444);
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 20px 18px;
+}
+
+.confirm-actions .primary-btn,
+.confirm-actions .secondary-btn {
+  flex: 1;
+  margin: 0;
+}
+
+@keyframes confirmFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* Loading Spinner */
+/* Loading Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.spinner.hidden {
+  display: none;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Scrollbar Styling */
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track, #f1f1f1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, #ccc);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, #999);
+}
+
+/* Dark Theme Support - REMOVED: Using CSS variables from :root instead (lines 45-75, 80-150) */
+/* Dark Theme Support - REMOVED: Using CSS variables from :root instead (lines 45-75, 80-150) */
+
+
+/* Scrollbar styling */
+/* Scrollbar styling */
+.page-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.page-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page-wrapper::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, #ccc);
+  border-radius: 3px;
+}
+
+.page-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, #999);
+}
+
+

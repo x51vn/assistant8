@@ -32,7 +32,7 @@ export const RETRY_DELAY_BASE_MS = 1000;
  * Older entries should be cleaned up by daily maintenance
  * @type {number}
  */
-export const MAX_CHAT_HISTORY = 100;
+export const MAX_CHAT_HISTORY = 50;
 
 // ============================================================================
 // PRICE UPDATES
@@ -134,3 +134,9 @@ export const ALARM_UPDATE_PRICES = 'updateStockPrices';
  * @type {string}
  */
 export const ALARM_DAILY_CLEANUP = 'dailyCleanup';
+
+/**
+ * Chrome alarm name for daily prompt improvement purge
+ * @type {string}
+ */
+export const ALARM_PROMPT_IMPROVEMENT_PURGE = 'promptImprovementPurge';

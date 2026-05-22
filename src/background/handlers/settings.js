@@ -14,6 +14,34 @@ import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js'
 const logger = createLogger('Settings');
 
 /**
+ * Deep-merge two config objects: nested objects are merged recursively,
+ * arrays and primitives from `patch` overwrite `base`.
+ * @param {Object} base - Existing config from DB
+ * @param {Object} patch - Incoming partial config
+ * @returns {Object} Merged config
+ */
+function deepMergeConfig(base, patch) {
+  const result = { ...base };
+  for (const key of Object.keys(patch)) {
+    const bVal = base[key];
+    const pVal = patch[key];
+    if (
+      pVal !== null &&
+      typeof pVal === 'object' &&
+      !Array.isArray(pVal) &&
+      bVal !== null &&
+      typeof bVal === 'object' &&
+      !Array.isArray(bVal)
+    ) {
+      result[key] = deepMergeConfig(bVal, pVal);
+    } else {
+      result[key] = pVal;
+    }
+  }
+  return result;
+}
+
+/**
  * SETTINGS_GET - Get user settings with normalized structure
  * Normalizes legacy format (config.prompt) → (config.prompts.master)
  */
@@ -58,7 +86,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
         }
       };
       delete config.prompt; // Remove legacy field from response
-      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master');
+      logger.debug('Normalized legacy config.prompt → config.prompts.master');
     }
     
     return createResponse(message, MESSAGE_TYPES.SETTINGS_DATA, {
@@ -91,11 +119,18 @@ registerHandler(MESSAGE_TYPES.SETTINGS_GET, async (message) => {
 
 /**
  * SETTINGS_UPDATE - Update user settings (upsert)
- * Accepts both legacy (config.prompt) and new (config.prompts.master) format
+ * Accepts multiple formats:
+ *   1. { data: { config: { ... } } }          — standard format
+ *   2. { data: { theme, consent_*, onboarding_*, ... } } — direct fields (legacy callers)
+ *   3. { data: { config: { prompt: '...' } } } — legacy prompt field
  */
 registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
   const correlationId = logger.startOperation('updateSettings', message.correlationId);
-  let { config } = message.data || {};
+  const data = message.data || {};
+  // ✅ NORMALIZE: if callers send fields directly without wrapping in `config`, treat data as config
+  let config = (data.config && typeof data.config === 'object')
+    ? data.config
+    : (Object.keys(data).length > 0 && !('config' in data) ? data : data.config);
   
   try {
     const userId = await requireAuth(message);
@@ -120,39 +155,49 @@ registerHandler(MESSAGE_TYPES.SETTINGS_UPDATE, async (message) => {
         }
       };
       delete config.prompt; // Remove legacy field before saving
-      console.log('[Settings] Normalized legacy config.prompt → config.prompts.master on save');
+      logger.debug('Normalized legacy config.prompt → config.prompts.master on save');
     }
     
-    const data = await supabaseWithRetry(
+    const savedData = await supabaseWithRetry(
       async () => {
-        const { data, error } = await supabase
+        // ✅ MERGE: Fetch existing config first and deep-merge to avoid wiping unrelated fields
+        // (e.g. saving llm_provider must NOT wipe onboarding_completed or consent_* fields)
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('config')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const mergedConfig = deepMergeConfig(existing?.config || {}, config);
+
+        const { data: upserted, error } = await supabase
           .from('settings')
           .upsert(
             {
               user_id: userId,
-              config: config
+              config: mergedConfig
             },
-            { 
+            {
               onConflict: 'user_id',
               ignoreDuplicates: false
             }
           )
           .select()
           .single();
-        
+
         if (error) throw error;
-        return data;
+        return upserted;
       },
       {
         operationName: 'updateSettings',
         correlationId
       }
     );
-    
+
     logger.endOperation(correlationId, 'success');
     // ✅ Return normalized config
     return createResponse(message, MESSAGE_TYPES.SETTINGS_UPDATED, {
-      config: data.config || {}
+      config: savedData.config || {}
     });
     
   } catch (error) {

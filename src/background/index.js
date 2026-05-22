@@ -18,6 +18,7 @@ import { onMessage } from '../platform/messaging.js';
 import { route } from './messageRouter.js';
 import { supabase } from '../supabaseConfig.js'; // GPT-003: Supabase client with chromeStorageAdapter
 import { MESSAGE_TYPES } from '../shared/messageSchema.js';
+import { flushChatHistoryOutbox } from './services/chatHistoryService.js';
 import './handlers/index.js'; // This will register all handlers
 
 // CRITICAL: Static imports to avoid Vite preload helper injection
@@ -25,7 +26,7 @@ import './handlers/index.js'; // This will register all handlers
 import * as contextMenuModule from './handlers/contextMenu.js';
 import * as alarmsModule from './handlers/alarms.js';
 import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
-// ❌ REMOVED: import './handlers/telemetry.js'; (dead code - no telemetry events called)
+import './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling — registers SESSION_CHECK handler
 
 const logger = createLogger('Background');
 
@@ -52,12 +53,12 @@ chrome.storage.local.set({
   logger.warn('Failed to store extension start marker', { error: err.message });
 });
 
-// ✅ NEW: Force session restoration when Service Worker starts
+// Force session restoration when Service Worker starts
 // This ensures user stays logged in after Service Worker reload
 logger.info('Service Worker loaded - attempting to restore session...');
 // Note: Wrap in setTimeout to avoid blocking message routing
 setTimeout(() => {
-  restoreSessionOnServiceWorkerStart().catch(error => {
+  restoreSession('sw_start').catch(error => {
     logger.error('Failed to restore session on SW start', { 
       error: error.message 
     });
@@ -74,6 +75,16 @@ setTimeout(() => {
     });
   });
 }, 1000);
+
+// Option A: Flush any queued chat_history items on startup (best-effort).
+// This helps when prompts/responses were captured while offline or before login.
+setTimeout(() => {
+  flushChatHistoryOutbox({ reason: 'startup' }).catch(error => {
+    logger.warn('Failed to flush chat_history outbox on startup', {
+      error: error?.message || String(error)
+    });
+  });
+}, 2000);
 
 /**
  * Installation handler - runs once when extension is installed/updated
@@ -255,8 +266,8 @@ async function onStartup() {
     // Setup periodic alarms
     await setupAlarms();
     
-    // ✅ NEW: Force session restoration on startup
-    await restoreSessionOnStartup();
+    // Force session restoration on startup
+    await restoreSession('browser_startup');
     
     logger.info('Startup tasks completed');
   } catch (error) {
@@ -265,59 +276,77 @@ async function onStartup() {
 }
 
 /**
- * Force session restoration when browser starts
- * Ensures user stays logged in across browser restarts
+ * Restore auth session from chrome.storage.local.
+ * Called on both SW restart and browser startup.
+ * If token is expired, attempts an automatic refresh so the user
+ * never has to re-login as long as a valid refresh_token exists.
+ *
+ * @param {'sw_start'|'browser_startup'} reason
  */
-async function restoreSessionOnStartup() {
+async function restoreSession(reason = 'sw_start') {
   try {
-    logger.info('Attempting to restore session on startup...');
+    logger.info(`Restoring session (${reason})...`);
     
-    // Force Supabase to read session from chrome.storage.local
+    // Read session from chrome.storage.local (via adapter)
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (error) {
-      logger.warn('Failed to restore session on startup', { 
-        error: error.message 
-      });
+      logger.warn('Failed to read session', { reason, error: error.message });
       return;
     }
     
-    if (session) {
-      logger.info('✅ Session restored successfully', { 
-        userId: session.user?.id,
-        email: session.user?.email,
-        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
-      });
-      
-      // Broadcast to UI
-      // ✅ CRITICAL: Catch receiving end errors gracefully
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-restore-${Date.now()}`,
-        timestamp: Date.now(),
-        data: {
-          authenticated: true,
-          user: {
-            id: session.user.id,
-            email: session.user.email
-          }
-        }
-      }).catch(broadcastError => {
-        // UI not open - this is normal
-        if (broadcastError?.message?.includes('Receiving end does not exist')) {
-          logger.debug('UI not open - session will restore when UI loads');
-        } else {
-          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
-        }
-      });
-    } else {
-      logger.info('No session found on startup - user needs to login');
+    if (!session) {
+      logger.info('No session found - user needs to login', { reason });
+      return;
     }
-  } catch (error) {
-    logger.error('Session restoration failed', { 
-      error: error.message 
+    
+    // Check if token is expired / expiring → refresh proactively
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expiresAt = session.expires_at || 0;
+    if (expiresAt - nowSec < 120) {
+      logger.info('Token expired or expiring soon, refreshing', { reason, secondsLeft: expiresAt - nowSec });
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        logger.warn('Session refresh failed on restore', { reason, error: refreshError.message });
+        // Token is dead — broadcast will still carry the old session
+        // so the UI can show "session expired" gracefully
+      } else if (refreshData?.session) {
+        logger.info('Session refreshed successfully on restore', { reason });
+        // The onAuthStateChange listener in supabaseAuth.js will broadcast
+        // AUTH_STATE_CHANGED automatically — no duplicate broadcast needed
+        return;
+      }
+    }
+    
+    logger.info('Session restored', {
+      reason,
+      userId: session.user?.id,
+      email: session.user?.email,
+      expiresAt: new Date(expiresAt * 1000).toLocaleString()
     });
+    
+    // Broadcast to UI (if open)
+    chrome.runtime.sendMessage({
+      v: 1,
+      type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
+      correlationId: `auth-restore-${reason}-${Date.now()}`,
+      timestamp: Date.now(),
+      data: {
+        authenticated: true,
+        user: {
+          id: session.user.id,
+          email: session.user.email
+        }
+      }
+    }).catch(broadcastError => {
+      if (broadcastError?.message?.includes('Receiving end does not exist')) {
+        logger.debug('UI not open - session will restore when UI loads');
+      } else {
+        logger.warn('Auth broadcast failed', { error: broadcastError?.message });
+      }
+    });
+  } catch (error) {
+    logger.error('Session restoration failed', { reason, error: error.message });
   }
 }
 
@@ -325,105 +354,72 @@ async function restoreSessionOnStartup() {
  * Setup periodic alarms
  * - CHECK: Portfolio price check (5 minutes)
  * - AUTORUN: Auto-run evaluation (configurable interval)
+ * - COMMODITY: Gold & Crypto price updates (15 minutes, 24/7)
+ * - SESSION_CHECK: Session expiration check (1 minute) - X51LABS-XXX
  * 
  * NOTE: This function clears ALL alarms and recreates only CHECK and AUTORUN.
  */
 async function setupAlarms() {
   try {
-    // IMPORTANT: Only clear specific alarms, not all
-    await chrome.alarms.clear('CHECK');
-    await chrome.alarms.clear('AUTORUN');
-    
-    // CHECK alarm - portfolio price updates
+    // Clean up legacy/unknown alarms before (re)creating known alarms
+    await cleanupLegacyAlarms([
+      'CHECK',
+      'AUTORUN',
+      'updateCommodityPrices',
+      'watchlistPriceUpdate',
+      'SESSION_CHECK',
+      'promptImprovementPurge'
+    ]);
+
+    // CHECK alarm - portfolio price updates (stocks, during market hours)
     chrome.alarms.create('CHECK', { periodInMinutes: 5 });
-    
+
+    // ✅ NEW: Commodity (gold/crypto) price updates - runs 24/7, every 15 minutes
+    // Gold and crypto markets operate 24/7, not restricted to VN market hours
+    chrome.alarms.create('updateCommodityPrices', { periodInMinutes: 15 });
+
+    // ✅ XST-744: Watchlist price updates - runs every 5 minutes (market hours only)
+    // Handler checks market hours before fetching (9:00-15:00 VN weekdays)
+    chrome.alarms.create('watchlistPriceUpdate', { periodInMinutes: 5 });
+
+    // ✅ NEW: Session expiration check - runs every 1 minute
+    // Proactively checks if session is about to expire
+    // Allows graceful handling instead of sudden logout
+    chrome.alarms.create('SESSION_CHECK', { periodInMinutes: 1 });
+
+    // ✅ Prompt Improvement purge - runs daily (every 24h)
+    // Purges expired prompt_runs (7 days) and archived prompt_lessons
+    chrome.alarms.create('promptImprovementPurge', { periodInMinutes: 1440 });
+
     // ✅ AUTORUN alarm setup moved to settings handler
     // When user enables autoRun, settings.js will create the alarm
     // This avoids reading from chrome.storage.local (deprecated)
-    
-    // Clean up legacy/unknown alarms
-    await cleanupLegacyAlarms();
-    
+
     // X51LABS-66: HEARTBEAT removed - MV3 service workers should be allowed to sleep
     // Service worker will restart on-demand when needed (alarms, messages, events)
     // Keeping it alive wastes battery and resources
-    
-    logger.info('Alarms setup completed');
+
+    logger.info('Alarms setup completed (CHECK: 5min, COMMODITY: 15min, WATCHLIST: 5min, SESSION_CHECK: 1min, PURGE: daily)');
   } catch (error) {
     logger.error('Alarm setup failed', { error });
   }
 }
 
-/**
- * ✅ NEW: Restore session when Service Worker starts/reloads
- * Ensures user stays logged in after SW restart
- */
-async function restoreSessionOnServiceWorkerStart() {
-  try {
-    logger.info('Service Worker started - restoring auth session...');
-    
-    // Force Supabase to read session from chrome.storage.local
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      logger.warn('Failed to get session on SW start', { 
-        error: error.message 
-      });
-      return;
-    }
-    
-    if (session && session.user) {
-      logger.info('✅ Auth session restored', { 
-        userId: session.user.id,
-        email: session.user.email,
-        expiresAt: new Date(session.expires_at * 1000).toLocaleString()
-      });
-      
-      // Broadcast to UI if it's open
-      // ✅ CRITICAL: Catch receiving end errors gracefully
-      chrome.runtime.sendMessage({
-        v: 1,
-        type: MESSAGE_TYPES.AUTH_STATE_CHANGED,
-        correlationId: `auth-restored-${Date.now()}`,
-        timestamp: Date.now(),
-        data: {
-          authenticated: true,
-          event: 'SESSION_RESTORED',
-          user: {
-            id: session.user.id,
-            email: session.user.email
-          }
-        }
-      }).catch(broadcastError => {
-        // UI not open - this is normal
-        // Error: "Could not establish connection. Receiving end does not exist."
-        if (broadcastError?.message?.includes('Receiving end does not exist')) {
-          logger.debug('UI not open - session will restore when UI loads');
-        } else {
-          logger.warn('Auth broadcast failed', { error: broadcastError?.message });
-        }
-      });
-    } else {
-      logger.info('No session found on SW start - user will need to login');
-    }
-  } catch (error) {
-    logger.error('Session restoration failed', { 
-      error: error.message 
-    });
-  }
-}
+// restoreSessionOnServiceWorkerStart removed — consolidated into restoreSession()
 
 /**
  * Clean up legacy alarms from old versions
  * Known alarms: CHECK, AUTORUN, POLL
  */
-async function cleanupLegacyAlarms() {
+async function cleanupLegacyAlarms(knownAlarms = null) {
   try {
-    const knownAlarms = ['CHECK', 'AUTORUN', 'POLL'];
+    const known = Array.isArray(knownAlarms)
+      ? knownAlarms
+      : ['CHECK', 'AUTORUN', 'updateCommodityPrices', 'watchlistPriceUpdate', 'SESSION_CHECK'];
     const allAlarms = await chrome.alarms.getAll();
     
     for (const alarm of allAlarms) {
-      if (!knownAlarms.includes(alarm.name)) {
+      if (!known.includes(alarm.name)) {
         await chrome.alarms.clear(alarm.name);
         logger.info('Cleared legacy alarm', { name: alarm.name });
       }
@@ -435,23 +431,14 @@ async function cleanupLegacyAlarms() {
 
 /**
  * Create context menus
- * Idempotent - safe to call multiple times
+ * Delegated to contextMenu module for submenu structure.
+ * Idempotent - safe to call multiple times.
  */
 async function createContextMenus() {
   try {
-    // Remove all existing menus first
-    await chrome.contextMenus.removeAll();
-    
-    // Create new menu
-    chrome.contextMenus.create({
-      id: 'chatgpt-assistant-analyze',
-      title: 'ChatGPT Assistant - Phân tích',
-      contexts: ['selection', 'page']
-    });
-    
-    logger.info('Context menus created');
+    await contextMenuModule.createContextMenus();
+    logger.info('Context menus created (delegated to contextMenu module)');
   } catch (error) {
-    // Ignore errors (menu might already exist)
     logger.debug('Context menu creation note', { error: error?.message });
   }
 }

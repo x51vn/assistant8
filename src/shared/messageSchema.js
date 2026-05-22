@@ -7,6 +7,10 @@
  */
 
 import { generateCorrelationId } from '../logger.js';
+import { SYSTEM_DOMAIN_VERSION, SYSTEM_MESSAGE_TYPES } from './messages/domains/systemMessages.js';
+import { AUTH_DOMAIN_VERSION, AUTH_MESSAGE_TYPES } from './messages/domains/authMessages.js';
+import { SETTINGS_DOMAIN_VERSION, SETTINGS_MESSAGE_TYPES } from './messages/domains/settingsMessages.js';
+import { STOCK_RESEARCH_DOMAIN_VERSION, STOCK_RESEARCH_MESSAGE_TYPES } from './messages/domains/stockResearchMessages.js';
 
 /**
  * Base message structure - all messages must extend this
@@ -21,12 +25,22 @@ import { generateCorrelationId } from '../logger.js';
  * Message version - increment when schema changes
  */
 export const MESSAGE_VERSION = 1;
+export const MESSAGE_DOMAIN_VERSIONS = {
+  system: SYSTEM_DOMAIN_VERSION,
+  auth: AUTH_DOMAIN_VERSION,
+  settings: SETTINGS_DOMAIN_VERSION,
+  stockResearch: STOCK_RESEARCH_DOMAIN_VERSION,
+};
 
 /**
  * Message types - Centralized definition
  * Naming convention: DOMAIN_VERB or VERB_DOMAIN
  */
 export const MESSAGE_TYPES = {
+  ...SYSTEM_MESSAGE_TYPES,
+  ...AUTH_MESSAGE_TYPES,
+  ...SETTINGS_MESSAGE_TYPES,
+  ...STOCK_RESEARCH_MESSAGE_TYPES,
   // Health check
   PING: 'PING',
   PONG: 'PONG',
@@ -34,6 +48,12 @@ export const MESSAGE_TYPES = {
   // Session management
   SESSION_CREATE: 'SESSION_CREATE',
   SESSION_CREATED: 'SESSION_CREATED',
+  SESSION_CHECK: 'SESSION_CHECK',
+  SESSION_STATUS: 'SESSION_STATUS',
+  FORCE_SESSION_REFRESH: 'FORCE_SESSION_REFRESH',
+  SESSION_REFRESH_STATUS: 'SESSION_REFRESH_STATUS',
+  SESSION_ABOUT_TO_EXPIRE: 'SESSION_ABOUT_TO_EXPIRE',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
   
   // ChatGPT operations
   CHATGPT_SEND_INPUT: 'CHATGPT_SEND_INPUT',
@@ -47,6 +67,8 @@ export const MESSAGE_TYPES = {
   CONTENT_EXTRACTED: 'CONTENT_EXTRACTED',
   CONTENT_PROMPT_SENT: 'CONTENT_PROMPT_SENT',
   CONTENT_PROMPT_FAILED: 'CONTENT_PROMPT_FAILED',
+  // Content script -> Background: captured assistant response for an extension-run prompt
+  CONTENT_RESPONSE_CAPTURED: 'CONTENT_RESPONSE_CAPTURED',
   
   // State management
   STATE_GET: 'STATE_GET',
@@ -75,6 +97,10 @@ export const MESSAGE_TYPES = {
   SEND_PROMPT: 'SEND_PROMPT',
   ENSURE_CHATGPT_OPEN: 'ENSURE_CHATGPT_OPEN',
   CHATGPT_TAB_READY: 'CHATGPT_TAB_READY',
+  ENSURE_GEMINI_OPEN: 'ENSURE_GEMINI_OPEN',
+  GEMINI_TAB_READY: 'GEMINI_TAB_READY',
+  ENSURE_CLAUDE_OPEN: 'ENSURE_CLAUDE_OPEN',
+  CLAUDE_TAB_READY: 'CLAUDE_TAB_READY',
   
   // Supabase Auth operations
   SUPABASE_AUTH_LOGIN: 'SUPABASE_AUTH_LOGIN',
@@ -83,6 +109,18 @@ export const MESSAGE_TYPES = {
   SUPABASE_AUTH_LOGGED_OUT: 'SUPABASE_AUTH_LOGGED_OUT',
   SUPABASE_AUTH_CHECK: 'SUPABASE_AUTH_CHECK',
   SUPABASE_AUTH_STATUS: 'SUPABASE_AUTH_STATUS',
+  SUPABASE_AUTH_CHANGE_PASSWORD: 'SUPABASE_AUTH_CHANGE_PASSWORD',
+  SUPABASE_AUTH_PASSWORD_CHANGED: 'SUPABASE_AUTH_PASSWORD_CHANGED',
+  SUPABASE_AUTH_RESET_PASSWORD_REQUEST: 'SUPABASE_AUTH_RESET_PASSWORD_REQUEST',
+  SUPABASE_AUTH_RESET_PASSWORD_SENT: 'SUPABASE_AUTH_RESET_PASSWORD_SENT',
+  SUPABASE_AUTH_REGISTER: 'SUPABASE_AUTH_REGISTER',
+  SUPABASE_AUTH_REGISTERED: 'SUPABASE_AUTH_REGISTERED',
+  SUPABASE_AUTH_RESEND_CONFIRMATION: 'SUPABASE_AUTH_RESEND_CONFIRMATION',
+  SUPABASE_AUTH_CONFIRMATION_RESENT: 'SUPABASE_AUTH_CONFIRMATION_RESENT',
+  SUPABASE_AUTH_GOOGLE_LOGIN: 'SUPABASE_AUTH_GOOGLE_LOGIN',
+  SUPABASE_AUTH_GOOGLE_SUCCESS: 'SUPABASE_AUTH_GOOGLE_SUCCESS',
+  ACCOUNT_DELETE_REQUEST: 'ACCOUNT_DELETE_REQUEST',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
   AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',
   AUTH_TOKEN_REFRESHED: 'AUTH_TOKEN_REFRESHED',
   
@@ -92,6 +130,7 @@ export const MESSAGE_TYPES = {
   HISTORY_GET: 'HISTORY_GET',
   HISTORY_READY: 'HISTORY_READY',
   HISTORY_GET_BY_ID: 'HISTORY_GET_BY_ID',
+  HISTORY_DETAIL: 'HISTORY_DETAIL',
   HISTORY_ITEM: 'HISTORY_ITEM',
   HISTORY_ADD: 'HISTORY_ADD',
   HISTORY_ADDED: 'HISTORY_ADDED',
@@ -108,6 +147,8 @@ export const MESSAGE_TYPES = {
   ERROR_GET_ALL: 'ERROR_GET_ALL',
   ERROR_DATA: 'ERROR_DATA',
   ERROR_LIST: 'ERROR_LIST',
+  ERROR_GET_BY_ID: 'ERROR_GET_BY_ID',
+  ERROR_DETAIL: 'ERROR_DETAIL',
   ERROR_ADD: 'ERROR_ADD',
   ERROR_ADDED: 'ERROR_ADDED',
   ERROR_UPDATE: 'ERROR_UPDATE',
@@ -124,25 +165,324 @@ export const MESSAGE_TYPES = {
   SETTINGS_UPDATED: 'SETTINGS_UPDATED',
   SETTINGS_DELETE: 'SETTINGS_DELETE',
   SETTINGS_DELETED: 'SETTINGS_DELETED',
+
+  // Writing Templates operations (Writing Prompt Templates feature)
+  WRITING_TEMPLATES_GET: 'WRITING_TEMPLATES_GET',
+  WRITING_TEMPLATES_DATA: 'WRITING_TEMPLATES_DATA',
+  WRITING_TEMPLATES_UPSERT: 'WRITING_TEMPLATES_UPSERT',
+  WRITING_TEMPLATES_UPSERTED: 'WRITING_TEMPLATES_UPSERTED',
+  WRITING_TEMPLATES_INIT: 'WRITING_TEMPLATES_INIT',
+  WRITING_TEMPLATES_INITIALIZED: 'WRITING_TEMPLATES_INITIALIZED',
+
+  // Unified Prompts operations (ALL prompts: system + writing)
+  PROMPTS_GET_ALL: 'PROMPTS_GET_ALL',
+  PROMPTS_DATA_ALL: 'PROMPTS_DATA_ALL',
+  PROMPTS_GET_BY_TYPE: 'PROMPTS_GET_BY_TYPE',
+  PROMPTS_DATA_BY_TYPE: 'PROMPTS_DATA_BY_TYPE',
+  PROMPTS_UPSERT: 'PROMPTS_UPSERT',
+  PROMPTS_UPSERTED: 'PROMPTS_UPSERTED',
+  PROMPTS_INIT: 'PROMPTS_INIT',
+  PROMPTS_INITIALIZED: 'PROMPTS_INITIALIZED',
+
+  // Asset Management operations (XST-696)
+  ASSETS_GET: 'ASSETS_GET',
+  ASSETS_DATA: 'ASSETS_DATA',
+  ASSET_ADD: 'ASSET_ADD',
+  ASSET_ADDED: 'ASSET_ADDED',
+  ASSET_UPDATE: 'ASSET_UPDATE',
+  ASSET_UPDATED: 'ASSET_UPDATED',
+  ASSET_DELETE: 'ASSET_DELETE',
+  ASSET_DELETED: 'ASSET_DELETED',
   
-  // English learning operations
-  ENGLISH_GET_ALL: 'ENGLISH_GET_ALL',
-  ENGLISH_DATA: 'ENGLISH_DATA',
-  ENGLISH_ADD: 'ENGLISH_ADD',
-  ENGLISH_ADDED: 'ENGLISH_ADDED',
-  ENGLISH_DELETE: 'ENGLISH_DELETE',
-  ENGLISH_DELETED: 'ENGLISH_DELETED',
+  // Net Worth & History operations (XST-696)
+  NET_WORTH_GET: 'NET_WORTH_GET',
+  NET_WORTH_DATA: 'NET_WORTH_DATA',
+  ASSET_HISTORY_GET: 'ASSET_HISTORY_GET',
+  ASSET_HISTORY_DATA: 'ASSET_HISTORY_DATA',
+  ASSET_SNAPSHOT_CREATE: 'ASSET_SNAPSHOT_CREATE',
+  ASSET_SNAPSHOT_CREATED: 'ASSET_SNAPSHOT_CREATED',
   
+  // Commodity prices (gold, crypto) - XST-xxx
+  COMMODITY_GET_GOLD_PRICES: 'COMMODITY_GET_GOLD_PRICES',
+  COMMODITY_GOLD_PRICES: 'COMMODITY_GOLD_PRICES',
+  COMMODITY_GET_CRYPTO_PRICES: 'COMMODITY_GET_CRYPTO_PRICES',
+  COMMODITY_CRYPTO_PRICES: 'COMMODITY_CRYPTO_PRICES',
+  COMMODITY_UPDATE_ASSET_PRICES: 'COMMODITY_UPDATE_ASSET_PRICES',
+  COMMODITY_PRICES_UPDATED: 'COMMODITY_PRICES_UPDATED',
+
+  // Market indices (VNI, VN30, HNX, UPCOM)
+  MARKET_INDICES_GET: 'MARKET_INDICES_GET',
+  MARKET_INDICES_DATA: 'MARKET_INDICES_DATA',
+
+  // Atlassian Integration (Jira + Confluence)
+  ATLASSIAN_JIRA_GET_ISSUES: 'ATLASSIAN_JIRA_GET_ISSUES',
+  ATLASSIAN_JIRA_ISSUES_DATA: 'ATLASSIAN_JIRA_ISSUES_DATA',
+  ATLASSIAN_JIRA_CREATE_ISSUE: 'ATLASSIAN_JIRA_CREATE_ISSUE',
+  ATLASSIAN_JIRA_ISSUE_CREATED: 'ATLASSIAN_JIRA_ISSUE_CREATED',
+  ATLASSIAN_JIRA_UPDATE_ISSUE: 'ATLASSIAN_JIRA_UPDATE_ISSUE',
+  ATLASSIAN_JIRA_ISSUE_UPDATED: 'ATLASSIAN_JIRA_ISSUE_UPDATED',
+  ATLASSIAN_JIRA_DELETE_ISSUE: 'ATLASSIAN_JIRA_DELETE_ISSUE',
+  ATLASSIAN_JIRA_ISSUE_DELETED: 'ATLASSIAN_JIRA_ISSUE_DELETED',
+  ATLASSIAN_JIRA_GET_PROJECTS: 'ATLASSIAN_JIRA_GET_PROJECTS',
+  ATLASSIAN_JIRA_PROJECTS_DATA: 'ATLASSIAN_JIRA_PROJECTS_DATA',
+  ATLASSIAN_CONFLUENCE_GET_PAGES: 'ATLASSIAN_CONFLUENCE_GET_PAGES',
+  ATLASSIAN_CONFLUENCE_PAGES_DATA: 'ATLASSIAN_CONFLUENCE_PAGES_DATA',
+  ATLASSIAN_CONFLUENCE_GET_PAGE: 'ATLASSIAN_CONFLUENCE_GET_PAGE',
+  ATLASSIAN_CONFLUENCE_PAGE_DATA: 'ATLASSIAN_CONFLUENCE_PAGE_DATA',
+  ATLASSIAN_CONFLUENCE_CREATE_PAGE: 'ATLASSIAN_CONFLUENCE_CREATE_PAGE',
+  ATLASSIAN_CONFLUENCE_PAGE_CREATED: 'ATLASSIAN_CONFLUENCE_PAGE_CREATED',
+  ATLASSIAN_CONFLUENCE_UPDATE_PAGE: 'ATLASSIAN_CONFLUENCE_UPDATE_PAGE',
+  ATLASSIAN_CONFLUENCE_PAGE_UPDATED: 'ATLASSIAN_CONFLUENCE_PAGE_UPDATED',
+  ATLASSIAN_TEST_CONNECTION: 'ATLASSIAN_TEST_CONNECTION',
+  ATLASSIAN_CONNECTION_STATUS: 'ATLASSIAN_CONNECTION_STATUS',
+
   // X51LABS-94: Telemetry
   TELEMETRY_REPORT: 'TELEMETRY_REPORT',
   TELEMETRY_RECORDED: 'TELEMETRY_RECORDED',
+
+  // Context Menu → Side Panel (analysis in panel instead of ChatGPT tab)
+  CONTEXT_MENU_TO_SIDEPANEL: 'CONTEXT_MENU_TO_SIDEPANEL',
   
   // Migration
   MIGRATION_CHECK: 'MIGRATION_CHECK',
   MIGRATION_AVAILABLE: 'MIGRATION_AVAILABLE',
   MIGRATE_LOCAL_TO_SUPABASE: 'MIGRATE_LOCAL_TO_SUPABASE',
   MIGRATION_COMPLETE: 'MIGRATION_COMPLETE',
-  
+
+  // Supabase Watchlist operations (formerly X-Neews, migrated XST-738, XST-741)
+  XNEEWS_WATCHLIST_GET: 'XNEEWS_WATCHLIST_GET',
+  XNEEWS_WATCHLIST_DATA: 'XNEEWS_WATCHLIST_DATA',
+  XNEEWS_WATCHLIST_CREATE: 'XNEEWS_WATCHLIST_CREATE',
+  XNEEWS_WATCHLIST_CREATED: 'XNEEWS_WATCHLIST_CREATED',
+  XNEEWS_WATCHLIST_UPDATE: 'XNEEWS_WATCHLIST_UPDATE',
+  XNEEWS_WATCHLIST_UPDATED: 'XNEEWS_WATCHLIST_UPDATED',
+  XNEEWS_WATCHLIST_DELETE: 'XNEEWS_WATCHLIST_DELETE',
+  XNEEWS_WATCHLIST_DELETED: 'XNEEWS_WATCHLIST_DELETED',
+  XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT: 'XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT',
+  XNEEWS_WATCHLIST_HIGHLIGHT_TOGGLED: 'XNEEWS_WATCHLIST_HIGHLIGHT_TOGGLED',
+  XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES: 'XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES', // Batch update price+ediff
+  XNEEWS_WATCHLIST_PRICES_SAVED: 'XNEEWS_WATCHLIST_PRICES_SAVED', // Response after batch price save
+
+  // Supabase Watchlist Price Updates (formerly X-Neews, migrated XST-744)
+  XNEEWS_PRICE_UPDATE: 'XNEEWS_PRICE_UPDATE',           // Request from alarm to handler
+  XNEEWS_PRICES_UPDATED: 'XNEEWS_PRICES_UPDATED',      // Broadcast from handler to UI
+
+  // Watchlist AI Enrichment (entry/target/stoploss/thesis via ChatGPT)
+  WATCHLIST_AI_ENRICH_RUN: 'WATCHLIST_AI_ENRICH_RUN',           // UI → Background: start enrichment (single symbol)
+  WATCHLIST_AI_ENRICH_BATCH_RUN: 'WATCHLIST_AI_ENRICH_BATCH_RUN', // UI → Background: batch enrichment (max 10 symbols per prompt)
+  WATCHLIST_AI_ENRICH_STATUS: 'WATCHLIST_AI_ENRICH_STATUS',     // Background → UI: progress update
+  WATCHLIST_AI_ENRICH_CANCEL: 'WATCHLIST_AI_ENRICH_CANCEL',     // UI → Background: cancel running enrichment
+  WATCHLIST_AI_ENRICH_CANCELLED: 'WATCHLIST_AI_ENRICH_CANCELLED', // Background → UI: enrichment cancelled
+  WATCHLIST_AI_ENRICH_DONE: 'WATCHLIST_AI_ENRICH_DONE',         // Background → UI: run completed
+  WATCHLIST_AI_ENRICH_RESET: 'WATCHLIST_AI_ENRICH_RESET',       // UI → Background: force reset stuck state
+  WATCHLIST_AI_ENRICH_RESET_DONE: 'WATCHLIST_AI_ENRICH_RESET_DONE', // Background → UI: queue reset complete
+  WATCHLIST_ENRICH_SYMBOL: 'WATCHLIST_ENRICH_SYMBOL',           // Legacy UI → Background alias
+  WATCHLIST_ENRICHED: 'WATCHLIST_ENRICHED',                     // Legacy Background → UI alias
+
+  // Unified Prompt Queue (p-queue based, concurrency=1)
+  PROMPT_QUEUE_STATUS: 'PROMPT_QUEUE_STATUS',                   // Background → UI: generic queue job status update
+  PROMPT_QUEUE_GET_INFO: 'PROMPT_QUEUE_GET_INFO',               // UI → Background: request queue state
+  PROMPT_QUEUE_INFO: 'PROMPT_QUEUE_INFO',                       // Background → UI: queue state response
+  PROMPT_QUEUE_CLEAR_DONE: 'PROMPT_QUEUE_CLEAR_DONE',           // UI → Background: clear terminal jobs
+  PROMPT_QUEUE_CLEARED: 'PROMPT_QUEUE_CLEARED',                 // Background → UI: cleared confirmation
+  PROMPT_QUEUE_PAUSE: 'PROMPT_QUEUE_PAUSE',                     // UI → Background: pause queue (no new jobs start)
+  PROMPT_QUEUE_PAUSED: 'PROMPT_QUEUE_PAUSED',                   // Background → UI: queue paused confirmation
+  PROMPT_QUEUE_RESUME: 'PROMPT_QUEUE_RESUME',                   // UI → Background: resume queue
+  PROMPT_QUEUE_RESUMED: 'PROMPT_QUEUE_RESUMED',                 // Background → UI: queue resumed confirmation
+  PROMPT_QUEUE_CANCEL_ALL: 'PROMPT_QUEUE_CANCEL_ALL',           // UI → Background: cancel all pending jobs
+  PROMPT_QUEUE_ALL_CANCELLED: 'PROMPT_QUEUE_ALL_CANCELLED',     // Background → UI: all pending cancelled confirmation
+
+  // Billing & Subscription (XST-758..XST-763)
+  SUBSCRIPTION_GET: 'SUBSCRIPTION_GET',                         // UI → Background: get current plan + subscription
+  SUBSCRIPTION_DATA: 'SUBSCRIPTION_DATA',                       // Background → UI: subscription + plan info
+  SUBSCRIPTION_CREATE_CHECKOUT: 'SUBSCRIPTION_CREATE_CHECKOUT', // UI → Background: start Stripe Checkout
+  SUBSCRIPTION_CHECKOUT_URL: 'SUBSCRIPTION_CHECKOUT_URL',       // Background → UI: checkout session URL
+  SUBSCRIPTION_CREATE_PORTAL: 'SUBSCRIPTION_CREATE_PORTAL',     // UI → Background: open Stripe Customer Portal
+  SUBSCRIPTION_PORTAL_URL: 'SUBSCRIPTION_PORTAL_URL',           // Background → UI: portal session URL
+  PLANS_GET: 'PLANS_GET',                                       // UI → Background: list available plans
+  PLANS_DATA: 'PLANS_DATA',                                     // Background → UI: plans array.
+
+  // Usage Tracking (XST-760)
+  USAGE_CHECK: 'USAGE_CHECK',                                   // UI/Handler → Background: check if feature allowed
+  USAGE_ALLOWED: 'USAGE_ALLOWED',                               // Background → caller: { allowed, limit, used, remaining }
+  USAGE_INCREMENT: 'USAGE_INCREMENT',                           // Handler → Background: record feature usage
+  USAGE_INCREMENTED: 'USAGE_INCREMENTED',                       // Background → caller: updated count
+  USAGE_GET_STATS: 'USAGE_GET_STATS',                           // UI → Background: get all usage stats
+  USAGE_STATS: 'USAGE_STATS',                                   // Background → UI: all feature usage vs limits
+  USAGE_RESET_DAILY: 'USAGE_RESET_DAILY',                       // Alarm → Background: reset daily counters
+
+  // Compliance — GDPR Data Export (XST-765)
+  DATA_EXPORT_REQUEST: 'DATA_EXPORT_REQUEST',                   // UI → Background: request full user data export (GDPR Art.20)
+  DATA_EXPORT_DATA: 'DATA_EXPORT_DATA',                         // Background → UI: structured JSON export payload
+
+  // Data Import (XST-777)
+  DATA_IMPORT_REQUEST: 'DATA_IMPORT_REQUEST',                   // UI → Background: import JSON or CSV
+  DATA_IMPORT_COMPLETE: 'DATA_IMPORT_COMPLETE',                 // Background → UI: import result summary
+
+  // Price Alerts (XST-776)
+  ALERT_LIST: 'ALERT_LIST',
+  ALERT_DATA: 'ALERT_DATA',
+  ALERT_CREATE: 'ALERT_CREATE',
+  ALERT_CREATED: 'ALERT_CREATED',
+  ALERT_DELETE: 'ALERT_DELETE',
+  ALERT_DELETED: 'ALERT_DELETED',
+  ALERT_TOGGLE: 'ALERT_TOGGLE',
+  ALERT_TOGGLED: 'ALERT_TOGGLED',
+
+  // Enterprise API Keys (XST-778)
+  API_KEY_LIST: 'API_KEY_LIST',
+  API_KEY_DATA: 'API_KEY_DATA',
+  API_KEY_GENERATE: 'API_KEY_GENERATE',
+  API_KEY_GENERATED: 'API_KEY_GENERATED',
+  API_KEY_REVOKE: 'API_KEY_REVOKE',
+  API_KEY_REVOKED: 'API_KEY_REVOKED',
+
+  // Multi-Portfolio (XST-779)
+  PORTFOLIO_LIST_PORTFOLIOS: 'PORTFOLIO_LIST_PORTFOLIOS',
+  PORTFOLIO_PORTFOLIOS_DATA: 'PORTFOLIO_PORTFOLIOS_DATA',
+  PORTFOLIO_CREATE_PORTFOLIO: 'PORTFOLIO_CREATE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_CREATED: 'PORTFOLIO_PORTFOLIO_CREATED',
+  PORTFOLIO_UPDATE_PORTFOLIO: 'PORTFOLIO_UPDATE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_UPDATED: 'PORTFOLIO_PORTFOLIO_UPDATED',
+  PORTFOLIO_DELETE_PORTFOLIO: 'PORTFOLIO_DELETE_PORTFOLIO',
+  PORTFOLIO_PORTFOLIO_DELETED: 'PORTFOLIO_PORTFOLIO_DELETED',
+  PORTFOLIO_SET_DEFAULT: 'PORTFOLIO_SET_DEFAULT',
+  PORTFOLIO_DEFAULT_SET: 'PORTFOLIO_DEFAULT_SET',
+
+  // Multi-LLM Provider (XST-775)
+  LLM_GET_PROVIDERS: 'LLM_GET_PROVIDERS',
+  LLM_PROVIDERS_DATA: 'LLM_PROVIDERS_DATA',
+  LLM_SEND_PROMPT: 'LLM_SEND_PROMPT',
+  LLM_RESPONSE: 'LLM_RESPONSE',
+  LLM_GET_STATUS: 'LLM_GET_STATUS',
+  LLM_STATUS: 'LLM_STATUS',
+  LLM_SET_PROVIDER: 'LLM_SET_PROVIDER',
+  LLM_PROVIDER_SET: 'LLM_PROVIDER_SET',
+
+  // LLM API Key Management (llmClient)
+  SETTINGS_APIKEY_SET: 'SETTINGS_APIKEY_SET',               // UI → Background: persist API key to Supabase
+  SETTINGS_APIKEY_SET_DONE: 'SETTINGS_APIKEY_SET_DONE',     // Background → UI: key stored
+  SETTINGS_APIKEY_GET: 'SETTINGS_APIKEY_GET',               // UI → Background: read API key
+  SETTINGS_APIKEY_DATA: 'SETTINGS_APIKEY_DATA',             // Background → UI: key payload
+  SETTINGS_APIKEY_DELETE: 'SETTINGS_APIKEY_DELETE',          // UI → Background: remove key
+  SETTINGS_APIKEY_DELETED: 'SETTINGS_APIKEY_DELETED',       // Background → UI: key removed
+  SETTINGS_APIKEY_MIGRATE: 'SETTINGS_APIKEY_MIGRATE',       // UI → Background: migrate local keys → Supabase
+  SETTINGS_APIKEY_MIGRATED: 'SETTINGS_APIKEY_MIGRATED',     // Background → UI: migration complete
+  SETTINGS_APIKEY_HEALTHCHECK: 'SETTINGS_APIKEY_HEALTHCHECK', // UI → Background: test connection
+  SETTINGS_APIKEY_HEALTH_RESULT: 'SETTINGS_APIKEY_HEALTH_RESULT', // Background → UI: health result
+
+  // === Market Daily Assessment ===
+  MARKET_ASSESSMENT_RUN: 'MARKET_ASSESSMENT_RUN',               // UI → Background: trigger assessment
+  MARKET_ASSESSMENT_STATUS: 'MARKET_ASSESSMENT_STATUS',         // Background → UI: progress update
+  MARKET_ASSESSMENT_DONE: 'MARKET_ASSESSMENT_DONE',             // Background → UI: run completed
+  MARKET_ASSESSMENT_FAILED: 'MARKET_ASSESSMENT_FAILED',         // Background → UI: run failed
+  MARKET_ASSESSMENT_GET_HISTORY: 'MARKET_ASSESSMENT_GET_HISTORY', // UI → Background: fetch history
+  MARKET_ASSESSMENT_HISTORY_DATA: 'MARKET_ASSESSMENT_HISTORY_DATA', // Background → UI: history results
+  MARKET_ASSESSMENT_GET_DETAIL: 'MARKET_ASSESSMENT_GET_DETAIL', // UI → Background: single run detail
+  MARKET_ASSESSMENT_DETAIL_DATA: 'MARKET_ASSESSMENT_DETAIL_DATA', // Background → UI: run detail
+  MARKET_ASSESSMENT_DELETE_RUN: 'MARKET_ASSESSMENT_DELETE_RUN',   // UI → Background: delete a run
+  MARKET_ASSESSMENT_RUN_DELETED: 'MARKET_ASSESSMENT_RUN_DELETED', // Background → UI: run deleted
+
+  // === Sectors CRUD ===
+  SECTORS_GET: 'SECTORS_GET',                                   // UI → Background: list sectors
+  SECTORS_DATA: 'SECTORS_DATA',                                 // Background → UI: sectors list
+  SECTORS_UPSERT: 'SECTORS_UPSERT',                             // UI → Background: add/update sector
+  SECTORS_UPSERTED: 'SECTORS_UPSERTED',                         // Background → UI: sector saved
+  SECTORS_DELETE: 'SECTORS_DELETE',                              // UI → Background: delete sector
+  SECTORS_DELETED: 'SECTORS_DELETED',                            // Background → UI: sector deleted
+
+  // === Stock Research Pipeline (XST-781) ===
+  STOCK_RESEARCH_RUN: 'STOCK_RESEARCH_RUN',
+  STOCK_RESEARCH_STATUS: 'STOCK_RESEARCH_STATUS',
+  STOCK_RESEARCH_DONE: 'STOCK_RESEARCH_DONE',
+  STOCK_RESEARCH_FAILED: 'STOCK_RESEARCH_FAILED',
+  STOCK_RESEARCH_GET_HISTORY: 'STOCK_RESEARCH_GET_HISTORY',
+  STOCK_RESEARCH_HISTORY_DATA: 'STOCK_RESEARCH_HISTORY_DATA',
+  SEARCH_GOOGLE_RUN: 'SEARCH_GOOGLE_RUN',
+  SEARCH_GOOGLE_RESULT: 'SEARCH_GOOGLE_RESULT',
+
+  // === Prompt Improvement Loop ===
+  PROMPT_RUN_SAVE: 'PROMPT_RUN_SAVE',                         // UI → Background: save a prompt run
+  PROMPT_RUN_SAVED: 'PROMPT_RUN_SAVED',                       // Background → UI: run saved
+  PROMPT_RUNS_LIST: 'PROMPT_RUNS_LIST',                       // UI → Background: list runs (7d)
+  PROMPT_RUNS_DATA: 'PROMPT_RUNS_DATA',                       // Background → UI: runs list
+  PROMPT_RUN_GET: 'PROMPT_RUN_GET',                           // UI → Background: get single run
+  PROMPT_RUN_DETAIL: 'PROMPT_RUN_DETAIL',                     // Background → UI: run detail
+  PROMPT_RUN_DELETE: 'PROMPT_RUN_DELETE',                      // UI → Background: delete a run
+  PROMPT_RUN_DELETED: 'PROMPT_RUN_DELETED',                   // Background → UI: run deleted
+  PROMPT_RUN_PIN: 'PROMPT_RUN_PIN',                           // UI → Background: toggle pin
+  PROMPT_RUN_PINNED: 'PROMPT_RUN_PINNED',                     // Background → UI: pin toggled
+  PROMPT_RUN_BUILD_EVAL: 'PROMPT_RUN_BUILD_EVAL',             // UI → Background: build evaluator prompt
+  PROMPT_RUN_EVAL_PROMPT: 'PROMPT_RUN_EVAL_PROMPT',           // Background → UI: evaluator prompt text
+  PROMPT_EVAL_PARSE: 'PROMPT_EVAL_PARSE',                     // UI → Background: parse evaluator JSON output
+  PROMPT_EVAL_PARSED: 'PROMPT_EVAL_PARSED',                   // Background → UI: parsed evaluation result
+  PROMPT_LESSON_SAVE: 'PROMPT_LESSON_SAVE',                   // UI → Background: save a lesson
+  PROMPT_LESSON_SAVED: 'PROMPT_LESSON_SAVED',                 // Background → UI: lesson saved
+  PROMPT_LESSONS_LIST: 'PROMPT_LESSONS_LIST',                 // UI → Background: list lessons
+  PROMPT_LESSONS_DATA: 'PROMPT_LESSONS_DATA',                 // Background → UI: lessons list
+  PROMPT_LESSON_UPDATE: 'PROMPT_LESSON_UPDATE',               // UI → Background: update lesson
+  PROMPT_LESSON_UPDATED: 'PROMPT_LESSON_UPDATED',             // Background → UI: lesson updated
+  PROMPT_LESSON_DELETE: 'PROMPT_LESSON_DELETE',                // UI → Background: delete lesson
+  PROMPT_LESSON_DELETED: 'PROMPT_LESSON_DELETED',             // Background → UI: lesson deleted
+  PROMPT_LESSONS_INJECT: 'PROMPT_LESSONS_INJECT',             // UI → Background: inject lessons into prompt
+  PROMPT_LESSONS_INJECTED: 'PROMPT_LESSONS_INJECTED',         // Background → UI: injected prompt
+  PROMPT_IMPROVEMENT_STATS: 'PROMPT_IMPROVEMENT_STATS',       // UI → Background: daily stats
+  PROMPT_IMPROVEMENT_STATS_DATA: 'PROMPT_IMPROVEMENT_STATS_DATA', // Background → UI: stats
+  PROMPT_IMPROVEMENT_PURGE: 'PROMPT_IMPROVEMENT_PURGE',       // UI/Alarm → Background: purge expired
+  PROMPT_IMPROVEMENT_PURGED: 'PROMPT_IMPROVEMENT_PURGED',     // Background → UI: purge result
+
+  // === Trading Journal (trading-journal-mvp) ===
+  // Journal CRUD requests
+  JOURNAL_CREATE: 'JOURNAL_CREATE',                           // UI → Background: create new journal entry
+  JOURNAL_GET_ALL: 'JOURNAL_GET_ALL',                         // UI → Background: fetch entries (optional filters)
+  JOURNAL_UPDATE: 'JOURNAL_UPDATE',                           // UI → Background: update entry / advance status
+  JOURNAL_DELETE: 'JOURNAL_DELETE',                           // UI → Background: delete entry
+  JOURNAL_GET_PREFILL: 'JOURNAL_GET_PREFILL',                 // UI → Background: get pre-fill data from watchlist+market
+  JOURNAL_GET_METRICS: 'JOURNAL_GET_METRICS',                 // UI → Background: compute aggregate stats
+  JOURNAL_GET_SUMMARY: 'JOURNAL_GET_SUMMARY',                 // UI → Background: lightweight summary for Dashboard
+
+  // Decision Intelligence / Guardrails
+  DECISION_SCORE_EVALUATE: 'DECISION_SCORE_EVALUATE',         // UI → Background: evaluate weighted decision score
+  DECISION_SCORE_RESULT: 'DECISION_SCORE_RESULT',             // Background → UI: score payload with breakdown
+  JOURNAL_GUARDRAIL_EVALUATE: 'JOURNAL_GUARDRAIL_EVALUATE',   // UI → Background: run pre-trade guardrails
+  JOURNAL_GUARDRAIL_RESULT: 'JOURNAL_GUARDRAIL_RESULT',       // Background → UI: allow/block + reasons
+
+  // Journal-to-Playbook Insights
+  PLAYBOOK_INSIGHTS_GET: 'PLAYBOOK_INSIGHTS_GET',             // UI → Background: get generated insights
+  PLAYBOOK_INSIGHTS_DATA: 'PLAYBOOK_INSIGHTS_DATA',           // Background → UI: ranked insights payload
+  PLAYBOOK_INSIGHT_FEEDBACK: 'PLAYBOOK_INSIGHT_FEEDBACK',     // UI → Background: mark insight helpful/not-helpful
+  PLAYBOOK_INSIGHT_FEEDBACK_SAVED: 'PLAYBOOK_INSIGHT_FEEDBACK_SAVED', // Background → UI: feedback persisted
+
+  // Automation Hub v1 (safe action sandbox)
+  AUTOMATION_WORKFLOWS_GET: 'AUTOMATION_WORKFLOWS_GET',
+  AUTOMATION_WORKFLOWS_DATA: 'AUTOMATION_WORKFLOWS_DATA',
+  AUTOMATION_WORKFLOW_CREATE: 'AUTOMATION_WORKFLOW_CREATE',
+  AUTOMATION_WORKFLOW_CREATED: 'AUTOMATION_WORKFLOW_CREATED',
+  AUTOMATION_WORKFLOW_UPDATE: 'AUTOMATION_WORKFLOW_UPDATE',
+  AUTOMATION_WORKFLOW_UPDATED: 'AUTOMATION_WORKFLOW_UPDATED',
+  AUTOMATION_WORKFLOW_DELETE: 'AUTOMATION_WORKFLOW_DELETE',
+  AUTOMATION_WORKFLOW_DELETED: 'AUTOMATION_WORKFLOW_DELETED',
+  AUTOMATION_EXECUTIONS_GET: 'AUTOMATION_EXECUTIONS_GET',
+  AUTOMATION_EXECUTIONS_DATA: 'AUTOMATION_EXECUTIONS_DATA',
+
+  // Journal CRUD responses
+  JOURNAL_CREATED: 'JOURNAL_CREATED',                         // Background → UI: entry created
+  JOURNAL_LIST: 'JOURNAL_LIST',                               // Background → UI: entries list
+  JOURNAL_UPDATED: 'JOURNAL_UPDATED',                         // Background → UI: entry updated
+  JOURNAL_DELETED: 'JOURNAL_DELETED',                         // Background → UI: entry deleted
+  JOURNAL_PREFILL: 'JOURNAL_PREFILL',                         // Background → UI: pre-fill data payload
+  JOURNAL_METRICS: 'JOURNAL_METRICS',                         // Background → UI: metrics payload
+  JOURNAL_SUMMARY: 'JOURNAL_SUMMARY',                         // Background → UI: summary payload
+
+  // Checklist template requests
+  CHECKLIST_TEMPLATES_GET: 'CHECKLIST_TEMPLATES_GET',         // UI → Background: fetch templates (returns defaults if empty)
+  CHECKLIST_TEMPLATE_CREATE: 'CHECKLIST_TEMPLATE_CREATE',     // UI → Background: add new rule
+  CHECKLIST_TEMPLATE_UPDATE: 'CHECKLIST_TEMPLATE_UPDATE',     // UI → Background: update rule label/active/order
+  CHECKLIST_TEMPLATE_DELETE: 'CHECKLIST_TEMPLATE_DELETE',     // UI → Background: remove rule
+
+  // Checklist template responses
+  CHECKLIST_TEMPLATES_DATA: 'CHECKLIST_TEMPLATES_DATA',       // Background → UI: templates array
+
   // Error
   ERROR: 'ERROR'
 };
@@ -177,6 +517,12 @@ export function createResponse(originalMessage, responseType, payload = {}) {
     correlationId: originalMessage.correlationId, // Keep same correlation ID
     timestamp: Date.now(),
     inResponseTo: originalMessage.type,
+    /**
+     * CRITICAL: payload is SPREAD directly into the response object.
+     * 
+     * ✅ CORRECT: response.items / response.config / response.success
+     * ❌ WRONG:   response.data?.items (there is no nested .data by default)
+     */
     ...payload
   };
 }
@@ -193,9 +539,14 @@ export function createErrorResponse(originalMessage, errorCode, errorMessage, de
   return {
     v: MESSAGE_VERSION,
     type: MESSAGE_TYPES.ERROR,
-    correlationId: originalMessage.correlationId,
+    success: false,
+    // Backward-compatible aliases used by older handler patterns
+    // (many handlers check `if (error.errorCode) return error;`)
+    errorCode,
+    errorMessage,
+    correlationId: originalMessage?.correlationId || generateCorrelationId(),
     timestamp: Date.now(),
-    inResponseTo: originalMessage.type,
+    inResponseTo: originalMessage?.type || null,
     error: {
       code: errorCode,
       message: errorMessage,
@@ -227,6 +578,21 @@ export function isValidMessage(message) {
   }
   
   return true;
+}
+
+/**
+ * Return the domain version for known message types.
+ * Used by gateway/handlers for lightweight contract observability.
+ * @param {string} type
+ * @returns {string|null}
+ */
+export function getMessageDomainVersion(type) {
+  if (!type || typeof type !== 'string') return null;
+  if (Object.values(SYSTEM_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.system;
+  if (Object.values(AUTH_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.auth;
+  if (Object.values(SETTINGS_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.settings;
+  if (Object.values(STOCK_RESEARCH_MESSAGE_TYPES).includes(type)) return MESSAGE_DOMAIN_VERSIONS.stockResearch;
+  return null;
 }
 
 /**

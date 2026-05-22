@@ -8,36 +8,31 @@ X51LABS-90: Playwright-based E2E test suite for ChatGPT Assistant Chrome Extensi
 - ✅ Extension loads successfully with valid extension ID
 - ✅ Background service worker is running
 - ✅ Manifest.json is accessible
-- ✅ Sidepanel.html loads with tabs
-- ✅ Popup.html loads with interactive elements
+- ✅ sidepanel-preact.html loads from the built dist bundle
+- ✅ Built manifest entrypoints resolve to existing files
 
 ### 2. Settings Tests (`settings.spec.js`)
 - ✅ Navigate to Settings tab
-- ✅ Firebase sync toggle display
-- ✅ Toggle Firebase sync on/off
+- ✅ Settings controls display
+- ✅ Toggle setting on/off
 - ✅ Backup/restore buttons available
 - ✅ Version information display
 
 ### 3. English Tab Tests (`english-tab.spec.js`)
-- ✅ Navigate to English tab
-- ✅ Topic selector with options
-- ✅ Level selector with options
-- ✅ Type selector with options
-- ✅ Generate button visible
-- ✅ Select configuration options
-- ✅ Saved sentences area display
-- ✅ Result area for responses
+- ✅ Reach English learning through Writing navigation
+- ✅ English Learning job appears in the Writing selector
+- ✅ Topic input and English-specific options display
+- ✅ Generate button remains available for the live flow
+- ✅ Writing output/history surfaces remain available
 
 ### 4. Portfolio Tab Tests (`portfolio.spec.js`)
 - ✅ Navigate to Portfolio tab
-- ✅ Add Stock button display
-- ✅ Portfolio table display
-- ✅ Open Add Stock modal
-- ✅ Modal input fields (code, entry, quantity)
-- ✅ Save button in modal
-- ✅ Input stock data validation
-- ✅ P/L calculation section
-- ✅ Refresh/update button
+- ✅ Portfolio actions and current surface display
+- ✅ Open the live Add Stock modal
+- ✅ Current stock modal input fields (`#symbol`, `#entryPrice`, `#quantity`)
+- ✅ Submit starts disabled before valid input
+- ✅ Stock modal accepts current input flow
+- ✅ Refresh action display
 
 ### 5. History Tab Tests (`history.spec.js`)
 - ✅ Navigate to History tab
@@ -81,7 +76,7 @@ tests/
 └── e2e/
     ├── extension-load.spec.js    # Basic extension functionality
     ├── settings.spec.js          # Settings page tests
-    ├── english-tab.spec.js       # English learning feature
+   ├── english-tab.spec.js       # English learning via Writing
     ├── portfolio.spec.js         # Portfolio management
     └── history.spec.js           # Conversation history
 ```
@@ -101,7 +96,7 @@ The test suite uses `playwright.config.js` for configuration:
 Each test suite uses its own isolated user data directory:
 - Extension Load: `test-user-data-e2e`
 - Settings: `test-user-data-settings`
-- English: `test-user-data-english`
+- English via Writing: `test-user-data-english`
 - Portfolio: `test-user-data-portfolio`
 - History: `test-user-data-history`
 
@@ -140,7 +135,7 @@ Test reports are generated in `tests/e2e/reports/` directory.
 
 - Tests run in **non-headless mode** by default to properly load Chrome extensions
 - Each test suite has `beforeAll` and `afterAll` hooks for setup/cleanup
-- Extension ID is dynamically extracted from background pages
+- Extension ID is dynamically extracted from the MV3 service worker
 - All tests verify UI elements exist and are interactive
 - Tests don't require ChatGPT login (only test extension UI)
 
@@ -149,7 +144,7 @@ Test reports are generated in `tests/e2e/reports/` directory.
 Potential additions for more comprehensive testing:
 - Context menu integration tests
 - Prompt template loading tests
-- Firebase sync integration tests (requires auth)
+- Supabase sync integration tests (requires auth)
 - ChatGPT API interaction tests (requires login)
 - Market data provider tests
 - Portfolio P/L calculation accuracy tests

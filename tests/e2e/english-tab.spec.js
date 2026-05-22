@@ -1,11 +1,12 @@
 /**
- * X51LABS-90: English Tab Tests
- * Verify English learning feature works correctly
+ * X51LABS-90: English Learning Tests
+ * Verify English learning is reachable through the Writing page
  */
 
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { launchExtensionContext } from './extensionTestUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,31 +16,24 @@ test.describe('English Tab Tests', () => {
   let extensionId;
   let page;
 
+  async function openWritingPage() {
+    await page.locator('button:has-text("More")').click();
+    await page.locator('button:has-text("Writing")').click();
+    await expect(page.locator('.writing-page')).toBeVisible();
+  }
+
+  async function selectEnglishLearningJob() {
+    await openWritingPage();
+    await page.selectOption('.job-dropdown', 'english_learning');
+    await page.waitForTimeout(300);
+  }
+
   test.beforeAll(async () => {
-    const extensionPath = path.join(__dirname, '../../src/extension');
-    const userDataDir = path.join(__dirname, '../../test-user-data-english');
-
-    context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ]
-    });
-
-    // Get extension ID
-    const backgroundPages = context.backgroundPages();
-    if (backgroundPages.length > 0) {
-      const url = backgroundPages[0].url();
-      const match = url.match(/chrome-extension:\/\/([a-z]+)\//);
-      if (match) {
-        extensionId = match[1];
-      }
-    }
+    ({ context, extensionId } = await launchExtensionContext(__dirname, 'test-user-data-english'));
 
     // Open sidepanel
     page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await page.goto(`chrome-extension://${extensionId}/sidepanel-preact.html`);
     await page.waitForTimeout(1000);
   });
 
@@ -48,64 +42,60 @@ test.describe('English Tab Tests', () => {
     if (context) await context.close();
   });
 
-  test('should navigate to English tab', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
-
-    // Verify English page loaded
-    const englishPage = page.locator('#english-page');
-    await expect(englishPage).toBeVisible();
+  test('should reach English learning from Writing navigation', async () => {
+    await openWritingPage();
+    await expect(page.locator('.job-dropdown')).toHaveValue('email');
     
-    console.log('✅ English tab opened');
+    console.log('✅ Writing page opened');
   });
 
-  test('should display topic selector', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
+  test('should expose English learning job in the Writing selector', async () => {
+    await openWritingPage();
 
-    const topicSelect = page.locator('select#english-topic');
-    await expect(topicSelect).toBeVisible();
-    
-    const options = await topicSelect.locator('option').all();
-    expect(options.length).toBeGreaterThan(0);
-    
-    console.log(`✅ Topic selector has ${options.length} options`);
+    const jobOptions = await page.locator('.job-dropdown option').allTextContents();
+    expect(jobOptions).toContain('English Learning');
+
+    console.log('✅ English learning job is available');
   });
 
-  test('should display level selector', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
+  test('should display English learning topic input', async () => {
+    await selectEnglishLearningJob();
 
-    const levelSelect = page.locator('select#english-level');
-    await expect(levelSelect).toBeVisible();
+    const topicInput = page.locator('#input-topic');
+    await expect(topicInput).toBeVisible();
+    await expect(topicInput).toHaveAttribute('placeholder', /Leave empty/);
     
-    const options = await levelSelect.locator('option').all();
-    expect(options.length).toBeGreaterThan(0);
-    
-    console.log(`✅ Level selector has ${options.length} options`);
+    console.log('✅ Topic input visible');
   });
 
-  test('should display type selector', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
+  test('should display English learning options', async () => {
+    await selectEnglishLearningJob();
 
-    const typeSelect = page.locator('select#english-type');
-    await expect(typeSelect).toBeVisible();
+    await expect(page.locator('#option-autoSelect')).toBeVisible();
+    await expect(page.locator('#option-languageOutput')).toBeVisible();
     
-    const options = await typeSelect.locator('option').all();
-    expect(options.length).toBeGreaterThan(0);
-    
-    console.log(`✅ Type selector has ${options.length} options`);
+    const languageOptions = await page.locator('#option-languageOutput option').allTextContents();
+    expect(languageOptions).toEqual(expect.arrayContaining(['vi', 'en']));
+
+    console.log('✅ English learning options visible');
   });
 
-  test('should have Generate button', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
+  test('should let users configure English learning options', async () => {
+    await selectEnglishLearningJob();
+
+    await page.fill('#input-topic', 'market news');
+    await page.check('#option-autoSelect');
+    await page.selectOption('#option-languageOutput', 'en');
+
+    await expect(page.locator('#input-topic')).toHaveValue('market news');
+    await expect(page.locator('#option-autoSelect')).toBeChecked();
+    await expect(page.locator('#option-languageOutput')).toHaveValue('en');
+    
+    console.log('✅ English learning options configurable');
+  });
+
+  test('should keep Generate button available for English learning', async () => {
+    await selectEnglishLearningJob();
 
     const generateBtn = page.locator('button:has-text("Generate")');
     await expect(generateBtn).toBeVisible();
@@ -113,56 +103,12 @@ test.describe('English Tab Tests', () => {
     console.log('✅ Generate button found');
   });
 
-  test('should be able to select options', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
+  test('should retain Writing output and history surfaces for English learning', async () => {
+    await selectEnglishLearningJob();
 
-    // Select topic
-    await page.selectOption('select#english-topic', { index: 1 });
-    await page.waitForTimeout(200);
-    
-    // Select level
-    await page.selectOption('select#english-level', { index: 1 });
-    await page.waitForTimeout(200);
-    
-    // Select type
-    await page.selectOption('select#english-type', { index: 1 });
-    await page.waitForTimeout(200);
+    await expect(page.locator('.output-tabs button:has-text("Output")')).toBeVisible();
+    await expect(page.locator('.output-tabs button:has-text("History")')).toBeVisible();
 
-    // Verify selections were made
-    const topicValue = await page.locator('select#english-topic').inputValue();
-    const levelValue = await page.locator('select#english-level').inputValue();
-    const typeValue = await page.locator('select#english-type').inputValue();
-    
-    expect(topicValue).toBeTruthy();
-    expect(levelValue).toBeTruthy();
-    expect(typeValue).toBeTruthy();
-    
-    console.log(`✅ Selections made: topic=${topicValue}, level=${levelValue}, type=${typeValue}`);
-  });
-
-  test('should display saved sentences area', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
-
-    // Look for saved sentences container
-    const savedSentencesArea = page.locator('.saved-sentences, #saved-sentences');
-    const exists = await savedSentencesArea.count() > 0;
-    
-    console.log(`✅ Saved sentences area exists: ${exists}`);
-  });
-
-  test('should display result area for responses', async () => {
-    const englishTab = page.locator('button:has-text("English")');
-    await englishTab.click();
-    await page.waitForTimeout(500);
-
-    // Look for result display area
-    const resultArea = page.locator('.result-area, #result-area');
-    const exists = await resultArea.count() > 0;
-    
-    console.log(`✅ Result area exists: ${exists}`);
+    console.log('✅ Writing output and history remain visible');
   });
 });

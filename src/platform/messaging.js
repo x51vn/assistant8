@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '../logger.js';
-import { createErrorResponse, ERROR_CODES } from '../types.js';
+import { ERROR_CODES } from '../shared/errorCodes.js';
 import { isValidMessage, createErrorResponse as createMsgError, MESSAGE_TYPES } from '../shared/messageSchema.js';
 
 const logger = createLogger('Platform/Messaging');

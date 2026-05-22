@@ -13,6 +13,16 @@
 // ============================================================================
 
 export const ERROR_CODES = {
+  // ===== Communication / Platform Errors =====
+  TAB_NOT_FOUND: 'TAB_NOT_FOUND',
+  CONTENT_SCRIPT_NOT_READY: 'CONTENT_SCRIPT_NOT_READY',
+  MESSAGE_SEND_FAILED: 'MESSAGE_SEND_FAILED',
+  INVALID_TAB_ID: 'INVALID_TAB_ID',
+  SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
+  INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
+  OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
+  SESSION_MISMATCH: 'SESSION_MISMATCH',
+
   // ===== Network Errors =====
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT: 'TIMEOUT',
@@ -27,9 +37,14 @@ export const ERROR_CODES = {
   AUTH_LOGOUT_FAILED: 'AUTH_LOGOUT_FAILED',
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_NOT_CONFIRMED: 'AUTH_EMAIL_NOT_CONFIRMED',
+  AUTH_PASSWORD_SAME: 'AUTH_PASSWORD_SAME',
+  AUTH_PASSWORD_WEAK: 'AUTH_PASSWORD_WEAK',
+  AUTH_ACCOUNT_DELETE_FAILED: 'AUTH_ACCOUNT_DELETE_FAILED',
   
   // ===== Validation Errors =====
   INVALID_INPUT: 'INVALID_INPUT',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  EMPTY_PROMPT: 'EMPTY_PROMPT',
   DUPLICATE_ENTRY: 'DUPLICATE_ENTRY',
   NOT_FOUND: 'NOT_FOUND',
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
@@ -43,6 +58,7 @@ export const ERROR_CODES = {
   // ===== Rate Limiting =====
   RATE_LIMITED: 'RATE_LIMITED',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   
   // ===== ChatGPT Integration =====
   CHATGPT_NOT_AVAILABLE: 'CHATGPT_NOT_AVAILABLE',
@@ -61,6 +77,53 @@ export const ERROR_CODES = {
   // ===== Generic =====
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   OPERATION_FAILED: 'OPERATION_FAILED',
+  QUEUE_ERROR: 'QUEUE_ERROR',
+  STORAGE_ERROR: 'STORAGE_ERROR',
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+
+  // ===== Billing & Subscription (XST-758..XST-763) =====
+  USAGE_LIMIT_EXCEEDED: 'USAGE_LIMIT_EXCEEDED',
+  PLAN_LIMIT: 'PLAN_LIMIT',
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  SUBSCRIPTION_NOT_FOUND: 'SUBSCRIPTION_NOT_FOUND',
+  CHECKOUT_FAILED: 'CHECKOUT_FAILED',
+  PORTAL_FAILED: 'PORTAL_FAILED',
+  STRIPE_ERROR: 'STRIPE_ERROR',
+
+  // ===== Stock Research Pipeline (XST-781) =====
+  SEARCH_FAILED: 'SEARCH_FAILED',
+  SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
+  SEARCH_QUOTA_EXCEEDED: 'SEARCH_QUOTA_EXCEEDED',
+  LLM_TIMEOUT: 'LLM_TIMEOUT',
+  LLM_ERROR: 'LLM_ERROR',
+  LLM_QUOTA_EXCEEDED: 'LLM_QUOTA_EXCEEDED',
+  PARSE_ERROR: 'PARSE_ERROR',
+  PERSIST_ERROR: 'PERSIST_ERROR',
+
+  // ===== LLM API Key Management =====
+  LLM_APIKEY_INVALID: 'LLM_APIKEY_INVALID',
+  LLM_APIKEY_NOT_FOUND: 'LLM_APIKEY_NOT_FOUND',
+  LLM_APIKEY_SAVE_FAILED: 'LLM_APIKEY_SAVE_FAILED',
+  LLM_APIKEY_MIGRATE_FAILED: 'LLM_APIKEY_MIGRATE_FAILED',
+  LLM_HEALTHCHECK_FAILED: 'LLM_HEALTHCHECK_FAILED',
+
+  // ===== Enterprise API Keys =====
+  API_KEY_LIST_ERROR: 'API_KEY_LIST_ERROR',
+  API_KEY_GENERATE_ERROR: 'API_KEY_GENERATE_ERROR',
+  API_KEY_REVOKE_ERROR: 'API_KEY_REVOKE_ERROR',
+
+  // ===== Price Alerts =====
+  ALERT_LIST_ERROR: 'ALERT_LIST_ERROR',
+  ALERT_CREATE_ERROR: 'ALERT_CREATE_ERROR',
+  ALERT_DELETE_ERROR: 'ALERT_DELETE_ERROR',
+  ALERT_TOGGLE_ERROR: 'ALERT_TOGGLE_ERROR',
+
+  // ===== Multi-Portfolio =====
+  PORTFOLIO_LIST_ERROR: 'PORTFOLIO_LIST_ERROR',
+  PORTFOLIO_CREATE_ERROR: 'PORTFOLIO_CREATE_ERROR',
+  PORTFOLIO_UPDATE_ERROR: 'PORTFOLIO_UPDATE_ERROR',
+  PORTFOLIO_DELETE_ERROR: 'PORTFOLIO_DELETE_ERROR',
+  PORTFOLIO_SET_DEFAULT_ERROR: 'PORTFOLIO_SET_DEFAULT_ERROR',
 };
 
 // ============================================================================
@@ -82,9 +145,13 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.AUTH_LOGOUT_FAILED]: 'Không thể đăng xuất. Vui lòng thử lại.',
   [ERROR_CODES.AUTH_INVALID_CREDENTIALS]: 'Email hoặc mật khẩu không đúng.',
   [ERROR_CODES.AUTH_EMAIL_NOT_CONFIRMED]: 'Email chưa được xác nhận. Vui lòng kiểm tra hộp thư.',
+  [ERROR_CODES.AUTH_PASSWORD_SAME]: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
+  [ERROR_CODES.AUTH_PASSWORD_WEAK]: 'Mật khẩu phải có ít nhất 8 ký tự bao gồm: chữ hoa, chữ thường, chữ số và ký tự đặc biệt.',
+  [ERROR_CODES.AUTH_ACCOUNT_DELETE_FAILED]: 'Không thể xóa tài khoản. Vui lòng thử lại sau.',
   
   // Validation
   [ERROR_CODES.INVALID_INPUT]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
+  [ERROR_CODES.VALIDATION_ERROR]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
   [ERROR_CODES.DUPLICATE_ENTRY]: 'Mục này đã tồn tại trong hệ thống.',
   [ERROR_CODES.NOT_FOUND]: 'Không tìm thấy dữ liệu yêu cầu.',
   [ERROR_CODES.MISSING_REQUIRED_FIELD]: 'Vui lòng điền đầy đủ thông tin bắt buộc.',
@@ -116,6 +183,47 @@ export const ERROR_MESSAGES_VN = {
   // Generic
   [ERROR_CODES.UNKNOWN_ERROR]: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   [ERROR_CODES.OPERATION_FAILED]: 'Thao tác thất bại. Vui lòng thử lại.',
+
+  // Billing
+  [ERROR_CODES.USAGE_LIMIT_EXCEEDED]: 'Bạn đã đạt giới hạn của gói hiện tại. Nâng cấp lên Pro để tiếp tục.',
+  [ERROR_CODES.PLAN_LIMIT]: 'Gói hiện tại không cho phép thao tác này. Vui lòng nâng cấp để tiếp tục.',
+  [ERROR_CODES.PLAN_NOT_FOUND]: 'Không tìm thấy gói dịch vụ.',
+  [ERROR_CODES.SUBSCRIPTION_NOT_FOUND]: 'Không tìm thấy thông tin đăng ký.',
+  [ERROR_CODES.CHECKOUT_FAILED]: 'Không thể tạo phiên thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.PORTAL_FAILED]: 'Không thể mở trang quản lý thanh toán. Vui lòng thử lại.',
+  [ERROR_CODES.STRIPE_ERROR]: 'Lỗi thanh toán. Vui lòng thử lại hoặc dùng thẻ khác.',
+
+  // Stock Research Pipeline
+  [ERROR_CODES.SEARCH_FAILED]: 'Không thể tìm kiếm thông tin. Vui lòng thử lại sau.',
+  [ERROR_CODES.SEARCH_TIMEOUT]: 'Tìm kiếm quá thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.SEARCH_QUOTA_EXCEEDED]: 'Đã hết lượt tìm kiếm hôm nay. Thử lại vào ngày mai hoặc tắt Search.',
+  [ERROR_CODES.LLM_TIMEOUT]: 'AI provider không phản hồi trong thời gian cho phép. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_ERROR]: 'Lỗi từ AI provider. Vui lòng thử provider khác hoặc thử lại sau.',
+  [ERROR_CODES.LLM_QUOTA_EXCEEDED]: 'Đã hết quota AI provider. Vui lòng kiểm tra API key hoặc thử provider khác.',
+  [ERROR_CODES.PARSE_ERROR]: 'AI trả lời không đúng format. Đang thử lại...',
+  [ERROR_CODES.PERSIST_ERROR]: 'Không thể lưu kết quả. Dữ liệu vẫn hiển thị nhưng không được lưu.',
+
+  // LLM API Key Management
+  [ERROR_CODES.LLM_APIKEY_INVALID]: 'API key không hợp lệ. Vui lòng kiểm tra lại.',
+  [ERROR_CODES.LLM_APIKEY_NOT_FOUND]: 'Không tìm thấy API key cho provider này.',
+  [ERROR_CODES.LLM_APIKEY_SAVE_FAILED]: 'Không thể lưu API key. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED]: 'Di chuyển API key sang Supabase thất bại. Vui lòng thử lại.',
+  [ERROR_CODES.LLM_HEALTHCHECK_FAILED]: 'Kiểm tra kết nối thất bại. Vui lòng kiểm tra API key và thử lại.',
+
+  // Shared operation aliases
+  [ERROR_CODES.QUEUE_ERROR]: 'Không thể thêm tác vụ vào hàng đợi. Vui lòng thử lại.',
+  [ERROR_CODES.API_KEY_LIST_ERROR]: 'Lấy danh sách API key thất bại.',
+  [ERROR_CODES.API_KEY_GENERATE_ERROR]: 'Tạo API key thất bại.',
+  [ERROR_CODES.API_KEY_REVOKE_ERROR]: 'Hủy API key thất bại.',
+  [ERROR_CODES.ALERT_LIST_ERROR]: 'Lấy danh sách cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_CREATE_ERROR]: 'Tạo cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_DELETE_ERROR]: 'Xóa cảnh báo thất bại.',
+  [ERROR_CODES.ALERT_TOGGLE_ERROR]: 'Cập nhật cảnh báo thất bại.',
+  [ERROR_CODES.PORTFOLIO_LIST_ERROR]: 'Lấy danh sách portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_CREATE_ERROR]: 'Tạo portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_UPDATE_ERROR]: 'Cập nhật portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_DELETE_ERROR]: 'Xóa portfolio thất bại.',
+  [ERROR_CODES.PORTFOLIO_SET_DEFAULT_ERROR]: 'Đặt portfolio mặc định thất bại.',
 };
 
 // ============================================================================
@@ -182,6 +290,11 @@ export function isRetryableError(errorCode) {
     ERROR_CODES.SUPABASE_CONNECTION_ERROR,
     ERROR_CODES.DATABASE_ERROR,
     ERROR_CODES.SSI_API_ERROR,
+    ERROR_CODES.SEARCH_FAILED,
+    ERROR_CODES.SEARCH_TIMEOUT,
+    ERROR_CODES.LLM_TIMEOUT,
+    ERROR_CODES.LLM_ERROR,
+    ERROR_CODES.PERSIST_ERROR,
   ];
   return retryableErrors.includes(errorCode);
 }

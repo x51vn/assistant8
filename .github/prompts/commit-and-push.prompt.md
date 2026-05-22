@@ -1,120 +1,87 @@
 ---
-name: commit-branch-push
-description: Create a new branch based on current changes, commit ALL changes with a message derived from the diff, then push to origin.
-argument-hint: "baseBranchHint='main|master|develop' remote='origin' includeTicketKey='auto|off' commitTypeMode='conventional' "
+name: commit-and-push
+description: Create branch from changes, commit with conventional format, push to origin.
+argument-hint: "remote='origin'"
 agent: "agent"
 ---
 
-You are assisting with a disciplined Git commit flow: branch → commit all → push.
-You must derive branch name and commit message from actual changes (git diff). No guessing.
+# Commit & Push Workflow
 
-## Inputs (ask only if missing AND blocking)
-- baseBranchHint: ${input:baseBranchHint:Expected main branch name (main/master/develop) (optional)}
-- remote: ${input:remote:Remote name (default: origin)}
-- includeTicketKey: ${input:includeTicketKey:auto|off (default: auto)}
-- commitTypeMode: ${input:commitTypeMode:conventional (default)}
+**Goal**: Branch → Commit ALL changes → Push. Derive names from actual diff.
 
-## Non-negotiable rules
-- Create a NEW branch (never commit directly on main/master unless explicitly requested).
-- Commit ALL changes (tracked + untracked) unless a secret-risk is detected.
-- No fabricated facts: branch name + commit message must be supported by git status/diff evidence.
-- Prefer Conventional Commits format: <type>(<scope>): <summary> (optional body). (types: feat|fix|refactor|perf|test|docs|chore|build|ci)
-- Branch naming: use prefixes (feature/bugfix/hotfix/refactor/docs/chore/test), lowercase, hyphen-separated words, no spaces. 
-- STOP if you detect likely secrets in diffs (private keys, api_key, password=, tokens). Ask to fix/undo before proceeding.
+## Core Rules
+1. **Never commit to main/master** - always create new branch
+2. **Conventional Commits**: `<type>(<scope>): <summary>`
+3. **No secrets** - STOP if detect private keys, passwords, tokens
+4. **Evidence-based** - branch/commit message from git diff
 
-## Procedure (execute in order)
+---
 
-### Step 0 — Repo sanity
-Run:
-1) git rev-parse --show-toplevel
-2) git status --porcelain
-3) git branch --show-current
-4) git remote -v
+## Process
 
-If not a git repo: STOP.
+### Step 1 — Check Status
+```bash
+git status --porcelain
+git branch --show-current
+git diff --name-status
+```
 
-### Step 1 — Inspect changes (evidence)
-Run:
-1) git diff --name-status
-2) git diff
-3) If there are untracked files: git status --porcelain and include them in planning.
+### Step 2 — Secret Scan
+Scan diff for: `PRIVATE KEY`, `password=`, `api_key`, `secret`, `token=`
+If found: **STOP** and report file/line (don't copy secret).
 
-Derive:
-- Primary change intent (feature/bugfix/refactor/docs/test/build/ci/chore)
-- Scope: closest common directory or subsystem (e.g., "auth", "popup", "content-script", "service-worker", "api", "ui", "build")
-- Short summary: 3–7 words describing the change outcome
-- If includeTicketKey=auto: detect a ticket key pattern like ABC-123 from:
-  - branch name (if any), commit templates, PR text files, or changed content
-  - If none found: omit ticket key.
+### Step 3 — Create Branch
+Format: `<prefix>/<scope>-<summary>`
 
-### Step 2 — Secret scan (stop if risky)
-Scan git diff content for high-risk patterns (case-insensitive):
-- "BEGIN PRIVATE KEY", "PRIVATE KEY-----"
-- "password=", "passwd", "api_key", "apikey", "secret", "token="
-If suspected secret exists: STOP and report exact file/line context (no copying full secret).
+| Type | Prefix |
+|------|--------|
+| feat | feature/ |
+| fix | bugfix/ |
+| refactor | refactor/ |
+| docs | docs/ |
+| test | test/ |
+| chore | chore/ |
 
-### Step 3 — Create branch name from changes
-Branch format:
-- <prefix>/<scope>-<summary> OR <prefix>/<ticket>-<scope>-<summary> if ticket exists
-Rules:
-- prefix mapping:
-  - feat -> feature
-  - fix -> bugfix (or hotfix if urgent production patch is evident)
-  - refactor -> refactor
-  - test -> test
-  - docs -> docs
-  - build|ci -> ci
-  - chore -> chore
-- scope: lowercase, hyphenate
-- summary: lowercase, hyphenate, max ~40 chars
+Example: `feature/portfolio-add-filter`
 
-Example:
-- feature/popup-add-search
-- bugfix/ABC-123-content-script-null-guard
+```bash
+git switch -c <branch-name>
+```
 
-Commands:
-1) Run: `git branch --show-current`
-2) If current branch is main/master (or equals baseBranchHint): you MUST create a new branch.
-3) Create branch from current HEAD (pick one):
-  - `git switch -c <new-branch>` (preferred)
-  - `git checkout -b <new-branch>`
+### Step 4 — Stage & Commit
+```bash
+git add -A
+git commit -m "<type>(<scope>): <summary>
 
-### Step 4 — Stage ALL changes
-Run:
-1) git add -A
-2) git diff --cached --stat
-3) git diff --cached
+- What changed
+- Why
+- Verification: npm test"
+```
 
-If staged diff is empty: STOP.
+**Commit Types**: feat|fix|refactor|perf|test|docs|chore|build|ci
 
-### Step 5 — Generate commit message from diff (Conventional Commits)
-Commit message rules:
-- Subject: <type>(<scope>): <summary>
-  - type derived from primary intent (feat/fix/refactor/test/docs/build/ci/chore)
-  - scope = derived scope
-  - summary = outcome-focused, imperative mood, <= ~50 characters if possible
-- Body (optional, recommended if non-trivial):
-  - What changed (bullet)
-  - Why (bullet)
-  - Risks/compatibility notes (bullet)
-  - Verification steps (commands)
+### Step 5 — Push
+```bash
+git push -u origin <branch-name>
+```
 
-If a ticket key exists, include it as:
-- Either prefix in subject: "ABC-123 feat(scope): ..." OR
-- Footer line: "Refs: ABC-123"
-Pick one style and be consistent.
+---
 
-Command:
-- git commit -m "<subject>" -m "<body>"
+## Quick Examples
 
-### Step 6 — Push
-Run:
-1) git push -u <remote> HEAD
-2) git log -1 --oneline
+```bash
+# Feature
+git switch -c feature/assets-add-modal
+git commit -m "feat(assets): add AssetModal component
 
-### Step 7 — Final report (concise)
-Return:
-- new branch name
-- commit hash + subject
-- pushed status (remote/branch)
-- any risks/limitations + verification reminders
+- Add form for add/edit assets
+- Dynamic fields based on asset type
+- Validation for required fields"
+
+# Bugfix
+git switch -c bugfix/portfolio-null-check
+git commit -m "fix(portfolio): add null guard for empty response
+
+- Handle case when API returns null
+- Add default empty array fallback"
+```

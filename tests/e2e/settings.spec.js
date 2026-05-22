@@ -3,9 +3,10 @@
  * Verify settings can be saved and loaded correctly
  */
 
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { launchExtensionContext } from './extensionTestUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,30 +17,11 @@ test.describe('Settings Tests', () => {
   let page;
 
   test.beforeAll(async () => {
-    const extensionPath = path.join(__dirname, '../../src/extension');
-    const userDataDir = path.join(__dirname, '../../test-user-data-settings');
-
-    context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ]
-    });
-
-    // Get extension ID
-    const backgroundPages = context.backgroundPages();
-    if (backgroundPages.length > 0) {
-      const url = backgroundPages[0].url();
-      const match = url.match(/chrome-extension:\/\/([a-z]+)\//);
-      if (match) {
-        extensionId = match[1];
-      }
-    }
+    ({ context, extensionId } = await launchExtensionContext(__dirname, 'test-user-data-settings'));
 
     // Open sidepanel
     page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await page.goto(`chrome-extension://${extensionId}/sidepanel-preact.html`);
     await page.waitForTimeout(1000);
   });
 
@@ -66,7 +48,7 @@ test.describe('Settings Tests', () => {
     await settingsTab.click();
     await page.waitForTimeout(500);
 
-    // Check for basic settings controls (not Firebase-specific)
+    // Check for basic settings controls
     const settingsPage = page.locator('#settings-page');
     await expect(settingsPage).toBeVisible();
     
@@ -78,31 +60,31 @@ test.describe('Settings Tests', () => {
     await settingsTab.click();
     await page.waitForTimeout(500);
 
-    // Find Firebase sync checkbox
-    const firebaseSyncCheckbox = page.locator('input[type="checkbox"]').first();
+    // Find settings checkbox
+    const syncCheckbox = page.locator('input[type="checkbox"]').first();
     
     // Get initial state
-    const initialState = await firebaseSyncCheckbox.isChecked();
-    console.log(`Initial Firebase sync state: ${initialState}`);
+    const initialState = await syncCheckbox.isChecked();
+    console.log(`Initial setting state: ${initialState}`);
     
     // Toggle it
-    await firebaseSyncCheckbox.click();
+    await syncCheckbox.click();
     await page.waitForTimeout(500);
     
     // Verify state changed
-    const newState = await firebaseSyncCheckbox.isChecked();
+    const newState = await syncCheckbox.isChecked();
     expect(newState).not.toBe(initialState);
     
-    console.log(`✅ Firebase sync toggled to: ${newState}`);
+    console.log(`✅ Setting toggled to: ${newState}`);
     
     // Toggle back
-    await firebaseSyncCheckbox.click();
+    await syncCheckbox.click();
     await page.waitForTimeout(500);
     
-    const finalState = await firebaseSyncCheckbox.isChecked();
+    const finalState = await syncCheckbox.isChecked();
     expect(finalState).toBe(initialState);
     
-    console.log(`✅ Firebase sync restored to: ${finalState}`);
+    console.log(`✅ Setting restored to: ${finalState}`);
   });
 
   test('should have backup/restore buttons', async () => {

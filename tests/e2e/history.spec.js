@@ -3,9 +3,10 @@
  * Verify conversation history features work correctly
  */
 
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { launchExtensionContext } from './extensionTestUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,30 +17,11 @@ test.describe('History Tab Tests', () => {
   let page;
 
   test.beforeAll(async () => {
-    const extensionPath = path.join(__dirname, '../../src/extension');
-    const userDataDir = path.join(__dirname, '../../test-user-data-history');
-
-    context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ]
-    });
-
-    // Get extension ID
-    const backgroundPages = context.backgroundPages();
-    if (backgroundPages.length > 0) {
-      const url = backgroundPages[0].url();
-      const match = url.match(/chrome-extension:\/\/([a-z]+)\//);
-      if (match) {
-        extensionId = match[1];
-      }
-    }
+    ({ context, extensionId } = await launchExtensionContext(__dirname, 'test-user-data-history'));
 
     // Open sidepanel
     page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await page.goto(`chrome-extension://${extensionId}/sidepanel-preact.html`);
     await page.waitForTimeout(1000);
   });
 
@@ -154,8 +136,7 @@ test.describe('History Tab Tests', () => {
     const content = await page.content();
     const hasSyncInfo = content.includes('sync') || 
                         content.includes('Sync') ||
-                        content.includes('đồng bộ') ||
-                        content.includes('Firebase');
+                        content.includes('đồng bộ');
     
     console.log(`✅ Sync status info: ${hasSyncInfo}`);
   });

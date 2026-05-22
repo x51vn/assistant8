@@ -1,8 +1,8 @@
-# ChatGPT Assistant - Hướng dẫn cho AI Coding Agent
+# Assistant8 - Hướng dẫn cho AI Coding Agent
 
 ## Mục tiêu Dự án
 
-**ChatGPT Assistant** là Chrome MV3 extension tương tác với ChatGPT với 3 lĩnh vực chính:
+**Assistant8** (trước đây là ChatGPT Assistant) là Chrome MV3 extension tương tác với ChatGPT với 3 lĩnh vực chính:
 
 1. **📈 Quản lý Portfolio Chứng khoán**: 
    - Theo dõi cổ phiếu yêu thích trên Supabase
@@ -162,10 +162,22 @@ if (error.message.includes('Failed to fetch')) {
 
 ### Storage Strategy
 
-- **Supabase PostgreSQL**: TẤT CẢ business data (prompts, categories, chat history, portfolio, errors, settings)
-- **chrome.storage.local**: CHỈ Supabase auth token (qua adapter) + migration flag
-- ❌ **KHÔNG DÙNG** `localStorage` (browser API - không hoạt động trong SW)
-- ❌ **KHÔNG LƯU** business data locally
+**Permanent Data (Supabase PostgreSQL)**:
+- ✅ TẤT CẢ business data (prompts, categories, chat history, portfolio, errors, settings)
+- ✅ Tất cả user settings & preferences
+- ✅ Dữ liệu ghi lại theo user_id (RLS enforced)
+
+**Temporary/Session Data (chrome.storage.local)**:
+- ✅ Supabase auth token (qua adapter) + migration flag
+- ✅ **NEW**: Optimistic updates & pending state (watchlist enrichment, portfolio edits)
+- ✅ **NEW**: Session cache (prices, fetched items - short-lived)
+- ✅ **NEW**: UI state flags (e.g., "enrichment in progress", "last fetch timestamp")
+- ✅ Cleanup: Temp data should have TTL or be cleared on logout
+
+**Never Use**:
+- ❌ `localStorage` (browser API - không hoạt động trong SW)
+- ❌ **Permanent business data in chrome.storage.local** (only Supabase for persistence)
+- ❌ In-memory state in Service Worker (SW sẽ terminate)
 
 ### Workflow Phổ Biến
 
@@ -184,12 +196,29 @@ if (error.message.includes('Failed to fetch')) {
 
 ### Khi Sửa Code
 
-**🔴 QUAN TRỌNG: Lưu dữ liệu lên Supabase**
+**🔴 QUAN TRỌNG: Data Persistence Strategy**
+
+*Permanent Data (Supabase)*:
 - ✅ TẤT CẢ business data phải lưu vào Supabase PostgreSQL
 - ✅ Sử dụng các tables có `user_id` + RLS policies
 - ✅ Gọi Supabase từ Background handler (middleware pattern)
-- ❌ KHÔNG lưu data vào `chrome.storage.local` (chỉ dùng cho auth token)
-- ❌ KHÔNG lưu data vào `localStorage` trong Service Worker
+- ✅ Ví dụ: portfolio, watchlist, chat_history, settings, errors
+
+*Temporary Data (chrome.storage.local)*:
+- ✅ **NEW**: `chrome.storage.local` CÓ THỂ lưu optimistic updates & session state để persist giữa các tab:
+  - Watchlist enrichment in progress (pending symbol, timestamp)
+  - Portfolio edit cache (field value trước save)
+  - Last fetch timestamp & cache (prices, watchlist snapshot)
+  - UI state flags (loading states, enrichment status)
+- ⚠️ **Requirement**: Temp data PHẢI có TTL hoặc cleanup strategy (auto-clear sau 1h hoặc on logout)
+- ⚠️ **Requirement**: Nếu browser restart, temp data mất → cấp fetch lại từ Supabase
+
+*Never Use*:
+- ❌ `localStorage` (browser API - không hoạt động trong SW)
+- ❌ **Permanent business data in chrome.storage.local** (only Supabase)
+- ❌ In-memory state vĩnh viễn trong SW
+
+*Additional*:
 - ⚠️ **Sync Module**: `src/ui/sync.js` provides local notes storage only. All user data sync must be implemented via Supabase and background handlers.
 - ✅ **Message Schema requirement**: All cross-context messages MUST include `v` (schema version), `type` (from `MESSAGE_TYPES`), `correlationId` (unique tracing id), and `timestamp`. Use `createMessage()` / `createResponse()` helpers and add new message types to `src/shared/messageSchema.js` when necessary.
 

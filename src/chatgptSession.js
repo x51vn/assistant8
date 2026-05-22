@@ -2,12 +2,12 @@
 // Provides specialized functions for managing ChatGPT interactions
 // Pure business logic - no direct I/O except Chrome APIs
 
-import { 
-  ERROR_CODES, 
-  createSuccessResponse, 
-  createErrorResponse, 
-  exceptionToErrorResponse 
+import {
+  createDataResponse,
+  createApiErrorResponse,
+  exceptionToApiErrorResponse
 } from './types.js';
+import { ERROR_CODES } from './shared/errorCodes.js';
 import { createLogger } from './logger.js';
 import {
   getContentScriptStatus,
@@ -185,10 +185,10 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       throw new Error('Ping fallback exhausted all retries');
     };
     
-    // OPTIMIZATION 4: Race strategy
+    // OPTIMIZATION 4: First-success strategy
     // - If registry is fast (100-500ms), use that
-    // - If registry fails, fallback to ping (triggered after 500ms)
-    // - Return whichever succeeds first
+    // - If registry misses, ping fallback can still succeed
+    // - Only fail when BOTH strategies fail
     
     // Start ping fallback after 500ms
     const pingFallback = (async () => {
@@ -196,9 +196,9 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       return await tryPingUntilReady();
     })();
     
-    // Try registry first, race against ping fallback
+    // Try both strategies and resolve on first success
     try {
-      const result = await Promise.race([
+      const result = await Promise.any([
         checkRegistryUntilReady(),
         pingFallback
       ]);
@@ -211,16 +211,21 @@ export async function waitForTabReady(tabId, timeoutMs = 10000) {
       
       return result;
     } catch (error) {
-      // Both registry and ping failed
+      // Both registry and ping failed (AggregateError from Promise.any)
       const elapsed = Date.now() - startTime;
+      const aggregateErrors = Array.isArray(error?.errors) ? error.errors : [];
+      const rootCause = aggregateErrors.length > 0
+        ? aggregateErrors.map(e => e?.message || String(e)).join(' | ')
+        : (error?.message || 'Unknown strategy failure');
+
       logger.warn('waitForTabReady: All strategies exhausted', {
         tabId,
         elapsed,
-        error: error.message
+        error: rootCause
       });
       
       throw new Error(
-        `Timeout after ${Math.min(elapsed, timeoutMs)}ms: ${error.message}`
+        `Timeout after ${Math.min(elapsed, timeoutMs)}ms: ${rootCause}`
       );
     }
   } catch (error) {
@@ -248,7 +253,7 @@ export async function createNewSession(tabId) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'createNewSession'
@@ -265,18 +270,18 @@ export async function createNewSession(tabId) {
         chatUrl: response.chatUrl || null
       };
       logger.endOperation(correlationId, 'success');
-      return createSuccessResponse(data);
+      return createDataResponse(data);
     }
     
     logger.endOperation(correlationId, 'error', 'No success response');
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.SESSION_CREATE_FAILED,
       'Failed to create new session',
       'createNewSession'
     );
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'createNewSession');
+    return exceptionToApiErrorResponse(error, 'createNewSession');
   }
 }
 
@@ -296,7 +301,7 @@ export async function sendInput(tabId, prompt, options = {}) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'sendInput'
@@ -304,7 +309,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     }
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.EMPTY_PROMPT,
         'Prompt cannot be empty',
         'sendInput'
@@ -336,7 +341,7 @@ export async function sendInput(tabId, prompt, options = {}) {
             status: response.status
           };
           logger.endOperation(correlationId, 'success');
-          return createSuccessResponse(data);
+          return createDataResponse(data);
         }
         
         // Invalid status - retry if attempts remain
@@ -370,7 +375,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     
     // All retries exhausted
     logger.endOperation(correlationId, 'error', `Max retries exhausted: ${lastError}`);
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.INPUT_SEND_FAILED,
       `Failed after ${maxRetries + 1} attempts`,
       'sendInput',
@@ -378,7 +383,7 @@ export async function sendInput(tabId, prompt, options = {}) {
     );
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'sendInput');
+    return exceptionToApiErrorResponse(error, 'sendInput');
   }
 }
 
@@ -399,7 +404,7 @@ export async function getOutput(tabId, options = {}) {
   
   try {
     if (!tabId || tabId < 0) {
-      return createErrorResponse(
+      return createApiErrorResponse(
         ERROR_CODES.INVALID_TAB_ID,
         'Invalid tab ID provided',
         'getOutput'
@@ -419,8 +424,25 @@ export async function getOutput(tabId, options = {}) {
           action: 'get_output',
           wait: options.wait !== false,
           timeoutMs: options.timeoutMs || 15 * 60 * 1000,
-          stableMs: options.stableMs || 1500
+          stableMs: options.stableMs || 1500,
+          expectedChatId: options.expectedChatId || null  // Session guard
         });
+        
+        // Session mismatch: user navigated to a different chat while we were waiting
+        if (response && response.status === 'session_mismatch') {
+          logger.warn('[getOutput] Session mismatch — user navigated away', {
+            expectedChatId: options.expectedChatId,
+            currentChatId: response.currentChatId,
+            correlationId
+          });
+          logger.endOperation(correlationId, 'error', 'session_mismatch');
+          return createApiErrorResponse(
+            ERROR_CODES.SESSION_MISMATCH,
+            `Session changed: expected chatId=${options.expectedChatId}, actual chatId=${response.currentChatId}`,
+            'getOutput',
+            { expectedChatId: options.expectedChatId, currentChatId: response.currentChatId }
+          );
+        }
         
         if (response && response.result) {
           // X51LABS-62: Cache partial result
@@ -452,7 +474,7 @@ export async function getOutput(tabId, options = {}) {
           }
           
           logger.endOperation(correlationId, 'success', { attempt });
-          return createSuccessResponse(data);
+          return createDataResponse(data);
         }
         
         // X51LABS-62: If no result but response exists, might be transient
@@ -473,7 +495,7 @@ export async function getOutput(tabId, options = {}) {
             cachedResult = data.lastResult;
             if (cachedResult && Date.now() - cachedResult.timestamp < 60 * 60 * 1000) { // 1 hour TTL
               logger.info(`[getOutput] Using cached result fallback (age: ${Math.round((Date.now() - cachedResult.timestamp) / 1000)}s)`, { correlationId });
-              return createSuccessResponse({
+              return createDataResponse({
                 result: cachedResult.result,
                 chatId: cachedResult.chatId,
                 chatUrl: cachedResult.chatUrl,
@@ -488,7 +510,7 @@ export async function getOutput(tabId, options = {}) {
           
           // Return error with partial if available
           logger.endOperation(correlationId, 'error', 'No result after retries');
-          return createErrorResponse(
+          return createApiErrorResponse(
             ERROR_CODES.OUTPUT_FETCH_FAILED,
             lastPartialResult 
               ? `Timeout: partial result available (${lastPartialResult.length} chars)` 
@@ -525,7 +547,7 @@ export async function getOutput(tabId, options = {}) {
     
     // Should not reach here, but fallback
     logger.endOperation(correlationId, 'error', 'Retry loop exhausted');
-    return createErrorResponse(
+    return createApiErrorResponse(
       ERROR_CODES.OUTPUT_FETCH_FAILED,
       'Failed to get output after all retries',
       'getOutput',
@@ -534,7 +556,7 @@ export async function getOutput(tabId, options = {}) {
     
   } catch (error) {
     logger.endOperation(correlationId, 'error', error);
-    return exceptionToErrorResponse(error, 'getOutput');
+    return exceptionToApiErrorResponse(error, 'getOutput');
   }
 }
 
@@ -693,16 +715,42 @@ export async function ensureChatGPTTab(options = {}) {
     let chatTab = tabs.find(t => t.url && t.url.includes('chatgpt.com'));
     
     if (chatTab) {
-      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id });
-      
+      logger.info('Found existing ChatGPT tab', { tabId: chatTab.id, discarded: chatTab.discarded });
+
+      // Handle discarded tabs (Chrome Memory Saver killed the page process)
+      // A discarded tab has no JS running — must reload before content script can respond
+      if (chatTab.discarded) {
+        logger.warn('ChatGPT tab was discarded by Chrome Memory Saver, reloading', { tabId: chatTab.id });
+        await chrome.tabs.reload(chatTab.id);
+        await new Promise((resolve) => {
+          let timeoutId = null;
+          const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            chrome.tabs.onUpdated.removeListener(listener);
+          };
+          const listener = (tabId, changeInfo) => {
+            if (tabId === chatTab.id && changeInfo.status === 'complete') {
+              cleanup();
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          timeoutId = setTimeout(() => { cleanup(); resolve(); }, 30000);
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Prevent Chrome Memory Saver from discarding this tab while we use it
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Focus existing tab if requested
       if (focusTab) {
         await chrome.tabs.update(chatTab.id, { active: true });
       }
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult = await waitForTabReady(chatTab.id);
+      if (readyResult.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: false };
       } else {
@@ -735,9 +783,9 @@ export async function ensureChatGPTTab(options = {}) {
           // Additional wait for React to load
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // Try ping again after reload
-          const readyAfterReload = await waitForContentScript(chatTab.id);
-          if (readyAfterReload) {
+          // Try again after reload (registry-based + ping fallback, 10s)
+          const readyAfterReload = await waitForTabReady(chatTab.id);
+          if (readyAfterReload.success) {
             logger.endOperation(correlationId, 'success');
             return { tabId: chatTab.id, isNew: false };
           }
@@ -764,7 +812,10 @@ export async function ensureChatGPTTab(options = {}) {
         url: 'https://chatgpt.com/', 
         active: focusTab 
       });
-      
+
+      // Prevent Memory Saver from discarding this tab during job processing
+      try { await chrome.tabs.update(chatTab.id, { autoDiscardable: false }); } catch { /* not critical */ }
+
       // Wait for page to load
       await new Promise((resolve) => {
         let timeoutId = null;
@@ -790,13 +841,13 @@ export async function ensureChatGPTTab(options = {}) {
       // Additional wait for React to load
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Wait for content script to be ready
-      const ready = await waitForContentScript(chatTab.id);
-      if (ready) {
+      // Wait for content script to be ready (registry-based + ping fallback, 10s)
+      const readyResult2 = await waitForTabReady(chatTab.id);
+      if (readyResult2.success) {
         logger.endOperation(correlationId, 'success');
         return { tabId: chatTab.id, isNew: true };
       } else {
-        const errorMsg = 'Content script not ready after waiting';
+        const errorMsg = `Content script not ready after waiting: ${readyResult2.error || 'timeout'}`;
         logger.endOperation(correlationId, 'error', errorMsg);
         return { 
           tabId: chatTab.id, 
@@ -824,77 +875,19 @@ export async function ensureChatGPTTab(options = {}) {
   }
 }
 
+// waitForContentScript removed — replaced by waitForTabReady (registry + ping, 10s timeout)
+
 /**
- * Wait for content script to be ready with retry logic
- * @param {number} tabId - The tab ID to check
- * @param {WaitForContentScriptOptions} [options={}] - Options
- * @returns {Promise<boolean>}
+ * Release a tab back to Chrome's normal memory management (allow auto-discard).
+ * Call this after enrichment / job completes so the tab can be managed normally.
+ * @param {number} tabId
+ * @returns {Promise<void>}
  */
-export async function waitForContentScript(tabId, options = {}) {
-  const maxRetries = options.maxRetries || 10;
-  const retryDelay = options.retryDelay || 500;
-  
-  // First, verify tab exists
+export async function releaseTab(tabId) {
+  if (!tabId || tabId < 0) return;
   try {
-    const tab = await chrome.tabs.get(tabId);
-    logger.debug('Tab exists', { tabId, url: tab.url, status: tab.status });
-  } catch (error) {
-    logger.warn('Tab does not exist', { tabId, error: error.message });
-    return false;
+    await chrome.tabs.update(tabId, { autoDiscardable: true });
+  } catch {
+    // Tab might already be closed — not critical
   }
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      // Ping content script to check if it's ready
-      const pingResponse = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-      if (pingResponse && pingResponse.pong === true) {
-        logger.debug('Content script ready', { tabId, attempt: i + 1 });
-        return true;
-      }
-      logger.warn('Content script responded but pong !== true', { 
-        tabId, 
-        attempt: i + 1,
-        response: pingResponse 
-      });
-    } catch (error) {
-      // Check if tab still exists (might have been closed during retries)
-      try {
-        await chrome.tabs.get(tabId);
-      } catch (tabError) {
-        logger.warn('Tab closed during content script check', { tabId });
-        return false;
-      }
-      
-      logger.debug('Content script not ready, retrying', { 
-        tabId, 
-        attempt: i + 1, 
-        maxRetries,
-        error: error.message
-      });
-      if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      }
-    }
-  }
-  
-  logger.error('Content script not ready after max retries', { 
-    tabId, 
-    maxRetries,
-    troubleshooting: {
-      possibleCauses: [
-        'Extension not reloaded after build',
-        'Tab opened before extension loaded',
-        'Content script failed to inject',
-        'ChatGPT URL changed',
-        'JavaScript error in content script'
-      ],
-      solutions: [
-        '1. Reload extension at chrome://extensions',
-        '2. Close and reopen ChatGPT tab',
-        '3. Check browser console for errors',
-        '4. Check manifest.json content_scripts matches'
-      ]
-    }
-  });
-  return false;
 }

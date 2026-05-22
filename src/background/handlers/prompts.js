@@ -1,514 +1,587 @@
 /**
- * @fileoverview Prompts CRUD Handlers
- * Manages prompt template operations with Supabase backend
- * 
- * Ticket: GPT-012
+ * Unified Prompts Handler
+ * Manages unified prompts: 8 system prompts + 7 writing templates + custom prompts
+ * All stored in public.prompts table with prompt_type and is_system metadata
  */
 
+import { supabase } from '../../supabaseConfig.js';
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
-import { supabase } from '../../supabaseConfig.js';
+import { createLogger } from '../../logger.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js';
-import { createLogger } from '../../logger.js';
+import { invalidatePromptCache } from './contextMenu.js';
+import {
+  getAllPromptMetadata,
+  getAllDefaultPrompts,
+  getSystemPromptKeys,
+  getWritingTemplateKeys,
+  getPromptType,
+  PROMPT_TYPE
+} from '../../shared/allPrompts.js';
+import {
+  filterPromptsByType,
+  readPromptCache,
+  removePromptCache,
+  writePromptCache
+} from '../services/promptCacheService.js';
 
-const logger = createLogger('PromptsHandler');
+const logger = createLogger('Prompts');
+const STALE_REFRESH_TIMEOUT_MS = 5000;
 
-/**
- * PROMPT_GET_ALL - Get all prompts for current user
- */
-registerHandler(MESSAGE_TYPES.PROMPT_GET_ALL, async (message) => {
-  const correlationId = logger.startOperation('getPrompts', message.correlationId);
-  const { includeCategory } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    let query = supabase
-      .from('prompts')
-      .select(includeCategory ? '*, category:categories(*)' : '*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
-    
-    const data = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await query;
-        if (error) throw error;
-        return data;
-      },
-      {
-        operationName: 'getPrompts',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { count: data.length });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_LIST, { prompts: data });
-    
-  } catch (error) {
-    logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
+function buildDefaultPromptMap(promptType = null) {
+  const defaults = {};
+  const allMetadata = getAllPromptMetadata();
+  const allDefaults = getAllDefaultPrompts();
+  const metadata = promptType
+    ? allMetadata.filter(meta => meta.prompt_type === promptType)
+    : allMetadata;
+
+  for (const meta of metadata) {
+    defaults[meta.key] = {
+      key: meta.key,
+      title: meta.title,
+      content: allDefaults[meta.key],
+      tags: meta.tags || [],
+      promptType: meta.prompt_type,
+      isSystem: meta.is_system,
+      isDefault: true
+    };
   }
-});
+
+  return defaults;
+}
+
+function buildPromptMapFromRows(prompts) {
+  const result = {};
+  const allMetadata = getAllPromptMetadata();
+  const allDefaults = getAllDefaultPrompts();
+
+  for (const meta of allMetadata) {
+    const dbPrompt = prompts.find(p => p.key === meta.key);
+
+    if (dbPrompt) {
+      result[meta.key] = {
+        id: dbPrompt.id,
+        key: dbPrompt.key,
+        title: dbPrompt.title,
+        content: dbPrompt.content,
+        tags: dbPrompt.tags || [],
+        promptType: dbPrompt.prompt_type,
+        isSystem: dbPrompt.is_system,
+        updatedAt: dbPrompt.updated_at,
+        isCustom: false
+      };
+    } else {
+      result[meta.key] = {
+        key: meta.key,
+        title: meta.title,
+        content: allDefaults[meta.key],
+        tags: meta.tags || [],
+        promptType: meta.prompt_type,
+        isSystem: meta.is_system,
+        isDefault: true
+      };
+    }
+  }
+
+  const customPrompts = prompts.filter(p => !allMetadata.find(meta => meta.key === p.key));
+  for (const custom of customPrompts) {
+    result[custom.key] = {
+      id: custom.id,
+      key: custom.key,
+      title: custom.title,
+      content: custom.content,
+      tags: custom.tags || [],
+      promptType: custom.prompt_type || PROMPT_TYPE.CUSTOM,
+      isSystem: false,
+      updatedAt: custom.updated_at,
+      isCustom: true
+    };
+  }
+
+  return result;
+}
+
+function buildPromptMapForTypeFromRows(prompts, promptType) {
+  const result = {};
+  const allMetadata = getAllPromptMetadata().filter(meta => meta.prompt_type === promptType);
+  const allDefaults = getAllDefaultPrompts();
+
+  for (const meta of allMetadata) {
+    const dbPrompt = prompts.find(p => p.key === meta.key);
+
+    if (dbPrompt) {
+      result[meta.key] = {
+        id: dbPrompt.id,
+        key: dbPrompt.key,
+        title: dbPrompt.title,
+        content: dbPrompt.content,
+        tags: dbPrompt.tags || [],
+        promptType: dbPrompt.prompt_type,
+        isSystem: dbPrompt.is_system,
+        updatedAt: dbPrompt.updated_at
+      };
+    } else {
+      result[meta.key] = {
+        key: meta.key,
+        title: meta.title,
+        content: allDefaults[meta.key],
+        tags: meta.tags || [],
+        promptType: meta.prompt_type,
+        isSystem: meta.is_system,
+        isDefault: true
+      };
+    }
+  }
+
+  return result;
+}
+
+async function fetchAllPromptRows(userId, correlationId) {
+  return await supabaseWithRetry(
+    async () => {
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      operationName: 'getAllPrompts',
+      correlationId
+    }
+  );
+}
+
+async function fetchPromptRowsByType(userId, promptType, correlationId) {
+  return await supabaseWithRetry(
+    async () => {
+      const keys = promptType === PROMPT_TYPE.SYSTEM ? getSystemPromptKeys() : getWritingTemplateKeys();
+
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('id, key, title, content, tags, prompt_type, is_system, updated_at')
+        .eq('user_id', userId)
+        .in('key', keys);
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      operationName: `getPromptsByType_${promptType}`,
+      correlationId
+    }
+  );
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Prompt refresh timed out')), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function cacheResponseMetadata(cache, overrides = {}) {
+  return {
+    hit: cache?.hit === true,
+    stale: cache?.stale === true,
+    cachedAt: cache?.cachedAt,
+    source: cache?.hit ? 'chrome.storage.local' : overrides.source,
+    ...overrides
+  };
+}
+
+function normalizeSubmittedPrompts(prompts) {
+  const normalized = {};
+  for (const [key, prompt] of Object.entries(prompts || {})) {
+    normalized[key] = {
+      ...prompt,
+      key,
+      promptType: prompt.promptType || prompt.prompt_type || getPromptType(key),
+      isSystem: prompt.isSystem ?? prompt.is_system ?? getPromptType(key) !== PROMPT_TYPE.CUSTOM
+    };
+  }
+  return normalized;
+}
 
 /**
- * PROMPT_GET_BY_ID - Get single prompt by ID
+ * Initialize default prompts for a user
+ * Creates all default prompts if missing, idempotent (safe to run multiple times)
  */
-registerHandler(MESSAGE_TYPES.PROMPT_GET_BY_ID, async (message) => {
-  const correlationId = logger.startOperation('getPromptById', message.correlationId);
-  const { id } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    if (!id) {
-      logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'ID prompt không hợp lệ.'
-      );
+async function initializeDefaultPrompts(userId, promptType = null) {
+  const allMetadata = getAllPromptMetadata();
+  const allDefaults = getAllDefaultPrompts();
+
+  // Filter by prompt_type if specified
+  const metadataToInit = promptType
+    ? allMetadata.filter(meta => meta.prompt_type === promptType)
+    : allMetadata;
+
+  for (const promptMeta of metadataToInit) {
+    const defaultContent = allDefaults[promptMeta.key];
+    if (!defaultContent) {
+      logger.warn(`No default content found for key: ${promptMeta.key}`);
+      continue;
     }
-    
-    const data = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('prompts')
-          .select('*, category:categories(*)')
-          .eq('id', id)
-          .eq('user_id', userId)
-          .single();
-        
-        if (error) {
-          if (error.code === 'PGRST116') {
-            throw new Error('NOT_FOUND');
+
+    try {
+      // Insert if not exists (based on unique constraint user_id + key)
+      // If already exists, do nothing (respect user edits)
+      await supabaseWithRetry(
+        async () => {
+          const { data, error: insertError } = await supabase
+            .from('prompts')
+            .insert({
+              user_id: userId,
+              key: promptMeta.key,
+              title: promptMeta.title,
+              content: defaultContent,
+              tags: promptMeta.tags || [],
+              prompt_type: promptMeta.prompt_type,
+              is_system: promptMeta.is_system
+            })
+            .select();
+
+          // If insert fails due to unique constraint, it already exists - that's OK
+          if (insertError && insertError.code === '23505') {
+            logger.debug(`Prompt already exists (skipping): ${promptMeta.key}`);
+            return { skipped: true };
           }
-          throw error;
-        }
-        return data;
-      },
-      {
-        operationName: 'getPromptById',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { promptId: id });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_DETAIL, { prompt: data });
-    
-  } catch (error) {
-    logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message === 'NOT_FOUND') {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NOT_FOUND,
-        'Không tìm thấy prompt.'
-      );
-    }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
-  }
-});
 
-/**
- * PROMPT_ADD - Create new prompt
- */
-registerHandler(MESSAGE_TYPES.PROMPT_ADD, async (message) => {
-  const correlationId = logger.startOperation('addPrompt', message.correlationId);
-  const { title, content, category_id, is_favorite } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    // Validation
-    if (!title || typeof title !== 'string' || !title.trim()) {
-      logger.endOperation(correlationId, 'error', { reason: 'invalid_title' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'Tiêu đề prompt không được để trống.'
-      );
-    }
-    
-    if (!content || typeof content !== 'string' || !content.trim()) {
-      logger.endOperation(correlationId, 'error', { reason: 'invalid_content' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'Nội dung prompt không được để trống.'
-      );
-    }
-    
-    const data = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('prompts')
-          .insert({
-            user_id: userId,
-            title: title.trim(),
-            content: content.trim(),
-            category_id: category_id || null,
-            is_favorite: is_favorite || false,
-            usage_count: 0
-          })
-          .select('*, category:categories(*)')
-          .single();
-        
-        if (error) throw error;
-        return data;
-      },
-      {
-        operationName: 'addPrompt',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { promptId: data.id });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_ADDED, { prompt: data });
-    
-  } catch (error) {
-    logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
-  }
-});
+          if (insertError) throw insertError;
 
-/**
- * PROMPT_UPDATE - Update existing prompt
- */
-registerHandler(MESSAGE_TYPES.PROMPT_UPDATE, async (message) => {
-  const correlationId = logger.startOperation('updatePrompt', message.correlationId);
-  const { id, title, content, category_id, is_favorite } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    // Validation
-    if (!id) {
-      logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'ID prompt không hợp lệ.'
-      );
-    }
-    
-    const updateData = { updated_at: new Date().toISOString() };
-    if (title !== undefined) {
-      if (!title.trim()) {
-        return createErrorResponse(
-          message,
-          ERROR_CODES.INVALID_INPUT,
-          'Tiêu đề prompt không được để trống.'
-        );
-      }
-      updateData.title = title.trim();
-    }
-    if (content !== undefined) {
-      if (!content.trim()) {
-        return createErrorResponse(
-          message,
-          ERROR_CODES.INVALID_INPUT,
-          'Nội dung prompt không được để trống.'
-        );
-      }
-      updateData.content = content.trim();
-    }
-    if (category_id !== undefined) updateData.category_id = category_id;
-    if (is_favorite !== undefined) updateData.is_favorite = is_favorite;
-    
-    const data = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('prompts')
-          .update(updateData)
-          .eq('id', id)
-          .eq('user_id', userId)
-          .select('*, category:categories(*)')
-          .single();
-        
-        if (error) {
-          if (error.code === 'PGRST116') {
-            throw new Error('NOT_FOUND');
+          // Log success if data was returned
+          if (data && data.length > 0) {
+            logger.debug(`Prompt created: ${promptMeta.key} (type: ${promptMeta.prompt_type})`);
           }
-          throw error;
+
+          return { inserted: true };
+        },
+        {
+          operationName: `initPrompt_${promptMeta.key}`,
+          correlationId: null,
+          maxRetries: 2
         }
-        return data;
-      },
-      {
-        operationName: 'updatePrompt',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { promptId: id });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_UPDATED, { prompt: data });
-    
-  } catch (error) {
-    logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message === 'NOT_FOUND') {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NOT_FOUND,
-        'Không tìm thấy prompt.'
       );
+    } catch (error) {
+      logger.warn('Failed to initialize prompt', {
+        key: promptMeta.key,
+        errorMessage: error?.message || String(error)
+      });
     }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
   }
-});
+}
 
 /**
- * PROMPT_DELETE - Delete prompt
+ * PROMPTS_GET_ALL - Fetch ALL prompts for current user (default + any custom)
+ * Returns prompts from DB, or defaults if not found
  */
-registerHandler(MESSAGE_TYPES.PROMPT_DELETE, async (message) => {
-  const correlationId = logger.startOperation('deletePrompt', message.correlationId);
-  const { id } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    if (!id) {
-      logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'ID prompt không hợp lệ.'
-      );
-    }
-    
-    await supabaseWithRetry(
-      async () => {
-        const { error } = await supabase
-          .from('prompts')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', userId);
-        
-        if (error) throw error;
-      },
-      {
-        operationName: 'deletePrompt',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { promptId: id });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_DELETED, { id });
-    
-  } catch (error) {
-    logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
-  }
-});
+registerHandler(MESSAGE_TYPES.PROMPTS_GET_ALL, async (message) => {
+  const correlationId = logger.startOperation('getAllPrompts', message.correlationId);
 
-/**
- * PROMPT_SEARCH - Search prompts by title/content
- */
-registerHandler(MESSAGE_TYPES.PROMPT_SEARCH, async (message) => {
-  const correlationId = logger.startOperation('searchPrompts', message.correlationId);
-  const { query } = message.data || {};
-  
+  let userId;
   try {
-    const userId = await requireAuth(message);
-    
-    if (!query || typeof query !== 'string') {
-      logger.endOperation(correlationId, 'error', { reason: 'invalid_query' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'Từ khóa tìm kiếm không hợp lệ.'
-      );
-    }
-    
-    const searchTerm = `%${query.trim()}%`;
-    
-    const data = await supabaseWithRetry(
-      async () => {
-        const { data, error } = await supabase
-          .from('prompts')
-          .select('*, category:categories(*)')
-          .eq('user_id', userId)
-          .or(`title.ilike.${searchTerm},content.ilike.${searchTerm}`)
-          .order('usage_count', { ascending: false })
-          .limit(50);
-        
-        if (error) throw error;
-        return data;
-      },
-      {
-        operationName: 'searchPrompts',
-        correlationId
-      }
-    );
-    
-    logger.endOperation(correlationId, 'success', { count: data.length });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_SEARCH_RESULTS, { prompts: data });
-    
+    userId = await requireAuth(message);
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    if (error.message?.includes('Failed to fetch')) {
-      return createErrorResponse(
-        message,
-        ERROR_CODES.NETWORK_ERROR,
-        getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR)
-      );
-    }
-    
-    return createErrorResponse(
-      message,
-      ERROR_CODES.SUPABASE_ERROR,
-      getUserFriendlyMessage(ERROR_CODES.SUPABASE_ERROR),
-      { technicalError: error.message }
-    );
-  }
-});
 
-/**
- * PROMPT_INCREMENT_USAGE - Increment usage count for a prompt
- * Called internally when a prompt is sent to ChatGPT
- */
-registerHandler(MESSAGE_TYPES.PROMPT_INCREMENT_USAGE, async (message) => {
-  const correlationId = logger.startOperation('incrementPromptUsage', message.correlationId);
-  const { id } = message.data || {};
-  
-  try {
-    const userId = await requireAuth(message);
-    
-    if (!id) {
-      logger.endOperation(correlationId, 'error', { reason: 'missing_id' });
-      return createErrorResponse(
-        message,
-        ERROR_CODES.INVALID_INPUT,
-        'ID prompt không hợp lệ.'
-      );
+    const authErrorCode = error?.errorCode;
+    const isAuthError = authErrorCode === ERROR_CODES.AUTH_REQUIRED ||
+      authErrorCode === ERROR_CODES.AUTH_EXPIRED ||
+      authErrorCode === ERROR_CODES.AUTH_INVALID ||
+      authErrorCode === ERROR_CODES.AUTH_ERROR;
+
+    if (!isAuthError) {
+      return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
     }
-    
-    await supabaseWithRetry(
-      async () => {
-        // Use RPC for atomic increment
-        const { error } = await supabase
-          .rpc('increment_prompt_usage', { prompt_id: id, user_id: userId });
-        
-        if (error) throw error;
-      },
-      {
-        operationName: 'incrementPromptUsage',
-        correlationId
+
+    logger.info('Auth unavailable, returning default prompts');
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: buildDefaultPromptMap(),
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults' }
+    });
+  }
+
+  const { preferCache = false, forceRefresh = false } = message.data || {};
+  let cache = null;
+
+  if (preferCache && !forceRefresh) {
+    cache = await readPromptCache(userId);
+    if (cache.hit && !cache.stale) {
+      logger.endOperation(correlationId, 'success', {
+        count: Object.keys(cache.prompts).length,
+        source: 'cache'
+      });
+
+      return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+        success: true,
+        prompts: cache.prompts,
+        cache: cacheResponseMetadata(cache)
+      });
+    }
+
+    if (cache.hit && cache.stale) {
+      try {
+        const rows = await withTimeout(fetchAllPromptRows(userId, correlationId), STALE_REFRESH_TIMEOUT_MS);
+        const result = buildPromptMapFromRows(rows);
+        await writePromptCache(userId, result, { source: 'supabase' });
+        logger.endOperation(correlationId, 'success', { count: Object.keys(result).length, source: 'supabase' });
+
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+          success: true,
+          prompts: result,
+          cache: { hit: false, refreshed: true, source: 'supabase' }
+        });
+      } catch (error) {
+        logger.warn('Failed to refresh stale prompt cache, using stale cache', {
+          errorMessage: error?.message || String(error)
+        });
+        logger.endOperation(correlationId, 'success', {
+          count: Object.keys(cache.prompts).length,
+          source: 'stale-cache'
+        });
+
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+          success: true,
+          prompts: cache.prompts,
+          cache: cacheResponseMetadata(cache, { stale: true, fallback: true })
+        });
       }
-    );
-    
-    logger.endOperation(correlationId, 'success', { promptId: id });
-    return createResponse(message, MESSAGE_TYPES.PROMPT_USAGE_UPDATED, { id });
-    
+    }
+  }
+
+  try {
+    const rows = await fetchAllPromptRows(userId, correlationId);
+    const result = buildPromptMapFromRows(rows);
+    await writePromptCache(userId, result, { source: 'supabase' });
+
+    logger.endOperation(correlationId, 'success', { count: Object.keys(result).length });
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: result,
+      cache: { hit: false, source: 'supabase' }
+    });
   } catch (error) {
     logger.endOperation(correlationId, 'error', { error: error.message });
-    
-    // Don't fail the main operation if usage increment fails
-    logger.warn('Failed to increment usage count, but continuing', { error: error.message });
-    
-    if (error.errorCode) {
-      return error;
-    }
-    
-    return createResponse(message, MESSAGE_TYPES.PROMPT_USAGE_UPDATED, { 
-      id, 
-      warning: 'Usage count not updated' 
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_ALL, {
+      success: true,
+      prompts: buildDefaultPromptMap(),
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults', errorMessage: error.message }
     });
   }
 });
+
+/**
+ * PROMPTS_GET_BY_TYPE - Fetch prompts by type (system or writing)
+ */
+registerHandler(MESSAGE_TYPES.PROMPTS_GET_BY_TYPE, async (message) => {
+  const correlationId = logger.startOperation('getPromptsByType', message.correlationId);
+  const { promptType, preferCache = true, forceRefresh = false } = message.data || {};
+
+  if (!promptType || ![PROMPT_TYPE.SYSTEM, PROMPT_TYPE.WRITING].includes(promptType)) {
+    return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Invalid or missing promptType', correlationId);
+  }
+
+  try {
+    const userId = await requireAuth(message);
+
+    if (preferCache && !forceRefresh) {
+      const cache = await readPromptCache(userId);
+      if (cache.hit && !cache.stale) {
+        const cachedByType = filterPromptsByType(cache.prompts, promptType);
+        logger.endOperation(correlationId, 'success', {
+          count: Object.keys(cachedByType).length,
+          type: promptType,
+          source: 'cache'
+        });
+
+        return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
+          success: true,
+          prompts: cachedByType,
+          promptType,
+          cache: cacheResponseMetadata(cache)
+        });
+      }
+    }
+
+    const prompts = await fetchPromptRowsByType(userId, promptType, correlationId);
+    const result = buildPromptMapForTypeFromRows(prompts, promptType);
+
+    logger.endOperation(correlationId, 'success', { count: Object.keys(result).length, type: promptType });
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
+      success: true,
+      prompts: result,
+      promptType,
+      cache: { hit: false, source: 'supabase' }
+    });
+  } catch (error) {
+    logger.endOperation(correlationId, 'error', { error: error.message });
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_DATA_BY_TYPE, {
+      success: true,
+      prompts: buildDefaultPromptMap(promptType),
+      promptType,
+      isDefaultFallback: true,
+      cache: { hit: false, source: 'defaults', errorMessage: error.message }
+    });
+  }
+});
+
+/**
+ * PROMPTS_INIT - Initialize default prompts for user
+ */
+registerHandler(MESSAGE_TYPES.PROMPTS_INIT, async (message) => {
+  const correlationId = logger.startOperation('initPrompts', message.correlationId);
+  const { promptType } = message.data || {};
+
+  try {
+    const userId = await requireAuth(message);
+
+    // Initialize all prompts or by type
+    await initializeDefaultPrompts(userId, promptType);
+
+    logger.endOperation(correlationId, 'success', { type: promptType || 'all' });
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_INITIALIZED, {
+      success: true,
+      message: promptType
+        ? `${promptType} prompts initialized`
+        : 'All prompts initialized'
+    });
+  } catch (error) {
+    logger.endOperation(correlationId, 'error', { error: error.message });
+    return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
+  }
+});
+
+/**
+ * PROMPTS_UPSERT - Bulk upsert prompts
+ */
+registerHandler(MESSAGE_TYPES.PROMPTS_UPSERT, async (message) => {
+  const correlationId = logger.startOperation('upsertPrompts', message.correlationId);
+  const { prompts } = message.data || {};
+
+  logger.info('[PROMPTS_UPSERT] Received data:', {
+    promptCount: prompts ? Object.keys(prompts).length : 0,
+    promptKeys: prompts ? Object.keys(prompts) : []
+  });
+
+  if (!prompts || typeof prompts !== 'object') {
+    logger.warn('[PROMPTS_UPSERT] Invalid prompts data');
+    return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, 'Invalid prompts data', correlationId);
+  }
+
+  try {
+    const userId = await requireAuth(message);
+
+    const promptKeys = Object.keys(prompts);
+    const results = {};
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const key of promptKeys) {
+      const prompt = prompts[key];
+
+      logger.info(`[PROMPTS_UPSERT] Processing key=${key}`, {
+        hasTitle: !!prompt.title,
+        hasContent: !!prompt.content,
+        contentLength: prompt.content?.length || 0
+      });
+
+      // Validate content
+      if (!prompt.content || typeof prompt.content !== 'string') {
+        logger.warn(`[PROMPTS_UPSERT] Missing content for key=${key}`);
+        results[key] = { success: false, error: 'Content is required' };
+        failureCount++;
+        continue;
+      }
+
+      // Check if required (master prompt cannot be empty)
+      if (key === 'prompt.master' && prompt.content.trim().length === 0) {
+        logger.warn('[PROMPTS_UPSERT] Master prompt is empty');
+        results[key] = { success: false, error: 'Master prompt cannot be empty' };
+        failureCount++;
+        continue;
+      }
+
+      try {
+        // supabaseWithRetry() throws on error, doesn't return {error}
+        await supabaseWithRetry(
+          async () => {
+            logger.info(`[PROMPTS_UPSERT] Upserting key=${key} for user=${userId}`);
+
+            const { error: upsertError } = await supabase
+              .from('prompts')
+              .upsert({
+                user_id: userId,
+                key: key,
+                title: prompt.title || 'Untitled',
+                content: prompt.content,
+                tags: prompt.tags || [],
+                prompt_type: getPromptType(key),
+                is_system: prompt.isSystem || false
+              }, {
+                onConflict: 'user_id,key'
+              });
+
+            if (upsertError) throw upsertError;
+          },
+          {
+            operationName: `upsertPrompt_${key}`,
+            correlationId
+          }
+        );
+
+        // Success (no error thrown)
+        logger.info(`[PROMPTS_UPSERT] Successfully upserted key=${key}`);
+        results[key] = { success: true };
+        successCount++;
+      } catch (err) {
+        // Error thrown by supabaseWithRetry or upsert
+        logger.error(`[PROMPTS_UPSERT] Exception for key=${key}`, { error: err.message });
+        results[key] = { success: false, error: err.message };
+        failureCount++;
+      }
+    }
+
+    logger.info('[PROMPTS_UPSERT] Completed', { successCount, failureCount, total: promptKeys.length });
+
+    logger.endOperation(correlationId, successCount > 0 ? 'success' : 'error', {
+      successCount,
+      failureCount,
+      total: promptKeys.length
+    });
+
+    if (failureCount === 0) {
+      await writePromptCache(userId, normalizeSubmittedPrompts(prompts), { source: 'upsert' });
+      invalidatePromptCache();
+    } else if (successCount > 0) {
+      await removePromptCache(userId);
+      invalidatePromptCache();
+    }
+
+    return createResponse(message, MESSAGE_TYPES.PROMPTS_UPSERTED, {
+      success: failureCount === 0,
+      partialSuccess: successCount > 0 && failureCount > 0,
+      successCount,
+      failureCount,
+      results
+    });
+  } catch (error) {
+    logger.endOperation(correlationId, 'error', { error: error.message });
+    return createErrorResponse(message, ERROR_CODES.DATABASE_ERROR, error.message, correlationId);
+  }
+});
+
+logger.info('Unified Prompts handler registered');

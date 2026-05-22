@@ -46,12 +46,6 @@
  */
 
 /**
- * @typedef {Object} WaitForContentScriptOptions
- * @property {number} [maxRetries=10] - Maximum number of retry attempts
- * @property {number} [retryDelay=500] - Delay between retries in milliseconds
- */
-
-/**
  * Standard error codes used throughout the application
  */
 /**
@@ -69,6 +63,7 @@ export const ERROR_CODES = {
   SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
   INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
   OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
+  SESSION_MISMATCH: 'SESSION_MISMATCH',  // getOutput called while user navigated to different session
   TIMEOUT: 'TIMEOUT',
   OPERATION_FAILED: 'OPERATION_FAILED',
   
@@ -94,12 +89,12 @@ export const ERROR_CODES = {
 };
 
 /**
- * Create a standardized success response
+ * Create a standardized data response
  * @template T
  * @param {T} data - The response data
  * @returns {ApiResponse}
  */
-export function createSuccessResponse(data) {
+export function createDataResponse(data) {
   return {
     success: true,
     data
@@ -107,14 +102,14 @@ export function createSuccessResponse(data) {
 }
 
 /**
- * Create a standardized error response
+ * Create a standardized API error response
  * @param {string} code - Error code from ERROR_CODES
  * @param {string} message - Human-readable error message
  * @param {string} [context] - Additional context
  * @param {*} [details] - Additional details
  * @returns {ApiResponse}
  */
-export function createErrorResponse(code, message, context, details) {
+export function createApiErrorResponse(code, message, context, details) {
   return {
     success: false,
     error: {
@@ -132,9 +127,9 @@ export function createErrorResponse(code, message, context, details) {
  * @param {string} [context] - Where the error occurred
  * @returns {ApiResponse}
  */
-export function exceptionToErrorResponse(error, context) {
+export function exceptionToApiErrorResponse(error, context) {
   const message = error?.message || String(error);
-  return createErrorResponse(
+  return createApiErrorResponse(
     ERROR_CODES.UNKNOWN_ERROR,
     message,
     context,
