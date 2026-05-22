@@ -1,0 +1,39 @@
+flowchart TB
+  subgraph Browser[Chrome Browser]
+    UI[Side Panel UI\nPreact App]
+    CS1[Content Script\nChatGPT]
+    CS2[Content Script\nGemini]
+    CS3[Content Script\nClaude]
+  end
+
+  subgraph SW[Background Service Worker\nDomain Middleware]
+    Router[Message Router]
+    Handlers[Domain Handlers\nportfolio, watchlist, auth, history, settings, journal]
+    Queue[Prompt Queue / Job Queue\nretry + serialization]
+    Alarms[Scheduled Jobs\nprice updates, cleanup, session checks]
+  end
+
+  subgraph Data[Supabase Cloud]
+    Auth[Auth]
+    DB[(PostgreSQL + RLS)]
+  end
+
+  subgraph Providers[External Providers]
+    LLM[ChatGPT / Gemini / Claude]
+    Market[SSI / VPS / Gold / Crypto APIs]
+  end
+
+  UI <--> Router
+  CS1 <--> Router
+  CS2 <--> Router
+  CS3 <--> Router
+
+  Router --> Handlers
+  Handlers --> Queue
+  Alarms --> Handlers
+
+  Handlers <--> Auth
+  Handlers <--> DB
+
+  Queue --> LLM
+  Handlers --> Market

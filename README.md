@@ -14,6 +14,8 @@ The project covers three core domains:
 
 Assistant8 uses a three-layer architecture designed for Chrome MV3 constraints:
 
+![Assistant8 Architecture](docs/diagrams/architecture-overview.png)
+
 1. Side Panel UI (Preact)
 - Renders the full user interface.
 - Sends typed runtime messages for all business operations.
