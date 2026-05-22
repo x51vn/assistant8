@@ -103,8 +103,8 @@ Ví dụ mật khẩu hợp lệ: `SecurePass123!`
 **Response** (201 Created):
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<example-access-token>",
+  "refresh_token": "<example-refresh-token>",
   "token_type": "bearer"
 }
 ```
@@ -139,8 +139,8 @@ Ví dụ mật khẩu hợp lệ: `SecurePass123!`
 **Response** (200 OK):
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<example-access-token>",
+  "refresh_token": "<example-refresh-token>",
   "token_type": "bearer"
 }
 ```
@@ -161,7 +161,7 @@ Ví dụ mật khẩu hợp lệ: `SecurePass123!`
 **Request Body**:
 ```json
 {
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "refresh_token": "<example-refresh-token>"
 }
 ```
 
@@ -171,8 +171,8 @@ Ví dụ mật khẩu hợp lệ: `SecurePass123!`
 **Response** (200 OK):
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<example-access-token>",
+  "refresh_token": "<example-refresh-token>",
   "token_type": "bearer"
 }
 ```
@@ -720,8 +720,8 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
 
 # Phản hồi đăng ký
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<example-access-token>",
+  "refresh_token": "<example-refresh-token>",
   "token_type": "bearer"
 }
 
@@ -796,8 +796,8 @@ curl -X POST http://localhost:8000/api/v1/auth/refresh-token \
 
 # Phản hồi
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "<example-access-token>",
+  "refresh_token": "<example-refresh-token>",
   "token_type": "bearer"
 }
 ```
