@@ -32,7 +32,7 @@ import { loadSettings, saveSettings, saveAllPrompts } from '../api/settingsApi.j
 import { useAuth } from '../hooks/useAuth.js';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { clearTemplateCache } from '../api/writingApi.js';
-import { MESSAGE_TYPES } from '../../shared/messageSchema.js';
+import { MESSAGE_TYPES, createMessage } from '../../shared/messageSchema.js';
 import { isSaving, showStatus, allPrompts } from '../state/settingsState.js';
 import { setGlobalLoading, hideLoading } from '../state/appState.js';
 import { sendRuntimeMessage } from '../api/runtimeGateway.js';

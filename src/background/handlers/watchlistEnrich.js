@@ -1196,6 +1196,68 @@ registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, async (message) => 
 });
 
 /**
+ * WATCHLIST_AI_ENRICH_BATCH_RUN — Batch enrichment handler
+ * UI → Background: enqueue batch of symbols (max BATCH_SIZE per LLM prompt)
+ * Splits into chunks of BATCH_SIZE, each chunk becomes ONE background job → ONE LLM call
+ */
+registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_BATCH_RUN, async (message) => {
+  const { correlationId } = message;
+  const { symbols } = message.data || {};
+
+  logger.info('Enqueue batch enrichment request', { symbols, correlationId });
+
+  try {
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      return createErrorResponse(message, 'INVALID_INPUT', 'Danh sách mã cổ phiếu là bắt buộc');
+    }
+
+    // Sanitize & deduplicate
+    const cleanSymbols = [...new Set(
+      symbols
+        .filter(s => typeof s === 'string' && s.trim())
+        .map(s => s.trim().toUpperCase())
+    )];
+
+    if (cleanSymbols.length === 0) {
+      return createErrorResponse(message, 'INVALID_INPUT', 'Không có mã cổ phiếu hợp lệ');
+    }
+
+    // Split into chunks of BATCH_SIZE
+    const chunks = [];
+    for (let i = 0; i < cleanSymbols.length; i += BATCH_SIZE) {
+      chunks.push(cleanSymbols.slice(i, i + BATCH_SIZE));
+    }
+
+    // Enqueue each chunk as a separate background job
+    const jobResults = [];
+    for (const chunk of chunks) {
+      const result = await enqueueBackgroundJob({
+        type: 'WATCHLIST_ENRICH_BATCH',
+        payload: { symbols: chunk },
+        processor: processBatchEnrichmentJob
+      });
+      jobResults.push({
+        jobId: result.jobId,
+        position: result.position,
+        symbols: chunk,
+        duplicate: result.duplicate || false
+      });
+    }
+
+    return createResponse(message, MESSAGE_TYPES.WATCHLIST_AI_ENRICH_STATUS, {
+      success: true,
+      totalSymbols: cleanSymbols.length,
+      batches: jobResults.length,
+      jobs: jobResults,
+      message: `Đã tạo ${jobResults.length} batch (${cleanSymbols.length} mã, tối đa ${BATCH_SIZE} mã/batch)`
+    });
+  } catch (error) {
+    logger.error('Batch enqueue failed', { error: error.message, correlationId });
+    return createErrorResponse(message, 'QUEUE_ERROR', error.message);
+  }
+});
+
+/**
  * WATCHLIST_AI_ENRICH_CANCEL — Cancel a pending/running job
  */
 registerHandler(MESSAGE_TYPES.WATCHLIST_AI_ENRICH_CANCEL, async (message) => {
