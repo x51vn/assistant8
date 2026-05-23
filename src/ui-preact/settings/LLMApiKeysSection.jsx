@@ -247,7 +247,7 @@ export function LLMApiKeysSection() {
         <select
           id="llm-provider-select"
           value={selectedProvider}
-          onChange={(e) => setSelectedProvider(e.target.value)}
+          onChange={(e) => setSelectedProvider((/** @type {HTMLInputElement} */ (e.target)).value)}
           aria-label="Chọn provider"
           style={{ width: '100%', padding: '6px 10px', borderRadius: '4px', border: '1px solid var(--border-color, #ccc)', fontSize: '13px' }}
         >
@@ -286,7 +286,7 @@ export function LLMApiKeysSection() {
           id="llm-api-key-input"
           type="password"
           value={keyInput}
-          onInput={(e) => setKeyInput(e.target.value)}
+          onInput={(e) => setKeyInput((/** @type {HTMLInputElement} */ (e.target)).value)}
           placeholder={currentProvider.placeholder}
           aria-label={`Nhập API key cho ${currentProvider.label}`}
           autocomplete="off"

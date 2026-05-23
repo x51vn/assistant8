@@ -129,7 +129,7 @@ export function APIKeysSection({ isEnterprise }) {
             type="text"
             placeholder="VD: Google Sheets Integration"
             value={label}
-            onInput={e => setLabel(e.target.value)}
+            onInput={e => setLabel((/** @type {HTMLInputElement} */ (e.target)).value)}
             maxLength={100}
           />
         </div>

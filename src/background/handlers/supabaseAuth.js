@@ -242,15 +242,24 @@ registerHandler(MESSAGE_TYPES.SUPABASE_AUTH_CHECK, async (message) => {
   
   try {
     // Get current user session
+    const authResult = await supabase.auth.getUser();
+    if (authResult.error?.message?.includes('Auth session missing')) {
+      logger.info('Auth check: no session (not logged in)', { correlationId });
+      return createResponse(message, MESSAGE_TYPES.SUPABASE_AUTH_STATUS, {
+        authenticated: false,
+        user: null
+      });
+    }
+
     const result = await supabaseWithRetry(
       async () => {
-        const authResult = await supabase.auth.getUser();
+        const retryResult = await supabase.auth.getUser();
         // Note: getUser() returns { data: { user }, error }
         // If error, throw it so retry logic handles it
-        if (authResult.error) {
-          throw authResult.error;
+        if (retryResult.error) {
+          throw retryResult.error;
         }
-        return authResult;
+        return retryResult;
       },
       {
         operationName: 'supabase.auth.getUser',

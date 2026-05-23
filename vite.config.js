@@ -97,19 +97,119 @@ async function copyDir(srcDir, destDir) {
 }
 
 /**
- * Vite plugin: strip ES module export syntax from content scripts.
+ * Parse `export{a as b, c}` from a Rollup-generated chunk.
+ * Returns a Map of { externalName → internalName }.
  *
- * Problem: `format: 'es'` makes Rollup append `export default ...;` to every
- * output chunk, turning them into ES modules. Chrome's manifest `content_scripts`
- * supports `"type": "module"` for static injection, but
- * `chrome.scripting.executeScript({ files })` always injects as a CLASSIC script.
- * Classic scripts cannot contain `export` — they throw:
- *   "Uncaught SyntaxError: Unexpected token 'export'"
+ * Examples:
+ *   `export{t as s}`  → Map { 's' => 't' }
+ *   `export{sleep}`   → Map { 'sleep' => 'sleep' }
+ */
+function parseExportBindings(code) {
+  const map = new Map();
+  const match = code.match(/export\{([^}]+)\}/);
+  if (!match) return map;
+  for (const binding of match[1].split(',')) {
+    const trimmed = binding.trim();
+    const asParts = trimmed.split(/\s+as\s+/);
+    if (asParts.length === 2) {
+      // `internal as external` — map external → internal
+      map.set(asParts[1].trim(), asParts[0].trim());
+    } else {
+      map.set(trimmed, trimmed);
+    }
+  }
+  return map;
+}
+
+/**
+ * Strip trailing Rollup export statements from a chunk's source code.
+ * Used to get clean inlineable code from a shared chunk.
+ */
+function stripExports(code) {
+  return code
+    .replace(/;\s*export default [^;]+;?\s*$/, ';')
+    .replace(/\nexport default [^;]+;?\s*$/, '\n')
+    .replace(/;\s*export \{[^}]*\};?\s*$/, ';')
+    .replace(/\nexport \{[^}]*\};?\s*$/, '\n')
+    .replace(/export\{[^}]*\};?\s*$/, '')
+    .trim();
+}
+
+/**
+ * Inline all `import{...}from"./chunk.js"` statements from `code` into the
+ * content script, making it a fully self-contained classic script.
  *
- * Solution: post-process the built content script chunks to strip all top-level
- * export statements. The bundled scripts are already self-contained IIFEs
- * (Vite/Rollup wraps all imports); the `export default` is the only ES-module
- * artefact. Without it they load correctly as classic scripts in both contexts.
+ * For each import found:
+ *   1. Locate the shared chunk in `bundle` by filename.
+ *   2. Strip export statements from the chunk code.
+ *   3. Build `const localAlias=internalName;` alias declarations so that
+ *      the content script's references to the imported binding remain valid
+ *      (e.g. `import{s as g}` + chunk `export{t as s}` → `const g=t;`).
+ *   4. Prepend [stripped chunk code + aliases] before the content script body
+ *      and remove the original import statement.
+ *
+ * No-op when no `import{...}from"./..."` statements are present.
+ */
+function inlineImportedChunks(code, bundle) {
+  const importRegex = /import\{([^}]+)\}from"([^"]+)";?/g;
+  let match;
+  let result = code;
+  const preambles = [];
+
+  while ((match = importRegex.exec(code)) !== null) {
+    const [fullImport, bindings, chunkPath] = match;
+    const chunkName = chunkPath.replace(/^\.\//, '');
+    const chunk = bundle[chunkName];
+    if (!chunk || chunk.type !== 'chunk') continue;
+
+    const exportMap = parseExportBindings(chunk.code);
+    const strippedChunkCode = stripExports(chunk.code);
+
+    const aliases = [];
+    for (const binding of bindings.split(',')) {
+      const trimmed = binding.trim();
+      const asParts = trimmed.split(/\s+as\s+/);
+      let externalName, localAlias;
+      if (asParts.length === 2) {
+        // In `import{external as local}` — externalName is the chunk's export name
+        externalName = asParts[0].trim();
+        localAlias = asParts[1].trim();
+      } else {
+        externalName = trimmed;
+        localAlias = trimmed;
+      }
+      const internalName = exportMap.get(externalName) ?? externalName;
+      if (internalName !== localAlias) {
+        aliases.push(`const ${localAlias}=${internalName};`);
+      }
+    }
+
+    preambles.push(strippedChunkCode + (aliases.length ? '\n' + aliases.join('\n') : ''));
+    result = result.split(fullImport).join('');
+  }
+
+  if (preambles.length > 0) {
+    result = preambles.join('\n') + '\n' + result;
+  }
+
+  return result;
+}
+
+/**
+ * Vite plugin: make content scripts fully self-contained classic-script bundles.
+ *
+ * Problem 1 (pre-existing): `format: 'es'` makes Rollup append `export default ...;`
+ * to every output chunk. Chrome's `content_scripts` manifest key injects scripts as
+ * classic scripts. Classic scripts cannot contain `export` — SyntaxError.
+ *
+ * Problem 2 (new): When Rollup code-splits a shared module (e.g. `sleep` utility)
+ * into a separate chunk, content scripts get a static `import{...}from"./utils-X.js"`
+ * at the top of their bundle. Classic scripts cannot contain `import` — SyntaxError.
+ *
+ * Solution:
+ *   1. Inline shared chunk code directly into each content script (eliminates imports).
+ *   2. Strip trailing `export` statements (eliminates exports).
+ * Both steps run in the `generateBundle` hook, purely at build time.
  */
 function contentScriptClassicPlugin() {
   const CONTENT_SCRIPTS = new Set(['content.js', 'content-gemini.js', 'content-claude.js']);
@@ -119,7 +219,10 @@ function contentScriptClassicPlugin() {
     generateBundle(_options, bundle) {
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'chunk' || !CONTENT_SCRIPTS.has(fileName)) continue;
-        // Remove Rollup ES-module wrappers from minified single-line bundles.
+
+        // Must run BEFORE export-stripping since inlined code may itself have exports.
+        chunk.code = inlineImportedChunks(chunk.code, bundle);
+
         // Handles both `\nexport ...` and `;export ...` tail forms.
         chunk.code = chunk.code
           .replace(/;\s*export default [^;]+;?\s*$/, ';')

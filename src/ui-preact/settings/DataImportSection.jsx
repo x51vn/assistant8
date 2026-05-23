@@ -35,7 +35,7 @@ export function DataImportSection() {
 
     const reader = new FileReader();
     reader.onload = ev => {
-      const text = ev.target.result;
+      const text = /** @type {string} */ (ev.target.result);
       setFileContent(text);
 
       // Simple preview
@@ -147,7 +147,7 @@ export function DataImportSection() {
       <div class="form-row">
         <div class="form-group">
           <label>Xử lý trùng lặp</label>
-          <select class="form-input" value={conflict} onChange={e => setConflict(e.target.value)}>
+          <select class="form-input" value={conflict} onChange={e => setConflict((/** @type {HTMLInputElement} */ (e.target)).value)}>
             <option value="skip">Bỏ qua (giữ dữ liệu cũ)</option>
             <option value="overwrite">Ghi đè (cập nhật dữ liệu)</option>
           </select>

@@ -25,6 +25,7 @@
     "@preact/preset-vite": "^2.10.3",
     "@testing-library/preact": "^2.0.1",
     "@testing-library/preact-hooks": "^1.1.0",
+    "@types/chrome": "^0.1.42",
     "happy-dom": "^20.4.0",
     "jsdom": "^27.0.1",
     "playwright": "^1.57.0",

@@ -1,0 +1,182 @@
+/**
+ * settings-tabs.css — Tab navigation + provider card styles
+ * Redesign: redesign-model-settings-page
+ *
+ * Namespace: .settings-tabs (tab bar), .provider-card (provider cards)
+ * Fits within ~400px Chrome side panel
+ */
+
+/* ============================================================
+   SETTINGS TAB BAR
+   ============================================================ */
+
+.settings-tabs {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 16px;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.settings-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 10px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.settings-tab:hover {
+  color: var(--accent-color);
+  background: var(--accent-light);
+  border-radius: 6px 6px 0 0;
+}
+
+.settings-tab--active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+  font-weight: 600;
+}
+
+.settings-tab__icon {
+  font-size: 14px;
+}
+
+.settings-tab__label {
+  font-size: 11px;
+}
+
+/* ============================================================
+   SETTINGS PAGE STICKY SAVE BAR
+   ============================================================ */
+
+.settings-save-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  padding: 10px 16px;
+  margin: 0 -16px;
+  display: flex;
+  justify-content: flex-end;
+  z-index: 10;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ============================================================
+   PROVIDER CARDS — REDESIGNED
+   ============================================================ */
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.provider-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px 12px;
+  background: var(--card-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+  text-align: center;
+}
+
+.provider-card:hover {
+  border-color: var(--accent-color);
+  background: var(--accent-light);
+}
+
+.provider-card.active {
+  border-color: var(--accent-color);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 3px var(--accent-bg), var(--shadow-sm);
+}
+
+/* Provider icon */
+.provider-card__icon {
+  font-size: 20px;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.provider-card.active .provider-card__icon {
+  color: var(--accent-color);
+}
+
+/* Provider name */
+.provider-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+/* Status dot */
+.provider-card__status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-primary);
+  background: var(--text-muted); /* default: gray/unknown */
+}
+
+.provider-card__status--connected {
+  background: var(--success-color, #10b981);
+}
+
+.provider-card__status--error {
+  background: var(--danger-color, #ef4444);
+}
+
+.provider-card__status--unknown {
+  background: var(--text-muted, #9ca3af);
+}
+
+/* Tooltip on status dot */
+.provider-card__status[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  top: -26px;
+  right: 0;
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+}
