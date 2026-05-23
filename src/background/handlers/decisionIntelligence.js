@@ -9,6 +9,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 import {
   DECISION_POLICY_VERSION,
   GUARDRAIL_POLICY_VERSION,
@@ -17,6 +18,13 @@ import {
   buildPlaybookInsightsFromEntries,
 } from '../services/decisionIntelligenceService.js';
 import { DecisionIntelligenceMapper } from '../../shared/mappers/decisionIntelligenceMapper.js';
+import {
+  ROLLOUT_CAPABILITIES,
+  getUserSettingsConfig,
+  resolveCapabilityRollout,
+  isRolloutActive,
+  recordRolloutTelemetry,
+} from '../services/decisionAutomationService.js';
 
 const logger = createLogger('Handlers/DecisionIntelligence');
 
@@ -24,7 +32,7 @@ async function getRecentErrorCount(userId, symbol) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
 
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from('trade_journal')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -33,7 +41,7 @@ async function getRecentErrorCount(userId, symbol) {
     .gte('updated_at', since.toISOString());
 
   if (error) throw error;
-  return data?.length || 0;
+  return count || 0;
 }
 
 async function persistDecisionSnapshot(userId, payload) {
@@ -53,6 +61,12 @@ registerHandler(MESSAGE_TYPES.DECISION_SCORE_EVALUATE, async (message) => {
   try {
     const userId = await requireAuth(message);
     const input = message.data || {};
+    const settingsConfig = await getUserSettingsConfig(userId);
+    const rollout = resolveCapabilityRollout(ROLLOUT_CAPABILITIES.DECISION_SCORE, settingsConfig);
+
+    if (!isRolloutActive(rollout)) {
+      return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, 'Decision Intelligence chưa được bật cho tài khoản này.');
+    }
 
     const recentErrorCount = await supabaseWithRetry(
       () => getRecentErrorCount(userId, input.symbol),
@@ -75,15 +89,35 @@ registerHandler(MESSAGE_TYPES.DECISION_SCORE_EVALUATE, async (message) => {
       { operationName: 'decision.persistSnapshot', correlationId, maxRetries: 1 }
     );
 
+    await recordRolloutTelemetry({
+      userId,
+      capability: ROLLOUT_CAPABILITIES.DECISION_SCORE,
+      rollout,
+      triggerInput: {
+        symbol: String(input.symbol || '').toUpperCase(),
+        tradeJournalId: input.tradeJournalId || null,
+      },
+      resultPayload: {
+        success: true,
+        policyVersion: DECISION_POLICY_VERSION,
+        decisionScore: result.decisionScore,
+        grade: result.grade,
+        blockingReasons: result.blockingReasons,
+      },
+      tradeJournalId: input.tradeJournalId || null,
+      correlationId,
+    });
+
     return createResponse(message, MESSAGE_TYPES.DECISION_SCORE_RESULT, {
       success: true,
       policyVersion: DECISION_POLICY_VERSION,
+      rollout,
       ...result,
     });
   } catch (error) {
     if (error.errorCode) return error;
     logger.error('DECISION_SCORE_EVALUATE failed', { correlationId, error: error?.message });
-    return createErrorResponse(message, 'DECISION_SCORE_ERROR', error?.message || 'Không thể chấm điểm quyết định');
+    return createErrorResponse(message, ERROR_CODES.DECISION_SCORE_ERROR, error?.message || 'Không thể chấm điểm quyết định');
   }
 });
 
@@ -92,6 +126,12 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GUARDRAIL_EVALUATE, async (message) => {
   try {
     const userId = await requireAuth(message);
     const input = message.data || {};
+    const settingsConfig = await getUserSettingsConfig(userId);
+    const rollout = resolveCapabilityRollout(ROLLOUT_CAPABILITIES.GUARDRAIL_EVALUATION, settingsConfig);
+
+    if (!isRolloutActive(rollout)) {
+      return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, 'Guardrail evaluation chưa được bật cho tài khoản này.');
+    }
 
     const result = evaluateGuardrails(input, {
       strictRegime: input.strictRegime,
@@ -109,15 +149,35 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GUARDRAIL_EVALUATE, async (message) => {
       { operationName: 'guardrail.persistEvaluation', correlationId, maxRetries: 1 }
     );
 
+    await recordRolloutTelemetry({
+      userId,
+      capability: ROLLOUT_CAPABILITIES.GUARDRAIL_EVALUATION,
+      rollout,
+      triggerInput: {
+        symbol: String(input.symbol || '').toUpperCase(),
+        tradeJournalId: input.tradeJournalId || null,
+      },
+      resultPayload: {
+        success: true,
+        policyVersion: GUARDRAIL_POLICY_VERSION,
+        allowed: result.allowed,
+        blockingReasons: result.blockingReasons,
+        warnings: result.warnings,
+      },
+      tradeJournalId: input.tradeJournalId || null,
+      correlationId,
+    });
+
     return createResponse(message, MESSAGE_TYPES.JOURNAL_GUARDRAIL_RESULT, {
       success: true,
       policyVersion: GUARDRAIL_POLICY_VERSION,
+      rollout,
       ...result,
     });
   } catch (error) {
     if (error.errorCode) return error;
     logger.error('JOURNAL_GUARDRAIL_EVALUATE failed', { correlationId, error: error?.message });
-    return createErrorResponse(message, 'GUARDRAIL_EVALUATION_ERROR', error?.message || 'Không thể chạy guardrail checks');
+    return createErrorResponse(message, ERROR_CODES.GUARDRAIL_EVALUATION_ERROR, error?.message || 'Không thể chạy guardrail checks');
   }
 });
 
@@ -126,6 +186,12 @@ registerHandler(MESSAGE_TYPES.PLAYBOOK_INSIGHTS_GET, async (message) => {
   try {
     const userId = await requireAuth(message);
     const { refresh = false, limit = 3 } = message.data || {};
+    const settingsConfig = await getUserSettingsConfig(userId);
+    const rollout = resolveCapabilityRollout(ROLLOUT_CAPABILITIES.PLAYBOOK_INSIGHTS, settingsConfig);
+
+    if (!isRolloutActive(rollout)) {
+      return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, 'Playbook insights chưa được bật cho tài khoản này.');
+    }
 
     if (refresh) {
       const entries = await supabaseWithRetry(async () => {
@@ -174,14 +240,31 @@ registerHandler(MESSAGE_TYPES.PLAYBOOK_INSIGHTS_GET, async (message) => {
       return data || [];
     }, { operationName: 'playbook.fetchInsights', correlationId });
 
+    await recordRolloutTelemetry({
+      userId,
+      capability: ROLLOUT_CAPABILITIES.PLAYBOOK_INSIGHTS,
+      rollout,
+      triggerInput: {
+        refresh,
+        limit,
+      },
+      resultPayload: {
+        success: true,
+        refreshed: Boolean(refresh),
+        itemCount: rows.length,
+      },
+      correlationId,
+    });
+
     return createResponse(message, MESSAGE_TYPES.PLAYBOOK_INSIGHTS_DATA, {
       success: true,
+      rollout,
       items: rows.map(DecisionIntelligenceMapper.fromPlaybookInsightEntity),
     });
   } catch (error) {
     if (error.errorCode) return error;
     logger.error('PLAYBOOK_INSIGHTS_GET failed', { correlationId, error: error?.message });
-    return createErrorResponse(message, 'PLAYBOOK_INSIGHTS_ERROR', error?.message || 'Không thể tải playbook insights');
+    return createErrorResponse(message, ERROR_CODES.PLAYBOOK_INSIGHTS_ERROR, error?.message || 'Không thể tải playbook insights');
   }
 });
 
@@ -207,7 +290,7 @@ registerHandler(MESSAGE_TYPES.PLAYBOOK_INSIGHT_FEEDBACK, async (message) => {
   } catch (error) {
     if (error.errorCode) return error;
     logger.error('PLAYBOOK_INSIGHT_FEEDBACK failed', { correlationId, error: error?.message });
-    return createErrorResponse(message, 'PLAYBOOK_FEEDBACK_ERROR', error?.message || 'Không thể lưu feedback insight');
+    return createErrorResponse(message, ERROR_CODES.PLAYBOOK_FEEDBACK_ERROR, error?.message || 'Không thể lưu feedback insight');
   }
 });
 
@@ -231,7 +314,7 @@ registerHandler(MESSAGE_TYPES.AUTOMATION_WORKFLOWS_GET, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
-    return createErrorResponse(message, 'AUTOMATION_WORKFLOW_ERROR', error?.message || 'Không thể tải workflows');
+    return createErrorResponse(message, ERROR_CODES.AUTOMATION_WORKFLOW_ERROR, error?.message || 'Không thể tải workflows');
   }
 });
 
@@ -257,7 +340,7 @@ registerHandler(MESSAGE_TYPES.AUTOMATION_WORKFLOW_CREATE, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
-    return createErrorResponse(message, 'AUTOMATION_WORKFLOW_ERROR', error?.message || 'Không thể tạo workflow');
+    return createErrorResponse(message, ERROR_CODES.AUTOMATION_WORKFLOW_ERROR, error?.message || 'Không thể tạo workflow');
   }
 });
 
@@ -288,7 +371,7 @@ registerHandler(MESSAGE_TYPES.AUTOMATION_WORKFLOW_UPDATE, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
-    return createErrorResponse(message, 'AUTOMATION_WORKFLOW_ERROR', error?.message || 'Không thể cập nhật workflow');
+    return createErrorResponse(message, ERROR_CODES.AUTOMATION_WORKFLOW_ERROR, error?.message || 'Không thể cập nhật workflow');
   }
 });
 
@@ -313,7 +396,7 @@ registerHandler(MESSAGE_TYPES.AUTOMATION_WORKFLOW_DELETE, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
-    return createErrorResponse(message, 'AUTOMATION_WORKFLOW_ERROR', error?.message || 'Không thể xóa workflow');
+    return createErrorResponse(message, ERROR_CODES.AUTOMATION_WORKFLOW_ERROR, error?.message || 'Không thể xóa workflow');
   }
 });
 
@@ -344,6 +427,6 @@ registerHandler(MESSAGE_TYPES.AUTOMATION_EXECUTIONS_GET, async (message) => {
     });
   } catch (error) {
     if (error.errorCode) return error;
-    return createErrorResponse(message, 'AUTOMATION_EXECUTION_ERROR', error?.message || 'Không thể tải execution logs');
+    return createErrorResponse(message, ERROR_CODES.AUTOMATION_EXECUTION_ERROR, error?.message || 'Không thể tải execution logs');
   }
 });

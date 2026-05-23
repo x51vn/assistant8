@@ -107,7 +107,7 @@ describe('architecture fitness checks', () => {
       'src/background/handlers/apiKeys.js',
       'src/background/handlers/priceAlerts.js',
       'src/background/handlers/multiPortfolio.js',
-      'src/background/handlers/watchlistEnrich.js',
+      'src/background/handlers/watchlistEnrich/index.js',
     ];
 
     const offenders = [];
@@ -126,7 +126,7 @@ describe('architecture fitness checks', () => {
       'src/background/handlers/apiKeys.js',
       'src/background/handlers/priceAlerts.js',
       'src/background/handlers/multiPortfolio.js',
-      'src/background/handlers/watchlistEnrich.js',
+      'src/background/handlers/watchlistEnrich/index.js',
     ];
 
     const rawSecondArg = /(?:createResponse|createErrorResponse)\(\s*[^,]+,\s*['"`]/;
@@ -149,6 +149,40 @@ describe('architecture fitness checks', () => {
     for (const file of files) {
       const content = await readProjectFile(file);
       if (legacyImport.test(content)) {
+        offenders.push(file);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps runtime ERROR_CODES defined only in shared/errorCodes.js', async () => {
+    const typesContent = await readProjectFile('src/types.js');
+
+    expect(typesContent.includes('export const ERROR_CODES')).toBe(false);
+  });
+
+  it('prevents raw error-code strings in consolidated handlers', async () => {
+    const consolidatedHandlers = [
+      'src/background/handlers/chatHistoryAutoSave.js',
+      'src/background/handlers/content.js',
+      'src/background/handlers/contentScriptReady.js',
+      'src/background/handlers/dataImport.js',
+      'src/background/handlers/decisionIntelligence.js',
+      'src/background/handlers/indices.js',
+      'src/background/handlers/journal.js',
+      'src/background/handlers/promptQueueInfo.js',
+      'src/background/handlers/sessionManager.js',
+      'src/background/handlers/supabasePriceUpdate.js',
+      'src/background/handlers/supabaseWatchlist.js',
+      'src/background/handlers/watchlistEnrich/index.js',
+    ];
+
+    const rawErrorCodeArg = /createErrorResponse\(\s*[^,]+,\s*['"`]/;
+    const offenders = [];
+    for (const file of consolidatedHandlers) {
+      const content = await readProjectFile(file);
+      if (rawErrorCodeArg.test(content)) {
         offenders.push(file);
       }
     }

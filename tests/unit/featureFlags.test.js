@@ -16,6 +16,13 @@ describe('FEATURE_FLAGS', () => {
     expect(FEATURE_FLAGS.stock_research_v2.default).toBe(false);
     expect(FEATURE_FLAGS.stock_research_v2.ticket).toBe('XST-800');
   });
+
+  it('defines decision automation rollout flags', () => {
+    expect(FEATURE_FLAGS.decision_intelligence_enabled?.default).toBe(true);
+    expect(FEATURE_FLAGS.decision_intelligence_shadow_mode?.default).toBe(true);
+    expect(FEATURE_FLAGS.automation_hub_enabled?.default).toBe(false);
+    expect(FEATURE_FLAGS.automation_hub_shadow_mode?.default).toBe(true);
+  });
 });
 
 // ============================================================================
@@ -51,6 +58,12 @@ describe('getFeatureFlag', () => {
     expect(getFeatureFlag('stock_research_v2', { stock_research_v2: 'yes' })).toBe(false);
     expect(getFeatureFlag('stock_research_v2', { stock_research_v2: 1 })).toBe(false);
   });
+
+  it('returns rollout defaults for decision automation flags', () => {
+    expect(getFeatureFlag('decision_intelligence_enabled', {})).toBe(true);
+    expect(getFeatureFlag('automation_hub_enabled', {})).toBe(false);
+    expect(getFeatureFlag('automation_hub_shadow_mode', {})).toBe(true);
+  });
 });
 
 // ============================================================================
@@ -66,8 +79,9 @@ describe('getAllFeatureFlags', () => {
   });
 
   it('reflects user overrides', () => {
-    const flags = getAllFeatureFlags({ stock_research_v2: true });
+    const flags = getAllFeatureFlags({ stock_research_v2: true, automation_hub_enabled: true });
     expect(flags.stock_research_v2.enabled).toBe(true);
+    expect(flags.automation_hub_enabled.enabled).toBe(true);
   });
 
   it('works with empty config', () => {
@@ -83,6 +97,7 @@ describe('getAllFeatureFlags', () => {
 describe('isKnownFlag', () => {
   it('returns true for known flags', () => {
     expect(isKnownFlag('stock_research_v2')).toBe(true);
+    expect(isKnownFlag('decision_intelligence_enabled')).toBe(true);
   });
 
   it('returns false for unknown flags', () => {

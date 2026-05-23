@@ -10,7 +10,8 @@
  *   waitForConversationToChange(beforeCount, timeoutMs) → boolean
  */
 
-import { sleep, getChatMeta, truncateText } from './utils.js';
+import { sleep } from '../shared/utils.js';
+import { getChatMeta, truncateText } from './utils.js';
 import { getConversationMessageCount } from './selectors.js';
 import {
   getLatestAssistantMessageMeta,

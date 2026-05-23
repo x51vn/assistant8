@@ -18,6 +18,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { supabase } from '../../supabaseConfig.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('Handlers/SessionManager');
 
@@ -142,7 +143,7 @@ registerHandler(MESSAGE_TYPES.SESSION_CHECK, async (message) => {
     logger.error('Session check handler failed', { correlationId, error: error.message });
     return createErrorResponse(
       message,
-      'SESSION_CHECK_ERROR',
+      ERROR_CODES.AUTH_ERROR,
       'Lỗi kiểm tra phiên. Vui lòng thử lại.',
       { technicalError: error.message }
     );
@@ -199,7 +200,7 @@ registerHandler(MESSAGE_TYPES.FORCE_SESSION_REFRESH, async (message) => {
     logger.error('Force refresh handler failed', { correlationId, error: error.message });
     return createErrorResponse(
       message,
-      'REFRESH_ERROR',
+      ERROR_CODES.AUTH_ERROR,
       'Lỗi làm mới phiên',
       { technicalError: error.message }
     );

@@ -24,6 +24,7 @@ import {
   DEFAULT_TRUSTED_DOMAINS,
 } from './searchUtils.js';
 import { SearchResultCache, getSearchCache } from './searchCache.js';
+import { sleep } from '../../../shared/utils.js';
 
 const logger = createLogger('Services/GoogleSearchWeb');
 
@@ -485,15 +486,6 @@ function extractSearchResultsFromDOM() {
 }
 
 // ===== HELPERS =====
-
-/**
- * Promise-based sleep.
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // ===== EXPORTS FOR TESTING =====
 

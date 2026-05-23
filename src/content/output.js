@@ -12,7 +12,7 @@
  *   waitForStableAssistantResponse(opts) → { status, text }
  */
 
-import { sleep } from './utils.js';
+import { sleep } from '../shared/utils.js';
 
 /**
  * Get the raw text of the last assistant message (no noise removal).

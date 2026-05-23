@@ -23,7 +23,7 @@ import './handlers/index.js'; // This will register all handlers
 
 // CRITICAL: Static imports to avoid Vite preload helper injection
 // Dynamic imports cause Vite to inject document.* code which fails in Service Worker
-import * as contextMenuModule from './handlers/contextMenu.js';
+import * as contextMenuModule from './handlers/contextMenu/index.js';
 import * as alarmsModule from './handlers/alarms.js';
 import * as contentScriptReadyModule from './handlers/contentScriptReady.js'; // X51LABS-157
 import './handlers/sessionManager.js'; // X51LABS-XXX: Session expiration handling — registers SESSION_CHECK handler

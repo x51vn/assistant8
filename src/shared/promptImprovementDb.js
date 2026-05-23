@@ -20,7 +20,7 @@ const logger = createLogger('PromptImprovementDb');
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'PromptImprovementDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORE_RUNS = 'prompt_runs';
 export const STORE_LESSONS = 'prompt_lessons';
@@ -55,6 +55,7 @@ export function openDb() {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
+      const oldVersion = event.oldVersion;
 
       // prompt_runs store
       if (!db.objectStoreNames.contains(STORE_RUNS)) {
@@ -63,6 +64,13 @@ export function openDb() {
         runsStore.createIndex('retention_expires_at', 'retention_expires_at', { unique: false });
         runsStore.createIndex('task_key', 'task_key', { unique: false });
         runsStore.createIndex('prompt_version', 'prompt_version', { unique: false });
+        runsStore.createIndex('user_id', 'user_id', { unique: false });
+      } else if (oldVersion < 2) {
+        // Upgrade from v1: add user_id index
+        const runsStore = event.target.transaction.objectStore(STORE_RUNS);
+        if (!runsStore.indexNames.contains('user_id')) {
+          runsStore.createIndex('user_id', 'user_id', { unique: false });
+        }
       }
 
       // prompt_lessons store
@@ -74,6 +82,13 @@ export function openDb() {
         lessonsStore.createIndex('prompt_version', 'prompt_version', { unique: false });
         lessonsStore.createIndex('status', 'status', { unique: false });
         lessonsStore.createIndex('score', 'score', { unique: false });
+        lessonsStore.createIndex('user_id', 'user_id', { unique: false });
+      } else if (oldVersion < 2) {
+        // Upgrade from v1: add user_id index
+        const lessonsStore = event.target.transaction.objectStore(STORE_LESSONS);
+        if (!lessonsStore.indexNames.contains('user_id')) {
+          lessonsStore.createIndex('user_id', 'user_id', { unique: false });
+        }
       }
     };
 
@@ -135,6 +150,7 @@ function generateId() {
  * @param {string} [run.prompt_template]
  * @param {string} [run.page_url]
  * @param {string} [run.task_key]
+ * @param {string} [run.user_id] - Scopes data to authenticated user
  * @returns {Promise<Object>} Saved run with generated fields
  */
 export async function saveRun(run) {
@@ -148,13 +164,14 @@ export async function saveRun(run) {
     response_text: run.response_text || '',
     page_url: run.page_url || null,
     task_key: run.task_key || null,
+    user_id: run.user_id || null,
     retention_expires_at: (run.created_at || now) + RUNS_TTL_MS,
     evaluated: false,
     pinned: false,
   };
 
   await tx(STORE_RUNS, 'readwrite', (store) => store.put(record));
-  logger.debug('Run saved', { id: record.id });
+  logger.debug('Run saved', { id: record.id, userId: record.user_id });
   return record;
 }
 
@@ -163,9 +180,10 @@ export async function saveRun(run) {
  * @param {Object} [opts]
  * @param {number} [opts.sinceDays=7]
  * @param {string} [opts.taskKey]
+ * @param {string} [opts.userId] - Filter to runs owned by this user
  * @returns {Promise<Object[]>}
  */
-export async function listRuns({ sinceDays = 7, taskKey = null } = {}) {
+export async function listRuns({ sinceDays = 7, taskKey = null, userId = null } = {}) {
   const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
   const db = await openDb();
 
@@ -181,6 +199,7 @@ export async function listRuns({ sinceDays = 7, taskKey = null } = {}) {
       const c = event.target.result;
       if (c) {
         const val = c.value;
+        if (userId && val.user_id !== userId) { c.continue(); return; }
         if (!taskKey || val.task_key === taskKey) {
           results.push(val);
         }
@@ -257,6 +276,7 @@ export async function saveLesson(lesson) {
     source_run_id: lesson.source_run_id || null,
     prompt_version: lesson.prompt_version || null,
     task_key: lesson.task_key || null,
+    user_id: lesson.user_id || null,
     score: typeof lesson.score === 'number' ? lesson.score : 0,
     tags: Array.isArray(lesson.tags) ? lesson.tags : [],
     lesson_text: lesson.lesson_text || '',
@@ -269,7 +289,7 @@ export async function saveLesson(lesson) {
   };
 
   await tx(STORE_LESSONS, 'readwrite', (store) => store.put(record));
-  logger.debug('Lesson saved', { id: record.id, sourceRun: record.source_run_id });
+  logger.debug('Lesson saved', { id: record.id, sourceRun: record.source_run_id, userId: record.user_id });
   return record;
 }
 
@@ -281,9 +301,10 @@ export async function saveLesson(lesson) {
  * @param {string} [opts.status] - 'active'|'archived'|null (all)
  * @param {string[]} [opts.tags] - Filter to lessons containing at least one of these tags
  * @param {string} [opts.sort] - 'newest'|'score_asc'|'score_desc' (default: newest)
+ * @param {string} [opts.userId] - Filter to lessons owned by this user
  * @returns {Promise<Object[]>}
  */
-export async function listLessons({ taskKey, promptVersion, status, tags, sort = 'newest' } = {}) {
+export async function listLessons({ taskKey, promptVersion, status, tags, sort = 'newest', userId = null } = {}) {
   const db = await openDb();
 
   return new Promise((resolve, reject) => {
@@ -297,6 +318,7 @@ export async function listLessons({ taskKey, promptVersion, status, tags, sort =
       if (c) {
         const val = c.value;
         // Apply filters
+        if (userId && val.user_id !== userId) { c.continue(); return; }
         if (taskKey && val.task_key !== taskKey) { c.continue(); return; }
         if (promptVersion && val.prompt_version !== promptVersion) { c.continue(); return; }
         if (status && val.status !== status) { c.continue(); return; }
@@ -465,27 +487,107 @@ export async function purgeAll() {
 }
 
 // ---------------------------------------------------------------------------
+// User context isolation
+// ---------------------------------------------------------------------------
+
+/**
+ * Clear all prompt-improvement data for a specific user (on logout/switch).
+ * If userId is null, clears ALL records (defensive full wipe).
+ * @param {string|null} userId - User whose data to clear, or null for full wipe
+ * @returns {Promise<{clearedRuns: number, clearedLessons: number}>}
+ */
+export async function clearUserData(userId = null) {
+  const db = await openDb();
+  let clearedRuns = 0;
+  let clearedLessons = 0;
+
+  // Clear runs
+  await new Promise((resolve, reject) => {
+    const txn = db.transaction(STORE_RUNS, 'readwrite');
+    const store = txn.objectStore(STORE_RUNS);
+
+    if (!userId) {
+      // Full wipe
+      store.clear();
+      txn.oncomplete = () => resolve();
+      txn.onerror = () => reject(txn.error);
+      return;
+    }
+
+    const cursor = store.openCursor();
+    cursor.onsuccess = (event) => {
+      const c = event.target.result;
+      if (c) {
+        if (c.value.user_id === userId) {
+          c.delete();
+          clearedRuns++;
+        }
+        c.continue();
+      } else {
+        resolve();
+      }
+    };
+    cursor.onerror = () => reject(cursor.error);
+    txn.oncomplete = () => resolve();
+  });
+
+  // Clear lessons
+  await new Promise((resolve, reject) => {
+    const txn = db.transaction(STORE_LESSONS, 'readwrite');
+    const store = txn.objectStore(STORE_LESSONS);
+
+    if (!userId) {
+      store.clear();
+      txn.oncomplete = () => resolve();
+      txn.onerror = () => reject(txn.error);
+      return;
+    }
+
+    const cursor = store.openCursor();
+    cursor.onsuccess = (event) => {
+      const c = event.target.result;
+      if (c) {
+        if (c.value.user_id === userId) {
+          c.delete();
+          clearedLessons++;
+        }
+        c.continue();
+      } else {
+        resolve();
+      }
+    };
+    cursor.onerror = () => reject(cursor.error);
+    txn.oncomplete = () => resolve();
+  });
+
+  logger.info('User data cleared', { userId, clearedRuns, clearedLessons });
+  return { clearedRuns, clearedLessons };
+}
+
+// ---------------------------------------------------------------------------
 // Stats (for Daily Review card)
 // ---------------------------------------------------------------------------
 
 /**
  * Get daily review stats.
+ * @param {Object} [opts]
+ * @param {string} [opts.userId] - Scope stats to this user
  * @returns {Promise<{todayRuns: number, evaluatedToday: number, totalLessons: number, activeLessons: number}>}
  */
-export async function getDailyStats() {
+export async function getDailyStats({ userId = null } = {}) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayCutoff = todayStart.getTime();
 
-  const runs = await listRuns({ sinceDays: 1 });
+  const runs = await listRuns({ sinceDays: 1, userId });
   const todayRuns = runs.filter(r => r.created_at >= todayCutoff);
   const evaluatedToday = todayRuns.filter(r => r.evaluated);
-  const lessons = await listLessons({ status: 'active' });
+  const lessons = await listLessons({ status: 'active', userId });
 
   return {
     todayRuns: todayRuns.length,
     evaluatedToday: evaluatedToday.length,
-    totalLessons: (await listLessons()).length,
+    totalLessons: (await listLessons({ userId })).length,
     activeLessons: lessons.length,
   };
 }

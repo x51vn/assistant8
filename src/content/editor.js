@@ -15,7 +15,7 @@
  *   setNativeValue(el, value)       → void
  */
 
-import { sleep } from './utils.js';
+import { sleep } from '../shared/utils.js';
 import { findEditor, findNewChatButton, getConversationMessageCount, findSendButton } from './selectors.js';
 
 /**

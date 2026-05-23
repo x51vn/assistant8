@@ -13,6 +13,8 @@
  * MV3-safe: Runs in page context, self-contained functions.
  */
 
+import { sleep } from '../shared/utils.js';
+
 const PENDING_PROMPT_KEY = '__chatgpt_assistant_pending_prompt_v1';
 
 // Lightweight content-script logger (avoids importing full logger.js to keep bundle small)
@@ -373,10 +375,6 @@ try {
 }
 
 // ===== HELPER =====
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // ESM exports for testing (stripped from build by contentScriptClassicPlugin)
 export { injectPrompt, extractResponse, isLoggedIn, createNewSession, handleMessage, CLAUDE_SELECTORS };

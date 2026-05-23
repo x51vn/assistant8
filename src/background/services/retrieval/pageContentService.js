@@ -12,6 +12,7 @@
  */
 
 import { createLogger } from '../../../logger.js';
+import { sleep } from '../../../shared/utils.js';
 
 const logger = createLogger('PageContentService');
 
@@ -199,10 +200,6 @@ function waitForTabLoad(tabId, timeoutMs) {
       }
     });
   });
-}
-
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
 }
 
 function truncateAtBoundary(text, maxLength) {

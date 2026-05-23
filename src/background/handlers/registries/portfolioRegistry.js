@@ -9,7 +9,7 @@ import '../commodity.js';
 import '../indices.js';
 import '../supabaseWatchlist.js';
 import '../supabasePriceUpdate.js';
-import '../watchlistEnrich.js';
+import '../watchlistEnrich/index.js';
 import '../priceAlerts.js';
 import '../multiPortfolio.js';
 import '../sectors.js';

@@ -217,7 +217,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_APIKEY_SET, async (message) => {
   } catch (err) {
     if (err.errorCode) return err; // requireAuth formatted error
     logger.error('SETTINGS_APIKEY_SET failed', { error: err.message, correlationId });
-    return createErrorResponse(message, ERROR_CODES.LLM_APIKEY_SAVE_FAILED || 'OPERATION_FAILED', err.message);
+    return createErrorResponse(message, ERROR_CODES.LLM_APIKEY_SAVE_FAILED, err.message);
   }
 });
 
@@ -308,7 +308,7 @@ registerHandler(MESSAGE_TYPES.SETTINGS_APIKEY_MIGRATE, async (message) => {
   } catch (err) {
     if (err.errorCode) return err;
     logger.error('SETTINGS_APIKEY_MIGRATE failed', { error: err.message, correlationId });
-    return createErrorResponse(message, ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED || 'OPERATION_FAILED', err.message);
+    return createErrorResponse(message, ERROR_CODES.LLM_APIKEY_MIGRATE_FAILED, err.message);
   }
 });
 
@@ -339,6 +339,6 @@ registerHandler(MESSAGE_TYPES.SETTINGS_APIKEY_HEALTHCHECK, async (message) => {
   } catch (err) {
     if (err.errorCode) return err;
     logger.error('SETTINGS_APIKEY_HEALTHCHECK failed', { error: err.message, correlationId });
-    return createErrorResponse(message, ERROR_CODES.LLM_HEALTHCHECK_FAILED || 'OPERATION_FAILED', err.message);
+    return createErrorResponse(message, ERROR_CODES.LLM_HEALTHCHECK_FAILED, err.message);
   }
 });

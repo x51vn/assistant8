@@ -46,6 +46,7 @@ export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   EMPTY_PROMPT: 'EMPTY_PROMPT',
   DUPLICATE_ENTRY: 'DUPLICATE_ENTRY',
+  CONFLICT: 'CONFLICT',
   NOT_FOUND: 'NOT_FOUND',
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
   
@@ -100,6 +101,16 @@ export const ERROR_CODES = {
   PARSE_ERROR: 'PARSE_ERROR',
   PERSIST_ERROR: 'PERSIST_ERROR',
 
+  // ===== Decision Intelligence / Journal =====
+  INVALID_TRANSITION: 'INVALID_TRANSITION',
+  GUARDRAIL_BLOCKED: 'GUARDRAIL_BLOCKED',
+  DECISION_SCORE_ERROR: 'DECISION_SCORE_ERROR',
+  GUARDRAIL_EVALUATION_ERROR: 'GUARDRAIL_EVALUATION_ERROR',
+  PLAYBOOK_INSIGHTS_ERROR: 'PLAYBOOK_INSIGHTS_ERROR',
+  PLAYBOOK_FEEDBACK_ERROR: 'PLAYBOOK_FEEDBACK_ERROR',
+  AUTOMATION_WORKFLOW_ERROR: 'AUTOMATION_WORKFLOW_ERROR',
+  AUTOMATION_EXECUTION_ERROR: 'AUTOMATION_EXECUTION_ERROR',
+
   // ===== LLM API Key Management =====
   LLM_APIKEY_INVALID: 'LLM_APIKEY_INVALID',
   LLM_APIKEY_NOT_FOUND: 'LLM_APIKEY_NOT_FOUND',
@@ -153,6 +164,7 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.INVALID_INPUT]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
   [ERROR_CODES.VALIDATION_ERROR]: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
   [ERROR_CODES.DUPLICATE_ENTRY]: 'Mục này đã tồn tại trong hệ thống.',
+  [ERROR_CODES.CONFLICT]: 'Dữ liệu đã tồn tại hoặc đang xung đột với trạng thái hiện tại.',
   [ERROR_CODES.NOT_FOUND]: 'Không tìm thấy dữ liệu yêu cầu.',
   [ERROR_CODES.MISSING_REQUIRED_FIELD]: 'Vui lòng điền đầy đủ thông tin bắt buộc.',
   
@@ -202,6 +214,16 @@ export const ERROR_MESSAGES_VN = {
   [ERROR_CODES.LLM_QUOTA_EXCEEDED]: 'Đã hết quota AI provider. Vui lòng kiểm tra API key hoặc thử provider khác.',
   [ERROR_CODES.PARSE_ERROR]: 'AI trả lời không đúng format. Đang thử lại...',
   [ERROR_CODES.PERSIST_ERROR]: 'Không thể lưu kết quả. Dữ liệu vẫn hiển thị nhưng không được lưu.',
+
+  // Decision Intelligence / Journal
+  [ERROR_CODES.INVALID_TRANSITION]: 'Không thể thực hiện chuyển trạng thái này.',
+  [ERROR_CODES.GUARDRAIL_BLOCKED]: 'Lệnh bị chặn bởi bộ guardrail hiện tại.',
+  [ERROR_CODES.DECISION_SCORE_ERROR]: 'Không thể chấm điểm quyết định lúc này.',
+  [ERROR_CODES.GUARDRAIL_EVALUATION_ERROR]: 'Không thể chạy kiểm tra guardrail lúc này.',
+  [ERROR_CODES.PLAYBOOK_INSIGHTS_ERROR]: 'Không thể tải playbook insights.',
+  [ERROR_CODES.PLAYBOOK_FEEDBACK_ERROR]: 'Không thể lưu phản hồi playbook insight.',
+  [ERROR_CODES.AUTOMATION_WORKFLOW_ERROR]: 'Không thể thao tác workflow tự động.',
+  [ERROR_CODES.AUTOMATION_EXECUTION_ERROR]: 'Không thể tải lịch sử chạy tự động.',
 
   // LLM API Key Management
   [ERROR_CODES.LLM_APIKEY_INVALID]: 'API key không hợp lệ. Vui lòng kiểm tra lại.',
