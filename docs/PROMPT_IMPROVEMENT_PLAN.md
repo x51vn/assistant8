@@ -1,5 +1,45 @@
 # Kế hoạch cải tiến prompt (extension-only, retention 7 ngày + “Đánh giá” qua LLM web UI)
 
+## MVP Status (shipped)
+
+The prompt-improvement loop is now a **supported MVP** with explicit boundaries:
+
+### Storage boundary
+- **Local-first**: runs and lessons remain in IndexedDB (`PromptImprovementDB` v2).
+- **Runs TTL**: 7 days, hard cap 500 records.
+- **Lessons TTL**: 90 days for archived lessons; active lessons are never auto-purged.
+- **Purge**: daily via `chrome.alarms` + on-demand via UI.
+- **Not in Supabase**: prompt-improvement data is intentionally local for MVP. Future migration to durable backend is a separate effort.
+
+### User/session isolation
+- All records carry a `user_id` field (added in DB version 2).
+- Background handlers resolve `userId` via `getCurrentUserId()` and scope all reads/writes.
+- On **logout**: `clearUserData(previousUserId)` removes the departing user's local data.
+- On **user switch**: old user's data is cleared before new user's session begins.
+- If `userId` is null (anonymous/unauthenticated): records are still stored but isolated from authenticated user queries.
+
+### Manual fallback
+- The evaluator flow supports both automated DOM injection and manual copy/paste.
+- Manual lessons follow the same lifecycle (retention, injection eligibility, purge) as automated lessons.
+- `PROMPT_LESSON_SAVE` handler accepts direct lesson input without requiring a source run.
+
+### Lesson injection rules
+- Only `status: 'active'` and `excluded: false` lessons are eligible.
+- Pinned lessons are always prioritized.
+- Injection is scoped to the current user's lessons only.
+- Top-N selection (default 5) filtered by optional `task_key` and `prompt_version`.
+
+### Key files
+- `src/shared/promptImprovementDb.js` - IndexedDB CRUD, purge, clearUserData
+- `src/background/handlers/promptImprovement.js` - message handlers with user-context isolation
+- `src/shared/lessonInjector.js` - lesson selection and prompt injection
+- `src/shared/evaluatorPrompt.js` - evaluator rubric builder
+- `src/shared/evalJsonParser.js` - JSON extraction and validation
+- `src/background/handlers/chatHistoryAutoSave.js` - automatic run capture with userId
+- `tests/unit/promptImprovementMvp.test.js` - focused MVP verification
+
+---
+
 ## Mục tiêu
 - Cải tiến prompt theo thời gian bằng vòng lặp **đơn giản**: lưu prompt+response 7 ngày → người dùng bấm nút để AI chấm điểm/rút bài học → lưu bài học → bơm bài học vào prompt lần sau.
 - Không cần backend/DB/server: toàn bộ chạy bằng **Chrome extension** + **LLM web UI** (tận dụng phiên đăng nhập của người dùng).

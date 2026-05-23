@@ -16,6 +16,7 @@
 
 import { createLogger, generateCorrelationId } from '../logger.js';
 import { SYSTEM_PROMPT_KEYS, DEFAULT_SYSTEM_PROMPTS } from './systemPrompts.js';
+import { sleep } from './utils.js';
 
 const logger = createLogger('LLMClient');
 
@@ -50,15 +51,6 @@ const settingsKeyForProvider = (provider) => `${provider}_api_key`;
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Sleep helper for exponential backoff.
- * @param {number} ms
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 
 /**
  * Read a short-lived cached value from chrome.storage.local.

@@ -14,6 +14,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
 import { ERROR_CODES } from '../../shared/errorCodes.js';
+import { getCurrentUserId } from '../utils/auth.js';
 
 import {
   saveRun,
@@ -28,6 +29,7 @@ import {
   deleteLesson,
   getDailyStats,
   purgeAll,
+  clearUserData,
 } from '../../shared/promptImprovementDb.js';
 
 import { buildEvaluatorPrompt } from '../../shared/evaluatorPrompt.js';
@@ -47,6 +49,7 @@ const logger = createLogger('Handlers/PromptImprovement');
 registerHandler(MESSAGE_TYPES.PROMPT_RUN_SAVE, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const run = await saveRun({
       prompt_text: data.prompt_text || data.promptText || '',
@@ -55,6 +58,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_RUN_SAVE, async (message) => {
       prompt_template: data.prompt_template || data.promptTemplate || null,
       page_url: data.page_url || data.pageUrl || null,
       task_key: data.task_key || data.taskKey || null,
+      user_id: userId,
     });
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_RUN_SAVED, {
@@ -74,10 +78,12 @@ registerHandler(MESSAGE_TYPES.PROMPT_RUN_SAVE, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_RUNS_LIST, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const runs = await listRuns({
       sinceDays: data.sinceDays || data.since_days || 7,
       taskKey: data.taskKey || data.task_key || null,
+      userId,
     });
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_RUNS_DATA, {
@@ -192,6 +198,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_RUN_BUILD_EVAL, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_EVAL_PARSE, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const result = parseEvalResponse(data.rawText || data.raw_text || '');
 
@@ -202,6 +209,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_EVAL_PARSE, async (message) => {
         source_run_id: data.runId || data.run_id,
         prompt_version: run?.prompt_version || null,
         task_key: run?.task_key || null,
+        user_id: userId,
         score: result.data.score,
         tags: result.data.tags,
         lesson_text: result.data.lesson_text,
@@ -242,11 +250,13 @@ registerHandler(MESSAGE_TYPES.PROMPT_EVAL_PARSE, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_LESSON_SAVE, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const lesson = await saveLesson({
       source_run_id: data.source_run_id || data.sourceRunId || null,
       prompt_version: data.prompt_version || data.promptVersion || null,
       task_key: data.task_key || data.taskKey || null,
+      user_id: userId,
       score: data.score || 0,
       tags: data.tags || [],
       lesson_text: data.lesson_text || data.lessonText || '',
@@ -273,6 +283,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_LESSON_SAVE, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_LESSONS_LIST, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const lessons = await listLessons({
       taskKey: data.taskKey || data.task_key || undefined,
@@ -280,6 +291,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_LESSONS_LIST, async (message) => {
       status: data.status || undefined,
       tags: data.tags || undefined,
       sort: data.sort || 'newest',
+      userId,
     });
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_LESSONS_DATA, {
@@ -345,6 +357,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_LESSON_DELETE, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_LESSONS_INJECT, async (message) => {
   const correlationId = message.correlationId;
   try {
+    const userId = await getCurrentUserId();
     const data = message.data || message;
     const result = await injectLessons(data.promptText || data.prompt_text || '', {
       taskKey: data.taskKey || data.task_key || undefined,
@@ -352,6 +365,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_LESSONS_INJECT, async (message) => {
       topN: data.topN || data.top_n || 5,
       mode: data.mode || 'full',
       enabled: data.enabled !== false,
+      userId,
     });
 
     return createResponse(message, MESSAGE_TYPES.PROMPT_LESSONS_INJECTED, {
@@ -376,7 +390,8 @@ registerHandler(MESSAGE_TYPES.PROMPT_LESSONS_INJECT, async (message) => {
 registerHandler(MESSAGE_TYPES.PROMPT_IMPROVEMENT_STATS, async (message) => {
   const correlationId = message.correlationId;
   try {
-    const stats = await getDailyStats();
+    const userId = await getCurrentUserId();
+    const stats = await getDailyStats({ userId });
     return createResponse(message, MESSAGE_TYPES.PROMPT_IMPROVEMENT_STATS_DATA, {
       success: true,
       ...stats,
@@ -403,6 +418,41 @@ registerHandler(MESSAGE_TYPES.PROMPT_IMPROVEMENT_PURGE, async (message) => {
   } catch (error) {
     logger.error('Failed to purge', { correlationId, error: error.message });
     return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
+  }
+});
+
+// ===========================================================================
+// Auth-state isolation: clear prompt-improvement data on user switch/logout
+// ===========================================================================
+
+/**
+ * Listen for AUTH_STATE_CHANGED broadcasts.
+ * On sign-out: clear current user's prompt-improvement data to prevent
+ * cross-user leakage on shared extension installs.
+ */
+let _previousUserId = null;
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== MESSAGE_TYPES.AUTH_STATE_CHANGED) return;
+
+  const data = message.data || {};
+  const newUserId = data.user?.id || null;
+
+  // Sign-out or user switch: clear previous user's local data
+  if (!data.authenticated && _previousUserId) {
+    clearUserData(_previousUserId).catch((err) => {
+      logger.warn('Failed to clear prompt-improvement data on logout', { error: err?.message });
+    });
+    _previousUserId = null;
+  } else if (data.authenticated && newUserId) {
+    // User signed in — track for future logout clearing
+    if (_previousUserId && _previousUserId !== newUserId) {
+      // Different user signed in — clear old user's data
+      clearUserData(_previousUserId).catch((err) => {
+        logger.warn('Failed to clear prompt-improvement data on user switch', { error: err?.message });
+      });
+    }
+    _previousUserId = newUserId;
   }
 });
 

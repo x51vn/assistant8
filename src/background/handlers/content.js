@@ -6,6 +6,7 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('Handlers/Content');
 
@@ -76,13 +77,13 @@ registerHandler(MESSAGE_TYPES.CONTENT_EXTRACT, async (message, sender) => {
   // Handle SSI API proxy
   if (action === 'fetch_ssi_api') {
     if (!endpoint) {
-      return createErrorResponse(message, 'MISSING_ENDPOINT', 'Missing endpoint parameter');
+      return createErrorResponse(message, ERROR_CODES.MISSING_REQUIRED_FIELD, 'Missing endpoint parameter');
     }
     
     const result = await fetchSSIAPI(endpoint, method, body);
     
     if (!result.success) {
-      return createErrorResponse(message, 'API_ERROR', result.error);
+      return createErrorResponse(message, ERROR_CODES.SSI_API_ERROR, result.error);
     }
     
     return createResponse(message, MESSAGE_TYPES.CONTENT_EXTRACTED, {
@@ -91,7 +92,7 @@ registerHandler(MESSAGE_TYPES.CONTENT_EXTRACT, async (message, sender) => {
   }
   
   // Unknown action
-  return createErrorResponse(message, 'UNKNOWN_ACTION', `Unknown action: ${action}`);
+  return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, `Unknown action: ${action}`);
 });
 
 logger.info('Content handlers registered');

@@ -22,6 +22,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('DataImport');
 
@@ -121,9 +122,9 @@ registerHandler(MESSAGE_TYPES.DATA_IMPORT_REQUEST, async (message) => {
   const correlationId = message.correlationId;
   const { fileContent, fileType, conflictMode = 'skip' } = message.data || message;
 
-  if (!fileContent) return createErrorResponse(message, 'VALIDATION_ERROR', 'Thiếu nội dung file');
+  if (!fileContent) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Thiếu nội dung file');
   if (!['json', 'csv'].includes(fileType)) {
-    return createErrorResponse(message, 'VALIDATION_ERROR', 'fileType phải là json hoặc csv');
+    return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'fileType phải là json hoặc csv');
   }
 
   try {
@@ -136,7 +137,7 @@ registerHandler(MESSAGE_TYPES.DATA_IMPORT_REQUEST, async (message) => {
         logger.warn('CSV parse warnings', { parseErrors, correlationId });
       }
       if (!rows.length) {
-        return createErrorResponse(message, 'PARSE_ERROR', 'Không tìm thấy dữ liệu hợp lệ trong CSV');
+        return createErrorResponse(message, ERROR_CODES.PARSE_ERROR, 'Không tìm thấy dữ liệu hợp lệ trong CSV');
       }
 
       results.portfolio = await batchUpsert('portfolio', rows, userId, conflictMode, 'symbol');
@@ -149,11 +150,11 @@ registerHandler(MESSAGE_TYPES.DATA_IMPORT_REQUEST, async (message) => {
         // Support both { data: { portfolio: [] } } and { portfolio: [] } formats
         if (parsed?.data && typeof parsed.data === 'object') parsed = parsed.data;
       } catch {
-        return createErrorResponse(message, 'PARSE_ERROR', 'File JSON không hợp lệ');
+        return createErrorResponse(message, ERROR_CODES.PARSE_ERROR, 'File JSON không hợp lệ');
       }
 
       const { valid, error: validateError, tables } = validateJSON(parsed);
-      if (!valid) return createErrorResponse(message, 'VALIDATE_ERROR', validateError);
+      if (!valid) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, validateError);
 
       // Strip user_id from imported data (will be replaced with current user)
       for (const table of tables) {
@@ -167,6 +168,6 @@ registerHandler(MESSAGE_TYPES.DATA_IMPORT_REQUEST, async (message) => {
 
   } catch (err) {
     logger.error('DATA_IMPORT_REQUEST failed', { error: err?.message, correlationId });
-    return createErrorResponse(message, 'IMPORT_ERROR', err?.message || 'Nhập dữ liệu thất bại');
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, err?.message || 'Nhập dữ liệu thất bại');
   }
 });

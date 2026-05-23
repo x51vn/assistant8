@@ -51,4 +51,20 @@ describe('DecisionIntelligenceMapper', () => {
     expect(entity.is_active).toBe(true);
     expect(entity.dedup_window_minutes).toBe(60);
   });
+
+  it('preserves rollout metadata in execution history mapping', () => {
+    const mapped = DecisionIntelligenceMapper.fromAutomationExecutionEntity({
+      id: 'exec-1',
+      workflow_id: 'wf-1',
+      trigger_input: { symbol: 'VNM' },
+      evaluation_result: { rollout: { stage: 'shadow' } },
+      action_outcome: { actions: [{ type: 'notify', status: 'shadowed' }] },
+      status: 'shadowed',
+      dedup_key: 'wf-1::review_ready::VNM',
+      executed_at: '2026-05-23T00:00:00Z',
+    });
+
+    expect(mapped.evaluationResult.rollout.stage).toBe('shadow');
+    expect(mapped.actionOutcome.actions).toHaveLength(1);
+  });
 });

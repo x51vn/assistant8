@@ -9,7 +9,8 @@
  *     Returns true when the response will be sent asynchronously.
  */
 
-import { sleep, getChatMeta } from './utils.js';
+import { sleep } from '../shared/utils.js';
+import { getChatMeta } from './utils.js';
 import { getConversationMessageCount, getSelectorStats } from './selectors.js';
 import { ensureNewChatSession, inputAndSendPrompt, triggerNewChatNavigation } from './editor.js';
 import {
@@ -20,7 +21,6 @@ import {
 import { writePendingPrompt, drainPendingPrompt } from './pendingPrompt.js';
 import { captureAndReportAssistantResponse } from './capture.js';
 import { activateGuard, deactivateGuard } from './navigationGuard.js';
-import { adaptSendInput, adaptGetOutput } from './contractAdapter.js';
 
 // Lightweight inline logger (content scripts are classic scripts — can't import shared chunks)
 const LOG_PREFIX = '[Content/Actions]';
@@ -93,12 +93,10 @@ export function handleMessage(request, safeSendResponse) {
     logger.debug('send_input action received', { promptLength: request.prompt?.length, reviewOnly: request.reviewOnly });
     (async () => {
       try {
-        // Normalize request through contract adapter (CHATGPT_SEND_INPUT contract)
-        const dto = adaptSendInput(request);
-        if (dto._warnings.length > 0) {
-          logger.warn('send_input contract warnings', { warnings: dto._warnings });
-        }
-        const { prompt, createNewChat, reviewOnly, runId } = dto;
+        const prompt = typeof request.prompt === 'string' ? request.prompt : '';
+        const createNewChat = request.createNewChat !== false;
+        const reviewOnly = request.reviewOnly === true;
+        const runId = typeof request.runId === 'string' ? request.runId : null;
 
         const beforeAssistant = getLatestAssistantMessageMeta();
         const beforeMsgCount = getConversationMessageCount();
@@ -170,12 +168,14 @@ export function handleMessage(request, safeSendResponse) {
     logger.debug('get_output action received', { wait: request.wait, timeoutMs: request.timeoutMs });
     (async () => {
       try {
-        // Normalize request through contract adapter (CHATGPT_GET_OUTPUT contract)
-        const dto = adaptGetOutput(request);
-        if (dto._warnings.length > 0) {
-          logger.warn('get_output contract warnings', { warnings: dto._warnings });
-        }
-        const { wait, timeoutMs, stableMs, expectedChatId } = dto;
+        const wait = request.wait !== false;
+        const timeoutMs = Number.isFinite(request.timeoutMs) && request.timeoutMs >= 1
+          ? request.timeoutMs
+          : 15 * 60 * 1000;
+        const stableMs = Number.isFinite(request.stableMs) && request.stableMs >= 0
+          ? request.stableMs
+          : 1500;
+        const expectedChatId = typeof request.expectedChatId === 'string' ? request.expectedChatId : null;
 
         const meta = getChatMeta();
 

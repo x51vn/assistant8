@@ -5,14 +5,6 @@
  * No DOM dependencies beyond `location` — safe to import anywhere.
  */
 
-/**
- * Sleep for a given duration.
- * @param {number} ms - Milliseconds to wait
- * @returns {Promise<void>}
- */
-export function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Extract chat metadata from the current page URL.

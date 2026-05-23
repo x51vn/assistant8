@@ -14,6 +14,7 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('Handlers/ContentScriptReady');
 
@@ -61,7 +62,7 @@ registerHandler(MESSAGE_TYPES.CONTENT_SCRIPT_READY, async (message, sender) => {
     logger.warn('content_script_ready: Missing tab ID', { correlationId });
     return createErrorResponse(
       message,
-      'MISSING_TAB_ID',
+      ERROR_CODES.INVALID_TAB_ID,
       'Could not determine tab ID from sender'
     );
   }

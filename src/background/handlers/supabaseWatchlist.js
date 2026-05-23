@@ -17,6 +17,7 @@ import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { requireAuth } from '../utils/auth.js';
 import { calcEdiff, calcPprofit, round4 } from '../../shared/watchlistCalc.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('Handlers/WatchlistSupabase');
 
@@ -115,10 +116,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_GET, async (message) => {
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.API_ERROR);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.API_ERROR);
   }
 });
 
@@ -150,7 +151,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
     // Validation
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
       logger.warn('Watchlist CREATE failed: missing symbol', { correlationId });
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
     const sanitizedSymbol = symbol.trim().toUpperCase();
@@ -257,16 +258,16 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_CREATE, async (message) => {
     if (error.message?.includes('unique') || error.code === '23505') {
       return createErrorResponse(
         message,
-        'DUPLICATE_ERROR',
+        ERROR_CODES.DUPLICATE_ENTRY,
         'Mã cổ phiếu này đã tồn tại trong watchlist của bạn.'
       );
     }
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.CREATE_FAILED);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.CREATE_FAILED);
   }
 });
 
@@ -288,12 +289,12 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     // Validation
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
       logger.warn('Watchlist UPDATE failed: missing symbol', { correlationId });
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
     if (!updates || typeof updates !== 'object') {
       logger.warn('Watchlist UPDATE failed: missing updates', { correlationId });
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.INVALID_INPUT);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.INVALID_INPUT);
     }
 
     // Build update data - support both camelCase and snake_case
@@ -369,7 +370,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
       });
       return createErrorResponse(
         message,
-        'NOT_FOUND_ERROR',
+        ERROR_CODES.NOT_FOUND,
         'Mục watchlist không tồn tại.'
       );
     }
@@ -397,10 +398,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_UPDATE, async (message) => {
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.UPDATE_FAILED);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.UPDATE_FAILED);
   }
 });
 
@@ -422,7 +423,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
     // Validation
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
       logger.warn('Watchlist DELETE failed: missing symbol', { correlationId });
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
     // Delete from Supabase with retry
@@ -453,7 +454,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
       });
       return createErrorResponse(
         message,
-        'NOT_FOUND_ERROR',
+        ERROR_CODES.NOT_FOUND,
         'Mục watchlist không tồn tại.'
       );
     }
@@ -481,10 +482,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_DELETE, async (message) => {
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.DELETE_FAILED);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.DELETE_FAILED);
   }
 });
 
@@ -506,7 +507,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
     // Validation
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
       logger.warn('Watchlist TOGGLE_HIGHLIGHT failed: missing symbol', { correlationId });
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.SYMBOL_REQUIRED);
     }
 
     const sanitizedSymbol = symbol.trim().toUpperCase();
@@ -555,7 +556,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
       });
       return createErrorResponse(
         message,
-        'NOT_FOUND_ERROR',
+        ERROR_CODES.NOT_FOUND,
         'Mục watchlist không tồn tại.'
       );
     }
@@ -585,10 +586,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_TOGGLE_HIGHLIGHT, async (message)
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.TOGGLE_FAILED);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.TOGGLE_FAILED);
   }
 });
 
@@ -612,7 +613,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES, async (messa
     const { prices } = message.data || {};
 
     if (!prices || typeof prices !== 'object') {
-      return createErrorResponse(message, 'INVALID_INPUT', ERROR_MESSAGES_VI.INVALID_INPUT);
+      return createErrorResponse(message, ERROR_CODES.INVALID_INPUT, ERROR_MESSAGES_VI.INVALID_INPUT);
     }
 
     const symbols = Object.keys(prices);
@@ -682,10 +683,10 @@ registerHandler(MESSAGE_TYPES.XNEEWS_WATCHLIST_BATCH_UPDATE_PRICES, async (messa
     });
 
     if (error.message?.includes('fetch') || error.name === 'TypeError') {
-      return createErrorResponse(message, 'NETWORK_ERROR', ERROR_MESSAGES_VI.NETWORK_ERROR);
+      return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, ERROR_MESSAGES_VI.NETWORK_ERROR);
     }
 
-    return createErrorResponse(message, 'UNKNOWN_ERROR', ERROR_MESSAGES_VI.API_ERROR);
+    return createErrorResponse(message, ERROR_CODES.UNKNOWN_ERROR, ERROR_MESSAGES_VI.API_ERROR);
   }
 });
 

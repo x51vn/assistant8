@@ -15,6 +15,7 @@
  */
 
 import { MarketDataClient, createAllProviders, getProviderRegistry } from '../../market-data/index.js';
+import { sleep } from '../../shared/utils.js';
 
 const MAX_BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 1000;
@@ -200,15 +201,6 @@ function isNetworkError(error) {
          message.includes('abort') ||
          message.includes('econnrefused') ||
          message.includes('enotfound');
-}
-
-/**
- * Sleep helper
- * @param {number} ms - Milliseconds
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

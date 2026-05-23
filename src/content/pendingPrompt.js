@@ -12,7 +12,8 @@
  *   drainPendingPrompt(opts)   → void (retries until sent or timeout)
  */
 
-import { sleep, getChatMeta } from './utils.js';
+import { sleep } from '../shared/utils.js';
+import { getChatMeta } from './utils.js';
 import { inputAndSendPrompt, waitForEmptyNewChat } from './editor.js';
 
 // Lightweight inline logger (content scripts are classic scripts — can't import shared chunks)

@@ -12,6 +12,7 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 import { getQueueInfo, pauseQueue, resumeQueue, isQueuePaused, cancelAllPending } from '../services/promptQueue.js';
 
 const logger = createLogger('Handlers/PromptQueueInfo');
@@ -52,7 +53,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_GET_INFO, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to get queue info', { correlationId, error: error.message });
-    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
   }
 });
 
@@ -82,7 +83,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_CLEAR_DONE, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to clear done jobs', { correlationId, error: error.message });
-    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
   }
 });
 
@@ -102,7 +103,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_PAUSE, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to pause queue', { correlationId, error: error.message });
-    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
   }
 });
 
@@ -122,7 +123,7 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_RESUME, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to resume queue', { correlationId, error: error.message });
-    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
   }
 });
 
@@ -142,6 +143,6 @@ registerHandler(MESSAGE_TYPES.PROMPT_QUEUE_CANCEL_ALL, async (message) => {
     });
   } catch (error) {
     logger.error('Failed to cancel all pending', { correlationId, error: error.message });
-    return createErrorResponse(message, 'OPERATION_FAILED', error.message);
+    return createErrorResponse(message, ERROR_CODES.OPERATION_FAILED, error.message);
   }
 });

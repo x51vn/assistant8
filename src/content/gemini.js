@@ -13,6 +13,8 @@
  * MV3-safe: Runs in page context, no imports, self-contained functions.
  */
 
+import { sleep } from '../shared/utils.js';
+
 // Lightweight content-script logger
 const LOG_PREFIX = '[Content/Gemini]';
 const clog = {
@@ -368,10 +370,6 @@ try {
 }
 
 // ===== HELPER =====
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // ESM exports for testing (stripped from build by contentScriptClassicPlugin)
 export { injectPrompt, extractResponse, isLoggedIn, createNewSession, handleMessage, GEMINI_SELECTORS };

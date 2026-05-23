@@ -30,6 +30,26 @@ export const FEATURE_FLAGS = {
     description: 'Enable Stock Research Pipeline v2 (AI-powered analysis with Google Search)',
     ticket: 'XST-800',
   },
+  decision_intelligence_enabled: {
+    default: true,
+    description: 'Enable decision scoring, guardrails, and playbook insight responses for the current user.',
+    ticket: 'complete-decision-automation-rollout',
+  },
+  decision_intelligence_shadow_mode: {
+    default: true,
+    description: 'Capture rollout telemetry for decision scoring, guardrails, and playbook insights.',
+    ticket: 'complete-decision-automation-rollout',
+  },
+  automation_hub_enabled: {
+    default: false,
+    description: 'Enable live Automation Hub v1 action execution for the current user.',
+    ticket: 'complete-decision-automation-rollout',
+  },
+  automation_hub_shadow_mode: {
+    default: true,
+    description: 'Evaluate and log Automation Hub v1 workflows without executing live actions.',
+    ticket: 'complete-decision-automation-rollout',
+  },
 };
 
 // ===== PUBLIC API =====

@@ -24,6 +24,7 @@ import {
   evaluateDecisionScore,
   evaluateGuardrails,
 } from '../services/decisionIntelligenceService.js';
+import { runJournalAutomationWorkflows } from '../services/decisionAutomationService.js';
 
 const logger = createLogger('Handlers/Journal');
 
@@ -77,7 +78,7 @@ function handleSupabaseError(message, error, operation) {
     return createErrorResponse(message, ERROR_CODES.NETWORK_ERROR, getUserFriendlyMessage(ERROR_CODES.NETWORK_ERROR));
   }
   if (error.code === '23505') {
-    return createErrorResponse(message, 'CONFLICT', 'Dữ liệu đã tồn tại. Vui lòng kiểm tra lại.');
+    return createErrorResponse(message, ERROR_CODES.CONFLICT, 'Dữ liệu đã tồn tại. Vui lòng kiểm tra lại.');
   }
   if (error.status === 401 || error.message?.includes('JWT')) {
     return createErrorResponse(message, ERROR_CODES.AUTH_EXPIRED, getUserFriendlyMessage(ERROR_CODES.AUTH_EXPIRED));
@@ -139,7 +140,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
     const entry = message.data || {};
 
     if (!entry.symbol || !String(entry.symbol).trim()) {
-      return createErrorResponse(message, 'VALIDATION_ERROR', 'Symbol là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'Symbol là bắt buộc');
     }
 
     // Pre-trade guardrail + decision scoring snapshot
@@ -168,10 +169,30 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
       maxRiskPct: entry.maxRiskPct,
     });
 
+    const draftStatus = entry.actual_entry != null ? 'open' : 'planned';
+
     if (!guardrailResult.allowed) {
+      try {
+        await runJournalAutomationWorkflows({
+          userId,
+          previousEntry: null,
+          currentEntry: {
+            ...entry,
+            symbol: String(entry.symbol).toUpperCase().trim(),
+            status: draftStatus,
+          },
+          decisionScore: scoreResult,
+          guardrailResult,
+          eventName: 'journal_create_guardrail_blocked',
+          correlationId: message.correlationId,
+        });
+      } catch (automationError) {
+        logger.warn('Guardrail-blocked automation evaluation failed', { error: automationError?.message });
+      }
+
       return createErrorResponse(
         message,
-        'GUARDRAIL_BLOCKED',
+        ERROR_CODES.GUARDRAIL_BLOCKED,
         'Lệnh bị chặn bởi pre-trade guardrails',
         {
           blockingReasons: guardrailResult.blockingReasons,
@@ -182,7 +203,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
     }
 
     // Auto-determine initial status
-    const status = entry.actual_entry != null ? 'open' : 'planned';
+    const status = draftStatus;
 
     const row = {
       user_id: userId,
@@ -268,6 +289,20 @@ registerHandler(MESSAGE_TYPES.JOURNAL_CREATE, async (message) => {
       maxRetries: 1,
     });
 
+    try {
+      await runJournalAutomationWorkflows({
+        userId,
+        previousEntry: null,
+        currentEntry: data,
+        decisionScore: scoreResult,
+        guardrailResult,
+        eventName: 'journal_create',
+        correlationId: message.correlationId,
+      });
+    } catch (automationError) {
+      logger.warn('Journal create automation execution failed', { error: automationError?.message });
+    }
+
     return createResponse(message, MESSAGE_TYPES.JOURNAL_CREATED, { item: data, success: true });
   } catch (error) {
     if (error.errorCode) return error;
@@ -283,7 +318,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_UPDATE, async (message) => {
     const userId = await requireAuth(message);
     const { id, updates } = message.data || {};
 
-    if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'ID là bắt buộc');
+    if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'ID là bắt buộc');
 
     // Fetch current entry to validate transition
     const current = await supabaseWithRetry(async () => {
@@ -298,7 +333,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_UPDATE, async (message) => {
     });
 
     if (!current) {
-      return createErrorResponse(message, 'NOT_FOUND', 'Journal entry không tìm thấy');
+      return createErrorResponse(message, ERROR_CODES.NOT_FOUND, 'Journal entry không tìm thấy');
     }
 
     const updateData = { updated_at: new Date().toISOString() };
@@ -309,7 +344,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_UPDATE, async (message) => {
       if (!allowed.includes(updates.status)) {
         return createErrorResponse(
           message,
-          'INVALID_TRANSITION',
+          ERROR_CODES.INVALID_TRANSITION,
           `Không thể chuyển từ "${current.status}" sang "${updates.status}". Chỉ có thể: ${allowed.join(', ') || 'không có'}`
         );
       }
@@ -357,6 +392,26 @@ registerHandler(MESSAGE_TYPES.JOURNAL_UPDATE, async (message) => {
       return data;
     });
 
+    try {
+      const reevaluatedGuardrails = evaluateGuardrails(data, {
+        strictRegime: data.strictRegime,
+        minChecklistRatio: data.minChecklistRatio,
+        maxRiskPct: data.maxRiskPct,
+      });
+
+      await runJournalAutomationWorkflows({
+        userId,
+        previousEntry: current,
+        currentEntry: data,
+        decisionScore: data.decision_score_snapshot || null,
+        guardrailResult: reevaluatedGuardrails,
+        eventName: 'journal_update',
+        correlationId: message.correlationId,
+      });
+    } catch (automationError) {
+      logger.warn('Journal update automation execution failed', { error: automationError?.message });
+    }
+
     return createResponse(message, MESSAGE_TYPES.JOURNAL_UPDATED, { item: data, success: true });
   } catch (error) {
     if (error.errorCode) return error;
@@ -372,7 +427,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_DELETE, async (message) => {
     const userId = await requireAuth(message);
     const { id } = message.data || {};
 
-    if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'ID là bắt buộc');
+    if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'ID là bắt buộc');
 
     await supabaseWithRetry(async () => {
       const { error } = await supabase
@@ -403,7 +458,7 @@ registerHandler(MESSAGE_TYPES.JOURNAL_GET_PREFILL, async (message) => {
     const { symbol, watchlist_id } = message.data || {};
 
     if (!symbol && !watchlist_id) {
-      return createErrorResponse(message, 'VALIDATION_ERROR', 'symbol hoặc watchlist_id là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'symbol hoặc watchlist_id là bắt buộc');
     }
 
     // Fetch watchlist item
@@ -695,7 +750,7 @@ registerHandler(MESSAGE_TYPES.CHECKLIST_TEMPLATE_CREATE, async (message) => {
     const { rule_key, label, order_num = 0 } = message.data || {};
 
     if (!rule_key || !label) {
-      return createErrorResponse(message, 'VALIDATION_ERROR', 'rule_key và label là bắt buộc');
+      return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'rule_key và label là bắt buộc');
     }
 
     const { data, error } = await supabase
@@ -706,7 +761,7 @@ registerHandler(MESSAGE_TYPES.CHECKLIST_TEMPLATE_CREATE, async (message) => {
 
     if (error) {
       if (error.code === '23505') {
-        return createErrorResponse(message, 'CONFLICT', `Rule "${rule_key}" đã tồn tại`);
+        return createErrorResponse(message, ERROR_CODES.CONFLICT, `Rule "${rule_key}" đã tồn tại`);
       }
       throw error;
     }
@@ -726,7 +781,7 @@ registerHandler(MESSAGE_TYPES.CHECKLIST_TEMPLATE_UPDATE, async (message) => {
     const userId = await requireAuth(message);
     const { id, updates } = message.data || {};
 
-    if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'ID là bắt buộc');
+    if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'ID là bắt buộc');
 
     const updateData = { updated_at: new Date().toISOString() };
     if (updates.label !== undefined) updateData.label = String(updates.label).trim();
@@ -758,7 +813,7 @@ registerHandler(MESSAGE_TYPES.CHECKLIST_TEMPLATE_DELETE, async (message) => {
     const userId = await requireAuth(message);
     const { id } = message.data || {};
 
-    if (!id) return createErrorResponse(message, 'VALIDATION_ERROR', 'ID là bắt buộc');
+    if (!id) return createErrorResponse(message, ERROR_CODES.VALIDATION_ERROR, 'ID là bắt buộc');
 
     const { error } = await supabase
       .from('checklist_templates')

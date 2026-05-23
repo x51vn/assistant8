@@ -18,6 +18,7 @@ import { registerHandler } from '../messageRouter.js';
 import { supabase } from '../../supabaseConfig.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { isMarketHours } from '../utils/marketHours.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 import { checkPriceAlerts } from './priceAlerts.js'; // XST-776
 
 const logger = createLogger('Handlers/PriceUpdate');
@@ -123,7 +124,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
     if (error.name === 'AbortError' || error.message.includes('timeout')) {
       return createErrorResponse(
         message,
-        'TIMEOUT',
+        ERROR_CODES.TIMEOUT,
         'Hết thời gian chờ. Vui lòng thử lại.'
       );
     }
@@ -131,7 +132,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
     if (error.message?.includes('fetch') || error.message?.includes('network')) {
       return createErrorResponse(
         message,
-        'NETWORK_ERROR',
+        ERROR_CODES.NETWORK_ERROR,
         'Không thể kết nối. Vui lòng kiểm tra mạng.'
       );
     }
@@ -139,7 +140,7 @@ registerHandler(MESSAGE_TYPES.XNEEWS_PRICE_UPDATE, async (message) => {
     // Generic error
     return createErrorResponse(
       message,
-      'API_ERROR',
+      ERROR_CODES.PRICE_UPDATE_FAILED,
       'Lỗi khi cập nhật giá. Vui lòng thử lại.'
     );
   }

@@ -3,6 +3,8 @@
  * Centralized type system for better maintainability
  */
 
+import { ERROR_CODES } from './shared/errorCodes.js';
+
 /**
  * @typedef {Object} ApiResponse
  * @property {boolean} success - Whether the operation succeeded
@@ -44,49 +46,6 @@
  * @property {boolean} isNew - Whether this is a newly created tab
  * @property {ErrorDetail} [error] - Error if tab couldn't be ensured
  */
-
-/**
- * Standard error codes used throughout the application
- */
-/**
- * Standard error codes used throughout the application
- * Use these codes for programmatic error handling
- * @const {Object.<string, string>}
- */
-export const ERROR_CODES = {
-  // Communication errors
-  TAB_NOT_FOUND: 'TAB_NOT_FOUND',
-  CONTENT_SCRIPT_NOT_READY: 'CONTENT_SCRIPT_NOT_READY',
-  MESSAGE_SEND_FAILED: 'MESSAGE_SEND_FAILED',
-  
-  // Operation errors
-  SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
-  INPUT_SEND_FAILED: 'INPUT_SEND_FAILED',
-  OUTPUT_FETCH_FAILED: 'OUTPUT_FETCH_FAILED',
-  SESSION_MISMATCH: 'SESSION_MISMATCH',  // getOutput called while user navigated to different session
-  TIMEOUT: 'TIMEOUT',
-  OPERATION_FAILED: 'OPERATION_FAILED',
-  
-  // Validation errors
-  INVALID_INPUT: 'INVALID_INPUT',
-  EMPTY_PROMPT: 'EMPTY_PROMPT',
-  INVALID_TAB_ID: 'INVALID_TAB_ID',
-  
-  // Authentication errors
-  AUTH_FAILED: 'AUTH_FAILED',
-  AUTH_EXPIRED: 'AUTH_EXPIRED',
-  
-  // Network errors
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
-  
-  // Storage errors
-  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
-  STORAGE_ERROR: 'STORAGE_ERROR',
-  
-  // Unknown/Generic
-  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
-};
 
 /**
  * Create a standardized data response

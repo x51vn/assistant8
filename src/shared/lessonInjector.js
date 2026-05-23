@@ -35,15 +35,17 @@ export const MAX_LESSONS_CHARS = 1500;
  * @param {string} [opts.taskKey]
  * @param {string} [opts.promptVersion]
  * @param {number} [opts.topN=5]
+ * @param {string} [opts.userId] - Scope to lessons owned by this user
  * @returns {Promise<Object[]>} Selected lessons (pinned first, then by recency/score)
  */
-export async function getTopLessons({ taskKey, promptVersion, topN = DEFAULT_TOP_N } = {}) {
+export async function getTopLessons({ taskKey, promptVersion, topN = DEFAULT_TOP_N, userId = null } = {}) {
   try {
     const allActive = await listLessons({
       taskKey,
       promptVersion,
       status: 'active',
       sort: 'newest',
+      userId,
     });
 
     // Filter out excluded lessons
@@ -150,16 +152,17 @@ function formatDigest(lessons) {
  * @param {number} [opts.topN=5]
  * @param {'full'|'digest'} [opts.mode='full']
  * @param {boolean} [opts.enabled=true] - Master toggle
+ * @param {string} [opts.userId] - Scope to lessons owned by this user
  * @returns {Promise<{injectedPrompt: string, lessonsCount: number, lessonsBlock: string}>}
  */
 export async function injectLessons(promptText, opts = {}) {
-  const { taskKey, promptVersion, topN = DEFAULT_TOP_N, mode = 'full', enabled = true } = opts;
+  const { taskKey, promptVersion, topN = DEFAULT_TOP_N, mode = 'full', enabled = true, userId = null } = opts;
 
   if (!enabled) {
     return { injectedPrompt: promptText, lessonsCount: 0, lessonsBlock: '' };
   }
 
-  const lessons = await getTopLessons({ taskKey, promptVersion, topN });
+  const lessons = await getTopLessons({ taskKey, promptVersion, topN, userId });
   if (lessons.length === 0) {
     return { injectedPrompt: promptText, lessonsCount: 0, lessonsBlock: '' };
   }

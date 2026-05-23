@@ -16,7 +16,7 @@ import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { createLogger } from '../../logger.js';
 import { ERROR_CODES, ERROR_MESSAGES_VN } from '../../shared/errorCodes.js';
 import { flushChatHistoryOutbox } from '../services/chatHistoryService.js';
-import { invalidatePromptCache } from './contextMenu.js';
+import { invalidatePromptCache } from './contextMenu/index.js';
 
 const logger = createLogger('Handlers/SupabaseAuth');
 const AUTH_REDIRECT_BASE_URL = chrome.runtime.getURL('sidepanel-preact.html');

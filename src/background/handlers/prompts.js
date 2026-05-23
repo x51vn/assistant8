@@ -11,7 +11,7 @@ import { createLogger } from '../../logger.js';
 import { requireAuth } from '../utils/auth.js';
 import { supabaseWithRetry } from '../utils/supabaseRetry.js';
 import { ERROR_CODES, getUserFriendlyMessage } from '../../shared/errorCodes.js';
-import { invalidatePromptCache } from './contextMenu.js';
+import { invalidatePromptCache } from './contextMenu/index.js';
 import {
   getAllPromptMetadata,
   getAllDefaultPrompts,

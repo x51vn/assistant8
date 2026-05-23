@@ -10,8 +10,10 @@
 import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 import { recordResponseCaptured } from '../services/chatHistoryService.js';
 import { saveRun } from '../../shared/promptImprovementDb.js';
+import { getCurrentUserId } from '../utils/auth.js';
 
 const logger = createLogger('Handlers/ChatHistoryAutoSave');
 
@@ -24,7 +26,7 @@ registerHandler(MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED, async (message, sender)
     logger.warn('CONTENT_RESPONSE_CAPTURED missing runId', { correlationId });
     return createErrorResponse(
       message,
-      'INVALID_INPUT',
+      ERROR_CODES.INVALID_INPUT,
       'Missing runId in CONTENT_RESPONSE_CAPTURED'
     );
   }
@@ -54,11 +56,13 @@ registerHandler(MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED, async (message, sender)
     // This gives the "Đánh giá" feature data to evaluate later
     try {
       if (data.prompt || data.response) {
+        const userId = await getCurrentUserId();
         await saveRun({
           id: runId,
           prompt_text: data.prompt || '',
           response_text: data.response || '',
           page_url: data.chatUrl || null,
+          user_id: userId,
         });
       }
     } catch (piErr) {
@@ -79,7 +83,7 @@ registerHandler(MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED, async (message, sender)
 
     return createErrorResponse(
       message,
-      'OPERATION_FAILED',
+      ERROR_CODES.OPERATION_FAILED,
       'Failed to persist captured response',
       { technicalError: error?.message || String(error) }
     );
@@ -87,4 +91,3 @@ registerHandler(MESSAGE_TYPES.CONTENT_RESPONSE_CAPTURED, async (message, sender)
 });
 
 logger.info('Chat history auto-save handlers registered');
-

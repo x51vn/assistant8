@@ -56,3 +56,6 @@ dist/
 
 # Claude/AI agent temp folders (repo pollution)
 tmpclaude-*-cwd/
+
+# OpenSpec workflow (local planning artifacts, not source)
+openspec/

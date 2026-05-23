@@ -14,6 +14,7 @@ import { registerHandler } from '../messageRouter.js';
 import { MESSAGE_TYPES, createResponse, createErrorResponse } from '../../shared/messageSchema.js';
 import { createLogger } from '../../logger.js';
 import { SSI_REQUEST_TIMEOUT_MS } from '../../shared/appConstants.js';
+import { ERROR_CODES } from '../../shared/errorCodes.js';
 
 const logger = createLogger('Handlers/MarketIndices');
 
@@ -55,7 +56,7 @@ registerHandler(MESSAGE_TYPES.MARKET_INDICES_GET, async (message) => {
 
     return createErrorResponse(
       message,
-      'MARKET_DATA_ERROR',
+      ERROR_CODES.SSI_API_ERROR,
       error.message || 'Không thể tải chỉ số thị trường. Vui lòng thử lại.'
     );
   }
