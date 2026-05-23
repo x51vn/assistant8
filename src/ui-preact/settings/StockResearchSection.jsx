@@ -72,7 +72,7 @@ export function StockResearchSection() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [validationErrors, setValidationErrors] = useState({});
+  const [validationErrors, setValidationErrors] = useState(/** @type {Record<string,string>} */ ({}));
 
   // Load settings on mount
   useEffect(() => {
@@ -152,7 +152,7 @@ export function StockResearchSection() {
 
   /** Validate fields and return true if valid */
   function validate() {
-    const errors = {};
+    const errors = /** @type {Record<string,string>} */ ({});
 
     const maxSrc = Number(maxSources);
     if (isNaN(maxSrc) || maxSrc < 1 || maxSrc > 20) {
@@ -243,7 +243,7 @@ export function StockResearchSection() {
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
+            onChange={(e) => setEnabled((/** @type {HTMLInputElement} */ (e.target)).checked)}
           />
           <span class="toggle-text">
             Bật Stock Research Pipeline v2
@@ -264,7 +264,7 @@ export function StockResearchSection() {
             <select
               class="form-input"
               value={provider}
-              onChange={(e) => setProvider(e.target.value)}
+              onChange={(e) => setProvider((/** @type {HTMLInputElement} */ (e.target)).value)}
             >
               <option value="chatgpt">ChatGPT (Web)</option>
               <option value="gemini">Gemini</option>
@@ -282,7 +282,7 @@ export function StockResearchSection() {
               <input
                 type="checkbox"
                 checked={searchEnabled}
-                onChange={(e) => setSearchEnabled(e.target.checked)}
+                onChange={(e) => setSearchEnabled((/** @type {HTMLInputElement} */ (e.target)).checked)}
               />
               <span class="toggle-text">
                 Tìm kiếm Google trước khi phân tích
@@ -302,7 +302,7 @@ export function StockResearchSection() {
               min="1"
               max="20"
               value={maxSources}
-              onInput={(e) => setMaxSources(e.target.value)}
+              onInput={(e) => setMaxSources(Number((/** @type {HTMLInputElement} */ (e.target)).value))}
             />
             {validationErrors.maxSources && (
               <span class="field-error">{validationErrors.maxSources}</span>
@@ -357,7 +357,7 @@ export function StockResearchSection() {
               <input
                 type="checkbox"
                 checked={strictValidation}
-                onChange={(e) => setStrictValidation(e.target.checked)}
+                onChange={(e) => setStrictValidation((/** @type {HTMLInputElement} */ (e.target)).checked)}
               />
               <span class="toggle-text">
                 Kiểm tra đầu ra nghiêm ngặt
@@ -376,7 +376,7 @@ export function StockResearchSection() {
               type="text"
               placeholder="cafef.vn, vietstock.vn, fireant.vn"
               value={trustedDomains}
-              onInput={(e) => setTrustedDomains(e.target.value)}
+              onInput={(e) => setTrustedDomains((/** @type {HTMLInputElement} */ (e.target)).value)}
             />
             <p class="field-hint">
               Các domain tin cậy, phân cách bằng dấu phẩy. Nguồn từ domain này sẽ được ưu tiên.
@@ -392,7 +392,7 @@ export function StockResearchSection() {
               min="1"
               max="90"
               value={recencyWindowDays}
-              onInput={(e) => setRecencyWindowDays(e.target.value)}
+              onInput={(e) => setRecencyWindowDays(Number((/** @type {HTMLInputElement} */ (e.target)).value))}
             />
             {validationErrors.recencyWindowDays && (
               <span class="field-error">{validationErrors.recencyWindowDays}</span>
@@ -411,7 +411,7 @@ export function StockResearchSection() {
               <input
                 type="checkbox"
                 checked={openValidUrls}
-                onChange={(e) => setOpenValidUrls(e.target.checked)}
+                onChange={(e) => setOpenValidUrls((/** @type {HTMLInputElement} */ (e.target)).checked)}
               />
               <span class="toggle-text">
                 Mở URL hợp lệ để đọc nội dung
@@ -428,7 +428,7 @@ export function StockResearchSection() {
               <input
                 type="checkbox"
                 checked={agentLoopEnabled}
-                onChange={(e) => setAgentLoopEnabled(e.target.checked)}
+                onChange={(e) => setAgentLoopEnabled((/** @type {HTMLInputElement} */ (e.target)).checked)}
               />
               <span class="toggle-text">
                 Agent Loop (Planner → Retriever → Critic)
@@ -448,7 +448,7 @@ export function StockResearchSection() {
                 min="1"
                 max="3"
                 value={agentMaxRounds}
-                onInput={(e) => setAgentMaxRounds(e.target.value)}
+                onInput={(e) => setAgentMaxRounds(Number((/** @type {HTMLInputElement} */ (e.target)).value))}
               />
               <p class="field-hint">Số vòng lặp tối đa (1-3, mặc định 2).</p>
             </div>
@@ -460,7 +460,7 @@ export function StockResearchSection() {
               <input
                 type="checkbox"
                 checked={microtasksEnabled}
-                onChange={(e) => setMicrotasksEnabled(e.target.checked)}
+                onChange={(e) => setMicrotasksEnabled((/** @type {HTMLInputElement} */ (e.target)).checked)}
               />
               <span class="toggle-text">
                 AI Micro-tasks (tóm tắt, phân loại, trích xuất)
@@ -486,7 +486,7 @@ export function StockResearchSection() {
                     checked={site.enabled}
                     onChange={(e) => {
                       const updated = [...seedSites];
-                      updated[idx] = { ...updated[idx], enabled: e.target.checked };
+                      updated[idx] = { ...updated[idx], enabled: (/** @type {HTMLInputElement} */ (e.target)).checked };
                       setSeedSites(updated);
                     }}
                   />
@@ -498,7 +498,7 @@ export function StockResearchSection() {
                   value={site.mode}
                   onChange={(e) => {
                     const updated = [...seedSites];
-                    updated[idx] = { ...updated[idx], mode: e.target.value };
+                    updated[idx] = { ...updated[idx], mode: (/** @type {HTMLInputElement} */ (e.target)).value };
                     setSeedSites(updated);
                   }}
                 >

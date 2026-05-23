@@ -2,6 +2,7 @@ import { h, render } from 'preact';
 import { AuthProvider } from '../context/AuthContext.jsx';
 import { App } from '../App.jsx';
 import '../styles/themes.css'; // XST-771: CSS custom properties for light/dark themes
+import '../styles/settings-tabs.css'; // redesign-model-settings-page: tab nav + provider cards
 
 /**
  * X51LABS-149: Preact Settings App Entry Point

@@ -2,11 +2,18 @@
  * LLMProviderSection.jsx — LLM Provider Selector for SettingsPage
  * Ticket: XST-775 — Multi-LLM Provider Interface
  * Updated: XST-815 — Web providers, no API keys
+ * Redesign: redesign-model-settings-page — provider icons, status dots, auto-check
  *
  * @done XST-815 — Web provider migration:
  *   - Removed API key input fields (all providers use Web/DOM automation)
  *   - Removed plan-gating (all providers are free-tier)
  *   - Added login guidance for Claude and Gemini
+ *
+ * @done redesign-model-settings-page:
+ *   - Added provider-specific icon mapping (Font Awesome)
+ *   - Status indicator dots (green/gray/red) per provider card
+ *   - Auto-check all provider statuses on mount
+ *   - Elevated active card styling
  */
 
 import { h } from 'preact';
@@ -20,23 +27,59 @@ async function msg(type, extra = {}) {
 
 /** Login URLs for each provider */
 const PROVIDER_LOGIN_INFO = {
-  chatgpt: { url: 'https://chatgpt.com', label: 'chatgpt.com' },
-  claude:  { url: 'https://claude.ai',   label: 'claude.ai' },
-  gemini:  { url: 'https://gemini.google.com', label: 'gemini.google.com' },
+  chatgpt: { url: 'https://chatgpt.com',           label: 'chatgpt.com' },
+  claude:  { url: 'https://claude.ai',              label: 'claude.ai' },
+  gemini:  { url: 'https://gemini.google.com',      label: 'gemini.google.com' },
 };
 
-export function LLMProviderSection() {
-  const [providers, setProviders]     = useState([]);
-  const [active, setActive]           = useState('chatgpt');
-  const [status, setStatus]           = useState('');
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState('');
+/** Font Awesome icon class per provider */
+const PROVIDER_ICONS = {
+  chatgpt: 'fa-robot',
+  claude:  'fa-brain',
+  gemini:  'fa-wand-magic-sparkles',
+};
 
+/** Default icon when provider ID is unknown */
+const DEFAULT_ICON = 'fa-microchip';
+
+/** Status → CSS modifier + tooltip */
+const STATUS_META = {
+  connected:    { mod: 'connected',  title: 'Đã kết nối' },
+  error:        { mod: 'error',      title: 'Lỗi kết nối' },
+  disconnected: { mod: 'unknown',    title: 'Chưa kết nối' },
+};
+
+function getStatusMeta(status) {
+  return STATUS_META[status] || { mod: 'unknown', title: 'Chưa kiểm tra' };
+}
+
+export function LLMProviderSection() {
+  const [providers, setProviders] = useState([]);
+  const [active, setActive]       = useState('chatgpt');
+  const [status, setStatus]       = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  /** Per-provider status map: { [providerId]: 'connected' | 'error' | 'disconnected' | null } */
+  const [statusMap, setStatusMap] = useState({});
+
+  // Load providers list on mount
   useEffect(() => {
     msg(MESSAGE_TYPES.LLM_GET_PROVIDERS).then(res => {
       if (res?.success) {
-        setProviders(res.providers || []);
+        const loadedProviders = res.providers || [];
+        setProviders(loadedProviders);
         setActive(res.activeProvider || 'chatgpt');
+
+        // Auto-check all provider statuses on mount
+        loadedProviders.forEach(p => {
+          msg(MESSAGE_TYPES.LLM_GET_STATUS, { provider: p.id })
+            .then(statusRes => {
+              if (statusRes?.success) {
+                setStatusMap(prev => ({ ...prev, [p.id]: statusRes.status }));
+              }
+            })
+            .catch(() => {});
+        });
       }
     });
   }, []);
@@ -62,6 +105,8 @@ export function LLMProviderSection() {
     if (res?.success) {
       const icon = res.status === 'connected' ? '✅' : res.status === 'error' ? '❌' : '⚠️';
       setStatus(`${icon} ${res.provider}: ${res.status}`);
+      // Update status dot for the tested provider
+      setStatusMap(prev => ({ ...prev, [active]: res.status }));
     } else {
       setStatus('❌ ' + (res?.errorMessage || 'Không thể kiểm tra'));
     }
@@ -71,24 +116,44 @@ export function LLMProviderSection() {
 
   return (
     <section class="settings-section">
-      <h3 class="settings-section-title"><i class="fas fa-robot"></i> LLM Provider</h3>
-      <p class="settings-hint">Chọn mô hình AI để gửi prompt. Tất cả sử dụng Web UI — không cần API key.</p>
+      <h3 class="settings-section-title">
+        <i class="fas fa-robot"></i> LLM Provider
+      </h3>
+      <p class="settings-hint">
+        Chọn mô hình AI để gửi prompt. Tất cả sử dụng Web UI — không cần API key.
+      </p>
 
       {error  && <div class="alert alert-danger">{error}</div>}
       {status && <div class="alert alert-info">{status}</div>}
 
       <div class="provider-grid">
-        {providers.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            class={`provider-card ${active === p.id ? 'active' : ''}`}
-            onClick={() => setActive(p.id)}
-            title={p.name}
-          >
-            <span class="provider-name">{p.name}</span>
-          </button>
-        ))}
+        {providers.map(p => {
+          const iconClass = PROVIDER_ICONS[p.id] || DEFAULT_ICON;
+          const providerStatus = statusMap[p.id] || null;
+          const { mod, title } = getStatusMeta(providerStatus);
+
+          return (
+            <button
+              key={p.id}
+              type="button"
+              class={`provider-card${active === p.id ? ' active' : ''}`}
+              onClick={() => setActive(p.id)}
+              title={p.name}
+            >
+              {/* Status dot */}
+              <span
+                class={`provider-card__status provider-card__status--${mod}`}
+                title={title}
+              ></span>
+
+              {/* Provider icon */}
+              <i class={`fas ${iconClass} provider-card__icon`}></i>
+
+              {/* Provider name */}
+              <span class="provider-name">{p.name}</span>
+            </button>
+          );
+        })}
       </div>
 
       {loginInfo && (
